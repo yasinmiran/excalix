@@ -94,6 +94,8 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
 - `elk.algorithm: layered`, `elk.direction: RIGHT | DOWN`
 - `elk.hierarchyHandling: INCLUDE_CHILDREN` so edges may cross group borders
 - `elk.edgeRouting: ORTHOGONAL`
+- `elk.layered.considerModelOrder.strategy: NODES_AND_EDGES`: siblings keep the
+  order the spec lists them in, as far as crossings allow
 - group padding leaves room for the label: top = label.height + 16, others 16
 - `elk.spacing.nodeNode: 48`, `elk.layered.spacing.nodeNodeBetweenLayers: 48`,
   `elk.spacing.edgeNode: 24`

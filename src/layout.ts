@@ -44,6 +44,7 @@ function toElkGraph(input: LayoutInput): ElkNode {
       "elk.spacing.edgeNode": "24",
       "elk.edgeLabels.placement": "CENTER",
       "elk.edgeLabels.inline": "true",
+      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
     },
     children: childrenOf(undefined),
     edges: input.edges.map(elkEdge),
