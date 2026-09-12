@@ -1,0 +1,39 @@
+{
+  "name": "excalix",
+  "version": "0.1.0",
+  "description": "Architecture diagrams from a topology spec, rendered in Excalidraw's hand-drawn style. CLI and MCP.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "excalix": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@excalidraw/utils": "0.1.5",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "elkjs": "0.12.0",
+    "playwright": "1.63.0",
+    "zod": "4.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}

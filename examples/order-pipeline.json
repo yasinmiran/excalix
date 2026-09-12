@@ -1,0 +1,25 @@
+{
+  "title": "order pipeline",
+  "direction": "lr",
+  "groups": [
+    { "id": "aws", "label": "AWS eu-north-1" },
+    { "id": "k8s", "label": "EKS", "parent": "aws" }
+  ],
+  "nodes": [
+    { "id": "web", "label": "Web app", "kind": "client" },
+    { "id": "api", "label": "Order API", "kind": "service", "group": "k8s" },
+    { "id": "worker", "label": "Fulfilment", "kind": "service", "group": "k8s" },
+    { "id": "q", "label": "orders.created", "kind": "queue", "group": "aws" },
+    { "id": "pg", "label": "Postgres", "kind": "datastore", "group": "aws" },
+    { "id": "redis", "label": "Redis", "kind": "cache", "group": "aws" },
+    { "id": "stripe", "label": "Stripe", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "web", "to": "api", "label": "POST /orders" },
+    { "from": "api", "to": "pg" },
+    { "from": "api", "to": "redis", "arrows": "both" },
+    { "from": "api", "to": "q", "style": "async" },
+    { "from": "q", "to": "worker", "style": "async" },
+    { "from": "worker", "to": "stripe", "label": "charge" }
+  ]
+}
