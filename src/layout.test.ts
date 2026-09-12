@@ -1,0 +1,197 @@
+import { describe, expect, it } from "vitest";
+import { layout } from "./layout.js";
+import { FONT, nodeSize } from "./style.js";
+import type { Box, Kind, LayoutInput, LayoutResult, Point, TextSize } from "./types.js";
+
+function estimate(text: string, fontSize: number): TextSize {
+  return { width: text.length * fontSize * 0.6, height: fontSize * FONT.lineHeight };
+}
+
+function node(id: string, label: string, kind: Kind, group?: string) {
+  return { id, ...nodeSize(kind, estimate(label, FONT.node)), ...(group ? { group } : {}) };
+}
+
+function group(id: string, label: string, parent?: string) {
+  return { id, label: estimate(label, FONT.group), ...(parent ? { parent } : {}) };
+}
+
+function edge(index: number, from: string, to: string, label?: string) {
+  return { id: `edge:${index}`, from, to, ...(label ? { label: estimate(label, FONT.edge) } : {}) };
+}
+
+const orderPipeline: LayoutInput = {
+  direction: "lr",
+  groups: [group("aws", "AWS eu-north-1"), group("k8s", "EKS", "aws")],
+  nodes: [
+    node("web", "Web app", "client"),
+    node("api", "Order API", "service", "k8s"),
+    node("worker", "Fulfilment", "service", "k8s"),
+    node("q", "orders.created", "queue", "aws"),
+    node("pg", "Postgres", "datastore", "aws"),
+    node("redis", "Redis", "cache", "aws"),
+    node("stripe", "Stripe", "external"),
+  ],
+  edges: [
+    edge(0, "web", "api", "POST /orders"),
+    edge(1, "api", "pg"),
+    edge(2, "api", "redis"),
+    edge(3, "api", "q"),
+    edge(4, "q", "worker"),
+    edge(5, "worker", "stripe", "charge"),
+  ],
+};
+
+const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+const within = (v: number, lo: number, hi: number) => v >= lo - 1 && v <= hi + 1;
+
+function onBorder(p: Point, box: Box): boolean {
+  const right = box.x + box.width;
+  const bottom = box.y + box.height;
+  const onVertical = (near(p.x, box.x) || near(p.x, right)) && within(p.y, box.y, bottom);
+  const onHorizontal = (near(p.y, box.y) || near(p.y, bottom)) && within(p.x, box.x, right);
+  return onVertical || onHorizontal;
+}
+
+function contains(outer: Box, inner: Box, pad: { top: number; side: number }): boolean {
+  return (
+    inner.x >= outer.x + pad.side &&
+    inner.y >= outer.y + pad.top &&
+    inner.x + inner.width <= outer.x + outer.width - pad.side &&
+    inner.y + inner.height <= outer.y + outer.height - pad.side
+  );
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+function allPoints(result: LayoutResult): Point[] {
+  const boxes = [...Object.values(result.nodes), ...Object.values(result.groups)];
+  return [
+    ...boxes.flatMap((b) => [b, { x: b.x + b.width, y: b.y + b.height }]),
+    ...Object.values(result.edges).flatMap((e) => e.points),
+  ];
+}
+
+describe("layout on the order pipeline", () => {
+  const run = layout(orderPipeline);
+
+  it("routes every edge from the source border to the target border", async () => {
+    const result = await run;
+    for (const spec of orderPipeline.edges) {
+      const { points } = result.edges[spec.id]!;
+      expect(points.length).toBeGreaterThanOrEqual(2);
+      expect(onBorder(points[0]!, result.nodes[spec.from]!), `${spec.id} start`).toBe(true);
+      expect(onBorder(points.at(-1)!, result.nodes[spec.to]!), `${spec.id} end`).toBe(true);
+    }
+  });
+
+  it("keeps polylines orthogonal, so bend points are included", async () => {
+    const result = await run;
+    for (const { points } of Object.values(result.edges)) {
+      for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1]!;
+        const b = points[i]!;
+        expect(Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6).toBe(true);
+      }
+    }
+    expect(Object.values(result.edges).some((e) => e.points.length > 2)).toBe(true);
+  });
+
+  it("nests nodes and groups inside their group with padding", async () => {
+    const result = await run;
+    const padding = (id: string) => ({ top: orderPipeline.groups.find((g) => g.id === id)!.label.height + 16, side: 16 });
+    for (const spec of orderPipeline.nodes) {
+      if (!spec.group) continue;
+      expect(contains(result.groups[spec.group]!, result.nodes[spec.id]!, padding(spec.group)), spec.id).toBe(true);
+    }
+    expect(contains(result.groups.aws!, result.groups.k8s!, padding("aws"))).toBe(true);
+    expect(overlaps(result.groups.aws!, result.nodes.web!)).toBe(false);
+    expect(overlaps(result.groups.aws!, result.nodes.stripe!)).toBe(false);
+  });
+
+  it("keeps node sizes from the input", async () => {
+    const result = await run;
+    for (const spec of orderPipeline.nodes) {
+      expect(result.nodes[spec.id]).toMatchObject({ width: spec.width, height: spec.height });
+    }
+  });
+
+  it("places labels only on labelled edges", async () => {
+    const result = await run;
+    for (const spec of orderPipeline.edges) {
+      const label = result.edges[spec.id]!.label;
+      if (spec.label) {
+        expect(label).toBeDefined();
+        expect(within(label!.x, 0, result.bounds.width)).toBe(true);
+        expect(within(label!.y, 0, result.bounds.height)).toBe(true);
+      } else {
+        expect(label).toBeUndefined();
+      }
+    }
+  });
+
+  it("normalises bounds to (0, 0) around everything", async () => {
+    const result = await run;
+    const points = allPoints(result);
+    expect(Math.min(...points.map((p) => p.x))).toBe(0);
+    expect(Math.min(...points.map((p) => p.y))).toBe(0);
+    expect(Math.max(...points.map((p) => p.x))).toBeLessThanOrEqual(result.bounds.width);
+    expect(Math.max(...points.map((p) => p.y))).toBeLessThanOrEqual(result.bounds.height);
+    expect(result.bounds).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("is deterministic", async () => {
+    expect(await layout(orderPipeline)).toEqual(await layout(orderPipeline));
+  });
+});
+
+describe("layout edge cases", () => {
+  it("survives a self edge", async () => {
+    const result = await layout({
+      direction: "lr",
+      groups: [],
+      nodes: [node("a", "A", "service")],
+      edges: [edge(0, "a", "a")],
+    });
+    expect(result.edges["edge:0"]!.points.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("stacks layers vertically for tb", async () => {
+    const result = await layout({
+      direction: "tb",
+      groups: [],
+      nodes: [node("a", "A", "service"), node("b", "B", "service")],
+      edges: [edge(0, "a", "b")],
+    });
+    const { a, b } = result.nodes;
+    expect(b!.y).toBeGreaterThanOrEqual(a!.y + a!.height + 64);
+    const { points } = result.edges["edge:0"]!;
+    expect(near(points[0]!.y, a!.y + a!.height)).toBe(true);
+    expect(near(points.at(-1)!.y, b!.y)).toBe(true);
+  });
+
+  it("widens a group to fit its label in both directions", async () => {
+    const wide = "a very long group label that outgrows its only child";
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [group("g", wide)],
+        nodes: [node("a", "A", "service", "g")],
+        edges: [],
+      });
+      expect(result.groups.g!.width, direction).toBeGreaterThanOrEqual(estimate(wide, FONT.group).width + 32);
+    }
+  });
+
+  it("gives an empty group its label size", async () => {
+    const result = await layout({
+      direction: "lr",
+      groups: [group("g", "empty")],
+      nodes: [node("a", "A", "service")],
+      edges: [],
+    });
+    const label = estimate("empty", FONT.group);
+    expect(result.groups.g).toMatchObject({ width: label.width + 32, height: label.height + 32 });
+  });
+});
