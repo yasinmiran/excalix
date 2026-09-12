@@ -81,11 +81,15 @@ export function createServer(deps: SketchDeps): McpServer {
 export async function serveMcp(): Promise<void> {
   const server = createServer({ writeSketch, createRenderer: createBrowserRenderer });
   const transport = new StdioServerTransport();
-  const closed = new Promise<void>((done) => {
-    transport.onclose = done;
-  });
   await server.connect(transport);
-  await closed;
+  process.stdin.once("end", () => void transport.close());
+  await new Promise<void>((done) => {
+    const releaseRenderer = server.server.onclose;
+    server.server.onclose = () => {
+      releaseRenderer?.();
+      done();
+    };
+  });
 }
 
 function failure(text: string) {
