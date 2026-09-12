@@ -1,0 +1,61 @@
+{
+  "title": "nodes only in groups, tb",
+  "direction": "tb",
+  "groups": [
+    {
+      "id": "g1",
+      "label": "Group one"
+    },
+    {
+      "id": "g2",
+      "label": "Group two"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "a",
+      "label": "A",
+      "kind": "service",
+      "group": "g1"
+    },
+    {
+      "id": "b",
+      "label": "B",
+      "kind": "service",
+      "group": "g1"
+    },
+    {
+      "id": "c",
+      "label": "C",
+      "kind": "service",
+      "group": "g2"
+    },
+    {
+      "id": "d",
+      "label": "D",
+      "kind": "datastore",
+      "group": "g2"
+    }
+  ],
+  "edges": [
+    {
+      "from": "a",
+      "to": "c",
+      "label": "g1 to g2"
+    },
+    {
+      "from": "b",
+      "to": "d"
+    },
+    {
+      "from": "c",
+      "to": "d"
+    },
+    {
+      "from": "d",
+      "to": "a",
+      "label": "back up",
+      "style": "async"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    {
+      "id": "only",
+      "label": "Only",
+      "kind": "service"
+    }
+  ]
+}

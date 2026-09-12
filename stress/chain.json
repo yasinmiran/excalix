@@ -1,0 +1,135 @@
+{
+  "title": "long chain",
+  "nodes": [
+    {
+      "id": "n0",
+      "label": "Stage 0",
+      "kind": "client"
+    },
+    {
+      "id": "n1",
+      "label": "Stage 1",
+      "kind": "service"
+    },
+    {
+      "id": "n2",
+      "label": "Stage 2",
+      "kind": "queue"
+    },
+    {
+      "id": "n3",
+      "label": "Stage 3",
+      "kind": "service"
+    },
+    {
+      "id": "n4",
+      "label": "Stage 4",
+      "kind": "datastore"
+    },
+    {
+      "id": "n5",
+      "label": "Stage 5",
+      "kind": "client"
+    },
+    {
+      "id": "n6",
+      "label": "Stage 6",
+      "kind": "service"
+    },
+    {
+      "id": "n7",
+      "label": "Stage 7",
+      "kind": "queue"
+    },
+    {
+      "id": "n8",
+      "label": "Stage 8",
+      "kind": "service"
+    },
+    {
+      "id": "n9",
+      "label": "Stage 9",
+      "kind": "datastore"
+    },
+    {
+      "id": "n10",
+      "label": "Stage 10",
+      "kind": "client"
+    },
+    {
+      "id": "n11",
+      "label": "Stage 11",
+      "kind": "service"
+    },
+    {
+      "id": "n12",
+      "label": "Stage 12",
+      "kind": "queue"
+    },
+    {
+      "id": "n13",
+      "label": "Stage 13",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "n0",
+      "to": "n1"
+    },
+    {
+      "from": "n1",
+      "to": "n2",
+      "label": "step 1"
+    },
+    {
+      "from": "n2",
+      "to": "n3"
+    },
+    {
+      "from": "n3",
+      "to": "n4",
+      "label": "step 3"
+    },
+    {
+      "from": "n4",
+      "to": "n5"
+    },
+    {
+      "from": "n5",
+      "to": "n6",
+      "label": "step 5"
+    },
+    {
+      "from": "n6",
+      "to": "n7"
+    },
+    {
+      "from": "n7",
+      "to": "n8",
+      "label": "step 7"
+    },
+    {
+      "from": "n8",
+      "to": "n9"
+    },
+    {
+      "from": "n9",
+      "to": "n10",
+      "label": "step 9"
+    },
+    {
+      "from": "n10",
+      "to": "n11"
+    },
+    {
+      "from": "n11",
+      "to": "n12",
+      "label": "step 11"
+    },
+    {
+      "from": "n12",
+      "to": "n13"
+    }
+  ]
+}

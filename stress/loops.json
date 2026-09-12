@@ -1,0 +1,52 @@
+{
+  "title": "self loops and repeated pairs",
+  "nodes": [
+    {
+      "id": "a",
+      "label": "Scheduler",
+      "kind": "service"
+    },
+    {
+      "id": "b",
+      "label": "Worker",
+      "kind": "service"
+    },
+    {
+      "id": "c",
+      "label": "Store",
+      "kind": "datastore"
+    }
+  ],
+  "edges": [
+    {
+      "from": "a",
+      "to": "a",
+      "label": "tick"
+    },
+    {
+      "from": "a",
+      "to": "b",
+      "label": "job"
+    },
+    {
+      "from": "a",
+      "to": "b",
+      "label": "cancel",
+      "style": "async"
+    },
+    {
+      "from": "b",
+      "to": "a",
+      "label": "done"
+    },
+    {
+      "from": "b",
+      "to": "c"
+    },
+    {
+      "from": "c",
+      "to": "b",
+      "label": "rows"
+    }
+  ]
+}

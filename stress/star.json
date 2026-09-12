@@ -1,0 +1,132 @@
+{
+  "title": "hub and spokes",
+  "nodes": [
+    {
+      "id": "hub",
+      "label": "Hub",
+      "kind": "service"
+    },
+    {
+      "id": "s0",
+      "label": "Spoke 0",
+      "kind": "external"
+    },
+    {
+      "id": "s1",
+      "label": "Spoke 1",
+      "kind": "datastore"
+    },
+    {
+      "id": "s2",
+      "label": "Spoke 2",
+      "kind": "external"
+    },
+    {
+      "id": "s3",
+      "label": "Spoke 3",
+      "kind": "datastore"
+    },
+    {
+      "id": "s4",
+      "label": "Spoke 4",
+      "kind": "external"
+    },
+    {
+      "id": "s5",
+      "label": "Spoke 5",
+      "kind": "datastore"
+    },
+    {
+      "id": "s6",
+      "label": "Spoke 6",
+      "kind": "external"
+    },
+    {
+      "id": "s7",
+      "label": "Spoke 7",
+      "kind": "datastore"
+    },
+    {
+      "id": "s8",
+      "label": "Spoke 8",
+      "kind": "external"
+    },
+    {
+      "id": "s9",
+      "label": "Spoke 9",
+      "kind": "datastore"
+    },
+    {
+      "id": "s10",
+      "label": "Spoke 10",
+      "kind": "external"
+    },
+    {
+      "id": "s11",
+      "label": "Spoke 11",
+      "kind": "datastore"
+    }
+  ],
+  "edges": [
+    {
+      "from": "s0",
+      "to": "hub",
+      "label": "in 0"
+    },
+    {
+      "from": "hub",
+      "to": "s1",
+      "label": "out 1"
+    },
+    {
+      "from": "hub",
+      "to": "s2",
+      "label": "out 2"
+    },
+    {
+      "from": "s3",
+      "to": "hub",
+      "label": "in 3"
+    },
+    {
+      "from": "hub",
+      "to": "s4",
+      "label": "out 4"
+    },
+    {
+      "from": "hub",
+      "to": "s5",
+      "label": "out 5"
+    },
+    {
+      "from": "s6",
+      "to": "hub",
+      "label": "in 6"
+    },
+    {
+      "from": "hub",
+      "to": "s7",
+      "label": "out 7"
+    },
+    {
+      "from": "hub",
+      "to": "s8",
+      "label": "out 8"
+    },
+    {
+      "from": "s9",
+      "to": "hub",
+      "label": "in 9"
+    },
+    {
+      "from": "hub",
+      "to": "s10",
+      "label": "out 10"
+    },
+    {
+      "from": "hub",
+      "to": "s11",
+      "label": "out 11"
+    }
+  ]
+}

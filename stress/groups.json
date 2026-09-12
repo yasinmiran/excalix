@@ -1,0 +1,95 @@
+{
+  "title": "group edge cases",
+  "groups": [
+    {
+      "id": "empty",
+      "label": "Empty group"
+    },
+    {
+      "id": "outer",
+      "label": "Outer"
+    },
+    {
+      "id": "mid",
+      "label": "Middle",
+      "parent": "outer"
+    },
+    {
+      "id": "inner",
+      "label": "Inner",
+      "parent": "mid"
+    },
+    {
+      "id": "sib",
+      "label": "Sibling",
+      "parent": "outer"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "deep",
+      "label": "Deep",
+      "kind": "service",
+      "group": "inner"
+    },
+    {
+      "id": "m",
+      "label": "Mid node",
+      "kind": "service",
+      "group": "mid"
+    },
+    {
+      "id": "s1",
+      "label": "Sib 1",
+      "kind": "service",
+      "group": "sib"
+    },
+    {
+      "id": "s2",
+      "label": "Sib 2",
+      "kind": "datastore",
+      "group": "sib"
+    },
+    {
+      "id": "out",
+      "label": "Outside",
+      "kind": "client"
+    },
+    {
+      "id": "far",
+      "label": "Far",
+      "kind": "external"
+    }
+  ],
+  "edges": [
+    {
+      "from": "out",
+      "to": "deep",
+      "label": "in"
+    },
+    {
+      "from": "deep",
+      "to": "s1",
+      "label": "across"
+    },
+    {
+      "from": "s1",
+      "to": "s2"
+    },
+    {
+      "from": "m",
+      "to": "deep"
+    },
+    {
+      "from": "s2",
+      "to": "far",
+      "label": "out"
+    },
+    {
+      "from": "far",
+      "to": "out",
+      "label": "back",
+      "style": "async"
+    }
+  ]
+}

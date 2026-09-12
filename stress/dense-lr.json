@@ -1,0 +1,244 @@
+{
+  "title": "dense lr",
+  "direction": "lr",
+  "groups": [
+    {
+      "id": "cloud",
+      "label": "GCP europe-west1"
+    },
+    {
+      "id": "gke",
+      "label": "GKE",
+      "parent": "cloud"
+    },
+    {
+      "id": "data",
+      "label": "Data tier",
+      "parent": "cloud"
+    },
+    {
+      "id": "edge",
+      "label": "Edge"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "browser",
+      "label": "Browser",
+      "kind": "client"
+    },
+    {
+      "id": "mobile",
+      "label": "Mobile app",
+      "kind": "client"
+    },
+    {
+      "id": "cdn",
+      "label": "CDN",
+      "kind": "external",
+      "group": "edge"
+    },
+    {
+      "id": "waf",
+      "label": "WAF",
+      "kind": "service",
+      "group": "edge"
+    },
+    {
+      "id": "gw",
+      "label": "API gateway",
+      "kind": "service",
+      "group": "gke"
+    },
+    {
+      "id": "auth",
+      "label": "Auth service",
+      "kind": "service",
+      "group": "gke"
+    },
+    {
+      "id": "orders",
+      "label": "Orders service",
+      "kind": "service",
+      "group": "gke"
+    },
+    {
+      "id": "inventory",
+      "label": "Inventory service",
+      "kind": "service",
+      "group": "gke"
+    },
+    {
+      "id": "notify",
+      "label": "Notifier",
+      "kind": "service",
+      "group": "gke"
+    },
+    {
+      "id": "search",
+      "label": "Search indexer",
+      "kind": "service",
+      "group": "gke"
+    },
+    {
+      "id": "pg",
+      "label": "Postgres\n(primary)",
+      "kind": "datastore",
+      "group": "data"
+    },
+    {
+      "id": "replica",
+      "label": "Postgres\n(replica)",
+      "kind": "datastore",
+      "group": "data"
+    },
+    {
+      "id": "redis",
+      "label": "Redis",
+      "kind": "cache",
+      "group": "data"
+    },
+    {
+      "id": "kafka",
+      "label": "Kafka",
+      "kind": "queue",
+      "group": "data"
+    },
+    {
+      "id": "es",
+      "label": "Elasticsearch",
+      "kind": "datastore",
+      "group": "data"
+    },
+    {
+      "id": "stripe",
+      "label": "Stripe",
+      "kind": "external"
+    },
+    {
+      "id": "ses",
+      "label": "SES",
+      "kind": "external"
+    },
+    {
+      "id": "idp",
+      "label": "Okta",
+      "kind": "external"
+    }
+  ],
+  "edges": [
+    {
+      "from": "browser",
+      "to": "cdn",
+      "label": "static assets"
+    },
+    {
+      "from": "browser",
+      "to": "waf",
+      "label": "HTTPS"
+    },
+    {
+      "from": "mobile",
+      "to": "waf",
+      "label": "HTTPS"
+    },
+    {
+      "from": "waf",
+      "to": "gw"
+    },
+    {
+      "from": "gw",
+      "to": "auth",
+      "label": "verify token"
+    },
+    {
+      "from": "auth",
+      "to": "idp",
+      "label": "OIDC"
+    },
+    {
+      "from": "gw",
+      "to": "orders",
+      "label": "/orders"
+    },
+    {
+      "from": "gw",
+      "to": "inventory",
+      "label": "/stock"
+    },
+    {
+      "from": "orders",
+      "to": "pg",
+      "label": "write"
+    },
+    {
+      "from": "orders",
+      "to": "replica",
+      "label": "read"
+    },
+    {
+      "from": "inventory",
+      "to": "pg"
+    },
+    {
+      "from": "orders",
+      "to": "redis",
+      "arrows": "both",
+      "label": "session"
+    },
+    {
+      "from": "auth",
+      "to": "redis",
+      "arrows": "both"
+    },
+    {
+      "from": "orders",
+      "to": "kafka",
+      "style": "async",
+      "label": "order.placed"
+    },
+    {
+      "from": "inventory",
+      "to": "kafka",
+      "style": "async",
+      "label": "stock.changed"
+    },
+    {
+      "from": "kafka",
+      "to": "notify",
+      "style": "async"
+    },
+    {
+      "from": "kafka",
+      "to": "search",
+      "style": "async"
+    },
+    {
+      "from": "search",
+      "to": "es",
+      "label": "index"
+    },
+    {
+      "from": "gw",
+      "to": "es",
+      "label": "query"
+    },
+    {
+      "from": "notify",
+      "to": "ses",
+      "label": "email"
+    },
+    {
+      "from": "orders",
+      "to": "stripe",
+      "label": "charge"
+    },
+    {
+      "from": "pg",
+      "to": "replica",
+      "style": "async",
+      "label": "replication",
+      "arrows": "none"
+    }
+  ]
+}
