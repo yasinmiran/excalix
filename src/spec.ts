@@ -99,17 +99,41 @@ export const specSchema = z
     direction,
     groups: z.array(group).default([]).describe("boundaries, nestable through parent"),
     nodes: z.array(node).min(1).describe("every box in the diagram"),
-    edges: z.array(edge).describe("every arrow in the diagram"),
+    edges: z.array(edge).default([]).describe("every arrow in the diagram"),
   })
   .describe("an architecture topology: what exists and what talks to what");
 
 /** Validates raw JSON into a Spec with defaults applied. Throws SpecError. */
 export function parseSpec(input: unknown): Spec {
   const parsed = specSchema.safeParse(input);
-  if (!parsed.success) throw new SpecError(parsed.error.issues.map(formatIssue));
-  const problems = semanticProblems(parsed.data);
-  if (problems.length > 0) throw new SpecError(problems);
-  return parsed.data;
+  if (parsed.success) {
+    const problems = semanticProblems(parsed.data);
+    if (problems.length > 0) throw new SpecError(problems);
+    return parsed.data;
+  }
+  const issuePaths = parsed.error.issues.map((issue) => formatPath(issue.path));
+  const alreadyReported = (problem: string) => issuePaths.some((path) => problem.startsWith(`${path}:`) || problem.startsWith(`${path}.`));
+  const semantic = semanticProblems(lenient(input)).filter((problem) => !alreadyReported(problem));
+  throw new SpecError([...parsed.error.issues.map(formatIssue), ...semantic]);
+}
+
+// Enough of a malformed spec to run the reference checks, so an agent sees every problem in one round trip.
+function lenient(input: unknown): Spec {
+  const raw = isRecord(input) ? input : {};
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  const optional = (value: unknown) => (typeof value === "string" ? value : undefined);
+  const records = (value: unknown) => (Array.isArray(value) ? value.map((entry) => (isRecord(entry) ? entry : {})) : []);
+  return {
+    title: optional(raw.title),
+    direction: "lr",
+    groups: records(raw.groups).map((g) => ({ id: text(g.id), label: text(g.label), parent: optional(g.parent) })),
+    nodes: records(raw.nodes).map((n) => ({ id: text(n.id), label: text(n.label), kind: "service", group: optional(n.group) })),
+    edges: records(raw.edges).map((e) => ({ from: text(e.from), to: text(e.to), label: optional(e.label), style: "sync", arrows: "forward" })),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function formatIssue(issue: z.core.$ZodIssue): string {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { z } from "zod";
@@ -69,12 +69,11 @@ async function render(argv: string[], io: Io): Promise<number> {
   }
   const spec = await readSpec(specPath);
   parseSpec(spec);
-  const basename = resolve(values.out ?? withoutExtension(specPath));
-  await mkdir(dirname(basename), { recursive: true });
+  const out = resolve(outputBasename(values.out, specPath));
 
   const renderer = await createBrowserRenderer();
   try {
-    const { files } = await writeSketch(spec, basename, renderer);
+    const { files } = await writeSketch(spec, out, renderer);
     io.stdout(files.excalidraw);
     io.stdout(files.svg);
     io.stdout(files.png);
@@ -111,6 +110,12 @@ async function readSpec(specPath: string): Promise<unknown> {
   }
 }
 
+function outputBasename(out: string | undefined, specPath: string): string {
+  if (out === undefined) return withoutExtension(specPath);
+  if (out === "") throw new Error("-o needs a basename");
+  return out.endsWith("/") ? join(out, basename(withoutExtension(specPath))) : out;
+}
+
 function withoutExtension(specPath: string): string {
   const ext = extname(specPath);
   return ext === "" ? specPath : specPath.slice(0, -ext.length);
@@ -139,5 +144,5 @@ if (isEntryPoint()) {
     stdout: (s) => void process.stdout.write(`${s}\n`),
     stderr: (s) => void process.stderr.write(`${s}\n`),
   });
-  process.exit(code);
+  process.exitCode = code;
 }

@@ -5,6 +5,8 @@ import type { Box, Direction, LayoutEdge, LayoutGroup, LayoutInput, LayoutNode, 
 
 const ROOT = ":root";
 const PADDING = GROUP_STYLE.padding;
+// Clearance ELK reserves around an edge label so the text never touches a neighbouring node.
+const LABEL_MARGIN = 12;
 
 const elk = new ELK();
 
@@ -37,9 +39,11 @@ function toElkGraph(input: LayoutInput): ElkNode {
       "elk.direction": input.direction === "tb" ? "DOWN" : "RIGHT",
       "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       "elk.edgeRouting": "ORTHOGONAL",
-      "elk.spacing.nodeNode": "40",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "64",
+      "elk.spacing.nodeNode": "48",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "48",
+      "elk.spacing.edgeNode": "24",
       "elk.edgeLabels.placement": "CENTER",
+      "elk.edgeLabels.inline": "true",
     },
     children: childrenOf(undefined),
     edges: input.edges.map(elkEdge),
@@ -74,7 +78,9 @@ function elkEdge(edge: LayoutEdge): ElkExtendedEdge {
     id: edge.id,
     sources: [edge.from],
     targets: [edge.to],
-    ...(edge.label ? { labels: [{ text: edge.id, ...edge.label }] } : {}),
+    ...(edge.label
+      ? { labels: [{ text: edge.id, width: edge.label.width + LABEL_MARGIN * 2, height: edge.label.height + LABEL_MARGIN * 2 }] }
+      : {}),
   };
 }
 
@@ -94,7 +100,7 @@ function routeEdge(edge: ElkExtendedEdge, boxes: Map<string, Box>): RoutedEdge {
   const label = edge.labels?.[0];
   return {
     points: points.length >= 2 ? points : [center(boxes.get(edge.sources[0]!)!), center(boxes.get(edge.targets[0]!)!)],
-    ...(label ? { label: shift({ x: label.x ?? 0, y: label.y ?? 0 }) } : {}),
+    ...(label ? { label: shift({ x: (label.x ?? 0) + LABEL_MARGIN, y: (label.y ?? 0) + LABEL_MARGIN }) } : {}),
   };
 }
 

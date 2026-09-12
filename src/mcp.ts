@@ -29,7 +29,7 @@ const inputSchema = specSchema.extend({
     .string()
     .optional()
     .describe(
-      "output basename without extension, absolute or relative to the server's cwd; writes <out>.excalidraw, <out>.svg and <out>.png. Defaults to diagrams/<title slug>.",
+      "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the server's working directory, which is the project directory when Claude Code launches the server. Defaults to diagrams/<title slug>.",
     ),
 });
 
@@ -51,11 +51,14 @@ export function createServer(deps: SketchDeps, onClose?: () => void): McpServer 
     return renderer;
   };
 
-  server.server.onclose = () => {
+  const release = (): Promise<void> => {
     const opened = renderer;
     renderer = undefined;
-    void opened?.then((it) => it.close()).catch(() => {});
-    onClose?.();
+    return opened?.then((it) => it.close()).catch(() => {}) ?? Promise.resolve();
+  };
+
+  server.server.onclose = () => {
+    void release().then(() => onClose?.());
   };
 
   server.registerTool("sketch", { description: DESCRIPTION, inputSchema }, async (args) => {
@@ -70,6 +73,7 @@ export function createServer(deps: SketchDeps, onClose?: () => void): McpServer 
       };
     } catch (error) {
       if (error instanceof SpecError) return failure(error.problems.join("\n"));
+      void release();
       return failure(`error: ${error instanceof Error ? error.message : String(error)}`);
     }
   });
@@ -80,12 +84,11 @@ export function createServer(deps: SketchDeps, onClose?: () => void): McpServer 
 /** Serves the sketch tool over stdio. Resolves when the transport closes. */
 export async function serveMcp(): Promise<void> {
   const transport = new StdioServerTransport();
-  const closed = new Promise<void>((done) => {
-    const server = createServer({ writeSketch, createRenderer: createBrowserRenderer }, done);
-    void server.connect(transport);
-  });
   process.stdin.once("end", () => void transport.close());
-  await closed;
+  await new Promise<void>((done, fail) => {
+    const server = createServer({ writeSketch, createRenderer: createBrowserRenderer }, done);
+    server.connect(transport).catch(fail);
+  });
 }
 
 function defaultOut(title: string | undefined): string {

@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,7 +70,7 @@ describe("render", () => {
     expect(mocks.close).toHaveBeenCalledOnce();
   });
 
-  it("resolves -o against cwd and creates its parent directories", async () => {
+  it("resolves -o against cwd", async () => {
     const { io } = collect();
     const cwd = process.cwd();
     process.chdir(dir);
@@ -81,7 +81,14 @@ describe("render", () => {
     }
 
     expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "out/nested/diagram"), renderer);
-    expect((await stat(join(dir, "out/nested"))).isDirectory()).toBe(true);
+  });
+
+  it("treats a trailing slash on -o as a directory", async () => {
+    const { io } = collect();
+
+    expect(await main(["render", specPath, "-o", join(dir, "diagrams/")], io)).toBe(0);
+
+    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "diagrams/topology"), renderer);
   });
 
   it("closes the renderer when writeSketch throws", async () => {

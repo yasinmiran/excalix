@@ -59,8 +59,8 @@ const layout: LayoutResult = {
   edges: {
     "edge:0": {
       points: [
-        { x: 167, y: 184 },
-        { x: 231, y: 184 },
+        { x: 167, y: 178.5 },
+        { x: 231, y: 178.5 },
         { x: 231, y: 132.5 },
         { x: 295, y: 132.5 },
       ],
@@ -148,7 +148,7 @@ describe("buildElements", () => {
 
   it("keeps group ids out of the element id space and nests them deepest first", () => {
     const awsRect = elements[0]!;
-    const k8sRect = elements[2]!;
+    const k8sRect = elements[4]!;
     const [awsGroup] = awsRect.groupIds;
     const [k8sGroup] = k8sRect.groupIds;
     expect(awsRect.groupIds).toEqual([awsGroup]);
@@ -226,7 +226,7 @@ describe("buildElements", () => {
       expect(arrow).toMatchObject({ elbowed: false, roundness: null, strokeWidth: 2 });
     });
     expect(arrowAt(0).width).toBe(295 - 167);
-    expect(arrowAt(0).height).toBe(184 - 132.5);
+    expect(arrowAt(0).height).toBe(178.5 - 132.5);
   });
 
   it("stores inside-mode fixed points normalised to the bound box, nudging exact halves", () => {
@@ -268,10 +268,11 @@ describe("buildElements", () => {
     expect(elements[elements.length - 1]).toBe(title);
   });
 
-  it("orders groups outermost first, then nodes, arrows, title", () => {
+  it("emits each group as one contiguous block, then free nodes, arrows, title", () => {
     expect(elements.map((e) => (isText(e) ? `text:${e.text}` : e.type))).toEqual([
-      "rectangle", "text:AWS", "rectangle", "text:EKS",
-      "ellipse", "text:Web app", "rectangle", "text:Order API", "rectangle", "text:Worker", "rectangle", "text:Postgres",
+      "rectangle", "text:AWS", "rectangle", "text:Postgres",
+      "rectangle", "text:EKS", "rectangle", "text:Order API", "rectangle", "text:Worker",
+      "ellipse", "text:Web app",
       "arrow", "text:POST /orders", "arrow", "arrow", "arrow",
       "text:order pipeline",
     ]);

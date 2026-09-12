@@ -55,7 +55,7 @@ export const FONT = {
   node: 20,
   edge: 16,
   group: 16,
-  title: 28,
+  title: 32,
 };
 
 export const NODE = {
@@ -79,6 +79,6 @@ export function nodeSize(kind: Kind, label: TextSize): { width: number; height: 
   const factor = NODE_STYLES[kind].shape === "ellipse" ? Math.SQRT2 : 1;
   return {
     width: Math.max(NODE.minWidth, Math.ceil(label.width * factor + NODE.paddingX * 2)),
-    height: Math.max(NODE.minHeight, Math.ceil(label.height * factor + NODE.paddingY * 2)),
+    height: Math.max(NODE.minHeight, Math.ceil(label.height + NODE.paddingY * 2)),
   };
 }

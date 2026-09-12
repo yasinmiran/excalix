@@ -83,7 +83,7 @@ describe("sketch tool", () => {
       "cache",
       "external",
     ]);
-    expect(schema.required).toEqual(["nodes", "edges"]);
+    expect(schema.required).toEqual(["nodes"]);
   });
 
   it("returns the written paths and the png", async () => {

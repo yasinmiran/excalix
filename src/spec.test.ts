@@ -328,7 +328,7 @@ describe("JSON Schema", () => {
   it("makes defaulted fields optional only under io input", () => {
     expect(schema.required).toEqual(["direction", "groups", "nodes", "edges"]);
     const input = z.toJSONSchema(specSchema, { io: "input" }) as Json;
-    expect(input.required).toEqual(["nodes", "edges"]);
+    expect(input.required).toEqual(["nodes"]);
     expect(input.properties.edges.items.required).toEqual(["from", "to"]);
     expect(input.properties.direction.default).toBe("lr");
   });

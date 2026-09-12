@@ -1,0 +1,21 @@
+{
+  "title": "login flow",
+  "direction": "tb",
+  "nodes": [
+    { "id": "app", "label": "Mobile app", "kind": "client" },
+    { "id": "gateway", "label": "API gateway", "kind": "service" },
+    { "id": "auth", "label": "Auth service", "kind": "service" },
+    { "id": "sessions", "label": "Session cache", "kind": "cache" },
+    { "id": "users", "label": "Users DB", "kind": "datastore" },
+    { "id": "idp", "label": "Google OAuth", "kind": "external" },
+    { "id": "audit", "label": "audit.events", "kind": "queue" }
+  ],
+  "edges": [
+    { "from": "app", "to": "gateway", "label": "POST /login" },
+    { "from": "gateway", "to": "auth" },
+    { "from": "auth", "to": "idp", "label": "verify token" },
+    { "from": "auth", "to": "users" },
+    { "from": "auth", "to": "sessions", "arrows": "both" },
+    { "from": "auth", "to": "audit", "style": "async" }
+  ]
+}

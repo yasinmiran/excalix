@@ -81,12 +81,12 @@ render defaults the basename to the spec path without its extension.
 | `both` | an arrowhead at each end, for a bidirectional link |
 | `none` | no arrowhead, a plain association |
 
-`direction` is `lr`, left to right, by default, or `tb` for top to bottom. `groups` draw a dashed boundary such as a VPC, cluster or account, and nest through `parent`. Run `excalix schema` for the full JSON Schema.
+`direction` is `lr`, left to right, by default, or `tb` for top to bottom; `examples/auth-flow.json` is a top-to-bottom one without groups. `groups` draw a dashed boundary such as a VPC, cluster or account, and nest through `parent`. Run `excalix schema` for the full JSON Schema.
 
 Validation reports every problem at once rather than stopping at the first:
 
 - ids match `^[A-Za-z0-9_-]+$` and are unique across nodes and groups together
-- labels are non-empty after trim, and there is at least one node
+- labels are non-empty after trim, and there is at least one node; `edges` may be empty or omitted
 - `node.group`, `group.parent`, `edge.from` and `edge.to` reference existing ids; edges reference nodes only, never groups
 - group parents form a forest, no cycles
 - self-edges and duplicate edges are both allowed, since they are distinct arrows
@@ -102,7 +102,7 @@ claude mcp add excalix --scope user -- node /absolute/path/to/excalix/dist/cli.j
 
 The repo also ships a `.mcp.json` for project scope. That one invokes `node dist/cli.js mcp` by a relative path, so it resolves only when the client's working directory is this repo; from anywhere else, use the absolute path above.
 
-There is one tool, `sketch`. Its input is the spec plus `out`, a basename for the files to write. It returns the three written paths as text and then the PNG inline as an image, so a calling agent sees the diagram in the same turn it asked for it and can send back an adjusted spec without a round trip through the filesystem.
+There is one tool, `sketch`. Its input is the spec plus an optional `out`, a basename for the files to write (default `diagrams/<title slug>` under the server's working directory, which is the project directory when Claude Code launches it). It returns the three written paths as text and then the PNG inline as an image, so a calling agent sees the diagram in the same turn it asked for it and can send back an adjusted spec without a round trip through the filesystem.
 
 ## How it works
 

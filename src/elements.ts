@@ -68,15 +68,22 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
     }
   });
 
+  // Excalidraw needs the members of a group contiguous in the array, so each group emits its own block:
+  // rect, label, direct nodes, then nested groups.
+  const nodesIn = groupBy(spec.nodes, (node) => node.group);
+  const groupsIn = groupBy(spec.groups, (group) => group.parent);
   const elements: ExcalidrawElement[] = [];
-  for (const group of byDepth(spec.groups, parents)) {
-    elements.push(...groupElements(group, ids, box(layout.groups, group.id), measured.groupLabels[group.id], chainOf(group.id)));
-  }
-  for (const node of spec.nodes) {
+  const pushNode = (node: NodeSpec) =>
     elements.push(
       ...nodeElements(node, ids, box(layout.nodes, node.id), measured.nodeLabels[node.id], chainOf(node.group), arrowsByNode.get(node.id) ?? []),
     );
-  }
+  const pushGroup = (group: GroupSpec): void => {
+    elements.push(...groupElements(group, ids, box(layout.groups, group.id), measured.groupLabels[group.id], chainOf(group.id)));
+    for (const node of nodesIn.get(group.id) ?? []) pushNode(node);
+    for (const child of groupsIn.get(group.id) ?? []) pushGroup(child);
+  };
+  for (const root of groupsIn.get(undefined) ?? []) pushGroup(root);
+  for (const node of nodesIn.get(undefined) ?? []) pushNode(node);
   spec.edges.forEach((edge, index) => {
     const routed = layout.edges[edgeKey(index)];
     if (!routed) throw new Error(`layout has no route for ${edgeKey(index)}`);
@@ -304,14 +311,15 @@ function groupChainsOf(groups: GroupSpec[], parents: Map<string, string | undefi
   return chains;
 }
 
-function byDepth(groups: GroupSpec[], parents: Map<string, string | undefined>): GroupSpec[] {
-  const depth = (id: string): number => {
-    const parent = parents.get(id);
-    return parent === undefined ? 0 : 1 + depth(parent);
-  };
-  return groups.map((group, order) => ({ group, order, depth: depth(group.id) }))
-    .sort((a, b) => a.depth - b.depth || a.order - b.order)
-    .map((entry) => entry.group);
+function groupBy<T, K>(items: T[], keyOf: (item: T) => K): Map<K, T[]> {
+  const buckets = new Map<K, T[]>();
+  for (const item of items) {
+    const key = keyOf(item);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(item);
+    else buckets.set(key, [item]);
+  }
+  return buckets;
 }
 
 // Excalidraw's normalizeFixedPoint nudges a coordinate within 1e-4 of 0.5 to 0.5001 on restore;

@@ -52,9 +52,11 @@ Validation (all problems reported at once, not first-fail):
 - group parents form a forest (no cycles)
 - self-edges are allowed; duplicate edges are allowed (they're distinct arrows)
 
-Defaults applied by parseSpec: `direction: "lr"`, `groups: []`, `edge.style:
-"sync"`, `edge.arrows: "forward"`. Unknown keys are rejected (zod strict) so an
-agent's typo fails loudly instead of being ignored.
+Defaults applied by parseSpec: `direction: "lr"`, `groups: []`, `edges: []`,
+`edge.style: "sync"`, `edge.arrows: "forward"`. Unknown keys are rejected (zod
+strict) so an agent's typo fails loudly instead of being ignored. When the
+schema fails, the reference checks still run over whatever shape the input has,
+so one round trip reports both the typo in a `kind` and the dangling edge.
 
 ## Visual vocabulary (src/style.ts)
 
@@ -66,21 +68,23 @@ Fixed per kind. No caller-facing colour, font, or shape options exist.
 | service   | rectangle, rounded       | `#a5d8ff` | solid     | `#1e1e1e` | the default "box"              |
 | datastore | rectangle, sharp         | `#b2f2bb` | solid     | `#1e1e1e` |                                |
 | queue     | rectangle, sharp         | `#ffec99` | hachure   | `#1e1e1e` | hatching reads as a stream     |
-| cache     | rectangle, rounded       | `#ffd8a8` | solid     | `#1e1e1e` |                                |
+| cache     | rectangle, sharp         | `#ffd8a8` | solid     | `#1e1e1e` | sharp = stateful, rounded = compute |
 | external  | rectangle, rounded       | transparent | solid   | `#1e1e1e` | strokeStyle `dashed`           |
 
-- group: rectangle, sharp, fill `#f8f9fa`, strokeStyle `dashed`, strokeWidth 1,
-  label text top-left inside, fontSize 16, colour `#495057`
+- group: rectangle, sharp, fill `#f8f9fa`, stroke `#868e96` (grey so boundaries
+  recede behind the flow), strokeStyle `dashed`, strokeWidth 1, label text
+  top-left inside, fontSize 16, colour `#495057`
 - edges: `sync` solid, `async` dashed; strokeColor `#1e1e1e`, strokeWidth 2;
   endArrowhead `"arrow"`; `arrows: "both"` also sets startArrowhead; `"none"`
   sets neither
 - text: fontFamily Excalifont (`FONT_FAMILY.Excalifont`, numeric 5 in this
   build, confirm from `excalidraw-types/common/src/constants.d.ts`), node labels
-  fontSize 20, edge labels 16, group labels 16, title 28, lineHeight 1.25
+  fontSize 20, edge labels 16, group labels 16, title 32, lineHeight 1.25
 - roughness 1, strokeWidth 2 for nodes, opacity 100 everywhere
 - node box = measured label + horizontal padding 24, vertical padding 16,
-  minimum 120x56; ellipse gets label box scaled by sqrt(2) before padding so
-  the text stays inside the curve
+  minimum 120x56; an ellipse gets its label width scaled by sqrt(2) before
+  padding so the text stays inside the curve (height keeps the plain padding,
+  the minimum height already leaves room)
 - multi-line labels (`\n` in label) are allowed; width is the widest line
 
 ## Layout (src/layout.ts)
@@ -91,8 +95,12 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
 - `elk.hierarchyHandling: INCLUDE_CHILDREN` so edges may cross group borders
 - `elk.edgeRouting: ORTHOGONAL`
 - group padding leaves room for the label: top = label.height + 16, others 16
-- `elk.spacing.nodeNode: 40`, `elk.layered.spacing.nodeNodeBetweenLayers: 64`
-- edge labels: `elk.edgeLabels.placement: CENTER`, sizes passed through
+- `elk.spacing.nodeNode: 48`, `elk.layered.spacing.nodeNodeBetweenLayers: 48`,
+  `elk.spacing.edgeNode: 24`
+- edge labels: `elk.edgeLabels.placement: CENTER`, `elk.edgeLabels.inline: true`,
+  sizes passed through with a 12px margin on every side so the text never
+  touches a neighbouring node (the returned label point is the text box, not
+  the padded one)
 
 Gotcha: ELK returns child coordinates relative to their parent node and edge
 sections relative to the edge's containing node. Convert everything to absolute
@@ -130,18 +138,25 @@ created: null, link: null, locked: false`.
 - Arrow: `type: "arrow"`, `elbowed: false`, x/y = first polyline point, `points`
   relative to x/y starting at `[0, 0]`, `roundness: null` (orthogonal, sharp
   corners). Bindings use the fixed-point format: `startBinding: { elementId,
-  fixedPoint: [fx, fy], mode: "orbit" }` where fixedPoint is the endpoint
-  normalised to the bound element's box (0..1 each axis). Both bound elements
-  also list the arrow in `boundElements: [{ type: "arrow", id }]`. Confirm
-  `mode` semantics by grepping `"orbit"` in the utils bundle before choosing.
+  fixedPoint: [fx, fy], mode: "inside" }` where fixedPoint is the endpoint
+  normalised to the bound element's box (0..1 each axis; a coordinate within
+  1e-4 of 0.5 is stored as 0.5001 because Excalidraw's restore nudges it, and
+  storing the nudged value keeps a reload byte-identical). `inside` keeps the
+  endpoint exactly where the layout put it; `orbit` would re-project it onto
+  the outline plus a 6px gap on the first drag. Both bound elements also list
+  the arrow in `boundElements: [{ type: "arrow", id }]`.
 - Edge label: a `text` element bound to the arrow (`containerId` = arrow id,
-  arrow `boundElements` includes it), placed at the layout's label point. Check
-  how this build uses `labelPosition` for arrow-bound text and set it so the
-  export and the editor agree.
+  arrow `boundElements` includes it). Export and editor both ignore the stored
+  x/y of arrow-bound text and place it from `labelPosition`, an arc-length
+  parameter along the polyline, so the label is stored at the on-path point
+  nearest ELK's label centre with x/y set to match. ELK's label point only
+  reserves space.
 - Title: free `text`, fontSize 28, top-left above the diagram bounds with 32px
   gap. Only when the spec has a title.
-- Element order: groups outermost first, then nodes with their labels, then
-  arrows with their labels, then title. Order is z-order.
+- Element order: Excalidraw needs the members of a group contiguous in the
+  array, so each group emits one block (rect, label, its direct nodes, then its
+  nested groups recursively), followed by ungrouped nodes, then arrows with
+  their labels, then the title. Order is z-order.
 
 Determinism: `ids.ts` derives every id, `seed`, and `versionNonce` from
 `sha256(specHash + ":" + key)` where specHash is the sha256 of the canonical
@@ -164,18 +179,23 @@ The `.excalidraw` document: `{ type: "excalidraw", version: 2, source:
   tears it down.
 - The page is served from a fake origin (`http://excalix.local/`) through
   `page.route`, mapping `/vendor/*` to
-  `node_modules/@excalidraw/utils/dist/prod/*` on disk. Set
-  `window.EXCALIDRAW_ASSET_PATH = "/vendor/assets/"` before the module loads so
-  fonts resolve. The bundle is a self-contained ES module (no bare imports).
-- `measure(texts, fontSize)`: register `@font-face` for Excalifont from the
-  vendored TTF, `await document.fonts.load(...)`, then canvas `measureText` per
-  line, width = widest line, height = lines * fontSize * 1.25. This must match
-  Excalidraw's own measurement so bound labels don't re-wrap on load.
+  `node_modules/@excalidraw/utils/dist/prod/*` on disk. The bundle is a
+  self-contained ES module (no bare imports).
+- Fonts: this bundle never reads the vendored TTF. Excalifont ships inside the
+  bundle as `data:font/woff2` faces split by unicode range, registered with
+  `document.fonts.add` only during an export. The TTF measures up to 1px wider
+  than those faces, so the renderer must not register its own `@font-face`.
+- `measure(texts, fontSize)`: run one probe export at start-up so the faces
+  are registered, then `document.fonts.load` and canvas `measureText` per line
+  with Excalidraw's own font string (`"20px Excalifont, Xiaolai, sans-serif,
+  Segoe UI Emoji"`), width = widest line, height = lines * fontSize * 1.25.
+  This matches Excalidraw's own measurement so bound labels don't re-wrap on
+  load.
 - `svg(elements)`: `exportToSvg({ data: { elements, appState, files: {} },
-  config: { padding: 24 } })` and return `outerHTML`. The SVG must be
-  self-contained: Excalidraw inlines font subsets; verify text renders in
-  Excalifont when the SVG is opened standalone. If inlining fails headless,
-  find out why before reaching for `skipInliningFonts`.
+  config: { padding: 24 } })` and return `outerHTML`. The SVG is
+  self-contained: Excalidraw subsets the font with harfbuzz wasm on the main
+  thread (one expected console error about workers per export) and inlines
+  it, about 2 KB per script used.
 - `png(elements)`: `exportToBlob` with `mimeType: "image/png"`, padding 24,
   2x scale; return bytes.
 - `estimate.ts` exports `estimateMeasurer: TextMeasurer` using 0.6 * fontSize
@@ -187,7 +207,9 @@ The `.excalidraw` document: `{ type: "excalidraw", version: 2, source:
 
 ```
 excalix render <spec.json> [-o <basename>]    writes <basename>.excalidraw, .svg, .png
-                                              default basename: spec path without extension
+                                              default basename: spec path without extension;
+                                              a trailing slash on -o means a directory;
+                                              validates before launching Chromium
 excalix validate <spec.json>                  exit 0 or print all problems, exit 1
 excalix schema                                JSON Schema of the spec to stdout
 excalix mcp                                   stdio MCP server
@@ -198,11 +220,15 @@ Errors go to stderr, one per line, exit code 1. No colour, no spinner.
 ## MCP (src/mcp.ts)
 
 `@modelcontextprotocol/sdk` `McpServer` over stdio. One tool, `sketch`.
-Input: the spec plus `out` (basename, absolute or relative to cwd). The tool
+Input: the spec plus an optional `out` (basename, absolute or relative to
+cwd; defaults to `diagrams/<title slug>`, or `diagrams/diagram`). The tool
 description doubles as the style guide: it lists every kind and edge style with
 one line on when to use it, so a calling agent never guesses. Result content:
 a text block listing the three written paths, then an `image` block with the
-PNG (base64, `image/png`) so the caller sees the diagram in the same turn.
+PNG (base64, `image/png`, taken from the in-memory result, never re-read from
+disk) so the caller sees the diagram in the same turn. One browser per server
+process, opened on the first call, dropped after a failed call so the next one
+starts fresh, and closed before the process exits when stdin ends.
 Validation errors return `isError: true` with the problem list.
 
 ## Conventions
