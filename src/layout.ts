@@ -1,9 +1,10 @@
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkEdgeSection, ElkExtendedEdge, ElkNode } from "elkjs/lib/elk.bundled.js";
+import { GROUP_STYLE } from "./style.js";
 import type { Box, Direction, LayoutEdge, LayoutGroup, LayoutInput, LayoutNode, LayoutResult, Point, RoutedEdge } from "./types.js";
 
 const ROOT = ":root";
-const PADDING = 16;
+const PADDING = GROUP_STYLE.padding;
 
 const elk = new ELK();
 

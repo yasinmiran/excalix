@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { buildElements, toDocument } from "./elements.js";
+import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
 import { FONT, nodeSize } from "./style.js";
@@ -23,9 +24,19 @@ export interface WrittenFiles {
   png: string;
 }
 
-/** Runs sketch and writes <basename>.excalidraw, .svg and .png. Returns the paths. */
-export async function writeSketch(input: unknown, basename: string, renderer: Renderer): Promise<WrittenFiles> {
+export interface Written {
+  files: WrittenFiles;
+  result: SketchResult;
+}
+
+/** Runs sketch and writes <basename>.excalidraw, .svg and .png. */
+export async function writeSketch(input: unknown, basename: string, renderer: Renderer): Promise<Written> {
   const result = await sketch(input, renderer);
+  return { files: await writeFiles(result, basename), result };
+}
+
+/** Writes a result to <basename>.excalidraw, .svg and .png. Returns the absolute paths. */
+export async function writeFiles(result: SketchResult, basename: string): Promise<WrittenFiles> {
   const base = resolve(basename);
   await mkdir(dirname(base), { recursive: true });
   const paths = { excalidraw: `${base}.excalidraw`, svg: `${base}.svg`, png: `${base}.png` };
@@ -37,14 +48,10 @@ export async function writeSketch(input: unknown, basename: string, renderer: Re
   return paths;
 }
 
-export function edgeId(index: number): string {
-  return `edge:${index}`;
-}
-
 async function measureLabels(spec: Spec, measurer: TextMeasurer): Promise<Measured> {
   const nodeLabels = await measureKeyed(measurer, spec.nodes.map((n) => [n.id, n.label]), FONT.node);
   const groupLabels = await measureKeyed(measurer, spec.groups.map((g) => [g.id, g.label]), FONT.group);
-  const labelled = spec.edges.flatMap((e, i): [string, string][] => (e.label ? [[edgeId(i), e.label]] : []));
+  const labelled = spec.edges.flatMap((e, i): [string, string][] => (e.label ? [[edgeKey(i), e.label]] : []));
   const edgeLabels = await measureKeyed(measurer, labelled, FONT.edge);
   const measured: Measured = { nodeLabels, groupLabels, edgeLabels };
   if (spec.title) {
@@ -69,10 +76,10 @@ function toLayoutInput(spec: Spec, measured: Measured): LayoutInput {
     groups: spec.groups.map((g) => ({ id: g.id, parent: g.parent, label: measured.groupLabels[g.id]! })),
     nodes: spec.nodes.map((n) => ({ id: n.id, group: n.group, ...nodeSize(n.kind, measured.nodeLabels[n.id]!) })),
     edges: spec.edges.map((e, i) => ({
-      id: edgeId(i),
+      id: edgeKey(i),
       from: e.from,
       to: e.to,
-      label: measured.edgeLabels[edgeId(i)],
+      label: measured.edgeLabels[edgeKey(i)],
     })),
   };
 }

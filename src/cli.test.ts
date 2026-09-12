@@ -49,9 +49,8 @@ beforeEach(async () => {
   await writeFile(specPath, JSON.stringify(specJson), "utf8");
   mocks.createBrowserRenderer.mockResolvedValue(renderer);
   mocks.writeSketch.mockImplementation(async (_spec: unknown, basename: string) => ({
-    excalidraw: `${basename}.excalidraw`,
-    svg: `${basename}.svg`,
-    png: `${basename}.png`,
+    files: { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` },
+    result: { excalidraw: "", svg: "", png: new Uint8Array() },
   }));
 });
 

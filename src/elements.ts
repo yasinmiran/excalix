@@ -7,7 +7,7 @@ import type {
   ExcalidrawTextElement,
   FixedPoint,
 } from "excalidraw-types/element/src/types";
-import { createIdSource, hashSpec, type IdSource } from "./ids.js";
+import { createIdSource, edgeKey, hashSpec, type IdSource } from "./ids.js";
 import { EDGE, EDGE_STYLES, FONT, GROUP_STYLE, NODE, NODE_STYLES, STROKE, TITLE_GAP, arrowheads } from "./style.js";
 import type { Box, EdgeSpec, GroupSpec, LayoutResult, Measured, NodeSpec, Point, Spec, TextSize } from "./types.js";
 
@@ -54,19 +54,22 @@ const TEXT_STROKE: Omit<Stroke, "strokeColor"> = {
 /** Turns a laid-out spec into Excalidraw elements. Pure and deterministic. */
 export function buildElements(spec: Spec, layout: LayoutResult, measured: Measured): ExcalidrawElement[] {
   const ids = createIdSource(hashSpec(spec));
-  const groupChains = groupChainsOf(spec.groups, ids);
+  const parents = new Map(spec.groups.map((group) => [group.id, group.parent]));
+  const groupChains = groupChainsOf(spec.groups, parents, ids);
   const chainOf = (group: string | undefined) => (group === undefined ? [] : (groupChains.get(group) ?? []));
   const nodeIds = new Map(spec.nodes.map((node) => [node.id, ids.id(`node:${node.id}`)]));
   const arrowsByNode = new Map<string, BoundElement[]>();
   spec.edges.forEach((edge, index) => {
-    const bound: BoundElement = { type: "arrow", id: ids.id(`edge:${index}`) };
+    const bound: BoundElement = { type: "arrow", id: ids.id(edgeKey(index)) };
     for (const nodeId of new Set([edge.from, edge.to])) {
-      arrowsByNode.set(nodeId, [...(arrowsByNode.get(nodeId) ?? []), bound]);
+      const arrows = arrowsByNode.get(nodeId);
+      if (arrows) arrows.push(bound);
+      else arrowsByNode.set(nodeId, [bound]);
     }
   });
 
   const elements: ExcalidrawElement[] = [];
-  for (const group of byDepth(spec.groups)) {
+  for (const group of byDepth(spec.groups, parents)) {
     elements.push(...groupElements(group, ids, box(layout.groups, group.id), measured.groupLabels[group.id], chainOf(group.id)));
   }
   for (const node of spec.nodes) {
@@ -75,9 +78,9 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
     );
   }
   spec.edges.forEach((edge, index) => {
-    const routed = layout.edges[`edge:${index}`];
-    if (!routed) throw new Error(`layout has no route for edge:${index}`);
-    elements.push(...edgeElements(edge, index, ids, routed, measured.edgeLabels[`edge:${index}`], nodeIds, layout.nodes));
+    const routed = layout.edges[edgeKey(index)];
+    if (!routed) throw new Error(`layout has no route for ${edgeKey(index)}`);
+    elements.push(...edgeElements(edge, index, ids, routed, measured.edgeLabels[edgeKey(index)], nodeIds, layout.nodes));
   });
   if (spec.title !== undefined && measured.title) {
     elements.push(
@@ -189,7 +192,7 @@ function edgeElements(
   nodeIds: Map<string, string>,
   nodeBoxes: LayoutResult["nodes"],
 ): ExcalidrawElement[] {
-  const key = `edge:${index}`;
+  const key = edgeKey(index);
   const points = routed.points;
   const first = points[0];
   const last = points[points.length - 1];
@@ -289,8 +292,7 @@ function base(ids: IdSource, key: string, box: Box, groupIds: string[], stroke: 
 }
 
 /** Excalidraw group id chains per group, own id first then ancestors. */
-function groupChainsOf(groups: GroupSpec[], ids: IdSource): Map<string, string[]> {
-  const parents = new Map(groups.map((group) => [group.id, group.parent]));
+function groupChainsOf(groups: GroupSpec[], parents: Map<string, string | undefined>, ids: IdSource): Map<string, string[]> {
   const chains = new Map<string, string[]>();
   for (const group of groups) {
     const chain: string[] = [];
@@ -302,8 +304,7 @@ function groupChainsOf(groups: GroupSpec[], ids: IdSource): Map<string, string[]
   return chains;
 }
 
-function byDepth(groups: GroupSpec[]): GroupSpec[] {
-  const parents = new Map(groups.map((group) => [group.id, group.parent]));
+function byDepth(groups: GroupSpec[], parents: Map<string, string | undefined>): GroupSpec[] {
   const depth = (id: string): number => {
     const parent = parents.get(id);
     return parent === undefined ? 0 : 1 + depth(parent);

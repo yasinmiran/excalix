@@ -74,10 +74,10 @@ async function render(argv: string[], io: Io): Promise<number> {
 
   const renderer = await createBrowserRenderer();
   try {
-    const written = await writeSketch(spec, basename, renderer);
-    io.stdout(written.excalidraw);
-    io.stdout(written.svg);
-    io.stdout(written.png);
+    const { files } = await writeSketch(spec, basename, renderer);
+    io.stdout(files.excalidraw);
+    io.stdout(files.svg);
+    io.stdout(files.png);
   } finally {
     await renderer.close();
   }

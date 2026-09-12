@@ -20,7 +20,7 @@ export const NODE_STYLES: Record<Kind, NodeStyle> = {
   service: { shape: "rectangle", rounded: true, fill: "#a5d8ff", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
   datastore: { shape: "rectangle", rounded: false, fill: "#b2f2bb", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
   queue: { shape: "rectangle", rounded: false, fill: "#ffec99", fillStyle: "hachure", stroke: STROKE, strokeStyle: "solid" },
-  cache: { shape: "rectangle", rounded: true, fill: "#ffd8a8", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
+  cache: { shape: "rectangle", rounded: false, fill: "#ffd8a8", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
   external: { shape: "rectangle", rounded: true, fill: "transparent", fillStyle: "solid", stroke: STROKE, strokeStyle: "dashed" },
 };
 
@@ -29,9 +29,7 @@ export const EDGE_STYLES: Record<EdgeStyle, { strokeStyle: StrokeStyle }> = {
   async: { strokeStyle: "dashed" },
 };
 
-export type Arrowhead = "arrow";
-
-export function arrowheads(arrows: Arrows): { start: Arrowhead | null; end: Arrowhead | null } {
+export function arrowheads(arrows: Arrows): { start: "arrow" | null; end: "arrow" | null } {
   switch (arrows) {
     case "forward":
       return { start: null, end: "arrow" };
@@ -44,7 +42,7 @@ export function arrowheads(arrows: Arrows): { start: Arrowhead | null; end: Arro
 
 export const GROUP_STYLE = {
   fill: "#f8f9fa",
-  stroke: STROKE,
+  stroke: "#868e96",
   strokeStyle: "dashed" as StrokeStyle,
   strokeWidth: 1,
   labelColor: "#495057",

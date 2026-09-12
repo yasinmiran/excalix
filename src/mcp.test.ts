@@ -1,6 +1,6 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -39,11 +39,10 @@ async function harness(overrides: Partial<SketchDeps> = {}) {
   const dir = await mkdtemp(join(tmpdir(), "excalix-mcp-"));
   const close = vi.fn(async () => {});
   const createRenderer = vi.fn(async () => ({ ...fakeRenderer(), close }));
-  const writeSketch = vi.fn(async (_input: unknown, basename: string) => {
-    const paths = { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` };
-    await writeFile(paths.png, PNG);
-    return paths;
-  });
+  const writeSketch = vi.fn(async (_input: unknown, basename: string) => ({
+    files: { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` },
+    result: { excalidraw: "", svg: "", png: PNG },
+  }));
 
   const server = createServer({ writeSketch, createRenderer, ...overrides });
   const client = new Client({ name: "test", version: "0" });
@@ -84,7 +83,7 @@ describe("sketch tool", () => {
       "cache",
       "external",
     ]);
-    expect(schema.required).toEqual(["nodes", "edges", "out"]);
+    expect(schema.required).toEqual(["nodes", "edges"]);
   });
 
   it("returns the written paths and the png", async () => {
@@ -97,6 +96,14 @@ describe("sketch tool", () => {
     expect(text).toMatchObject({ type: "text", text: `${out}.excalidraw\n${out}.svg\n${out}.png` });
     expect(image).toMatchObject({ type: "image", mimeType: "image/png", data: Buffer.from(PNG).toString("base64") });
     expect(writeSketch.mock.calls[0]?.[0]).toMatchObject({ nodes: SPEC.nodes, direction: "lr", groups: [] });
+  });
+
+  it("defaults out to diagrams/<title slug>", async () => {
+    const { client, writeSketch } = await harness();
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, title: "Order Pipeline v2" } });
+
+    expect(writeSketch.mock.calls[0]?.[1]).toBe(resolve("diagrams/order-pipeline-v2"));
   });
 
   it("reuses one renderer and closes it when the transport closes", async () => {

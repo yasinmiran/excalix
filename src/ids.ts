@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 
+/** Stable key for the edge at a spec index, shared by layout, measurement and elements. */
+export function edgeKey(index: number): string {
+  return `edge:${index}`;
+}
+
 /** Deterministic ids and seeds, all derived from the parsed spec. */
 export interface IdSource {
   id(key: string): string;

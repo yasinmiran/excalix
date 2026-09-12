@@ -1,10 +1,9 @@
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { writeSketch } from "./pipeline.js";
-import type { WrittenFiles } from "./pipeline.js";
+import type { Written } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { SpecError, specSchema } from "./spec.js";
 import type { Renderer } from "./types.js";
@@ -28,18 +27,19 @@ Look at the returned image and call again with an adjusted spec if labels overla
 const inputSchema = specSchema.extend({
   out: z
     .string()
+    .optional()
     .describe(
-      "output basename, absolute or relative to the server's cwd; writes <out>.excalidraw, <out>.svg, <out>.png",
+      "output basename without extension, absolute or relative to the server's cwd; writes <out>.excalidraw, <out>.svg and <out>.png. Defaults to diagrams/<title slug>.",
     ),
 });
 
 export interface SketchDeps {
-  writeSketch: (input: unknown, basename: string, renderer: Renderer) => Promise<WrittenFiles>;
+  writeSketch: (input: unknown, basename: string, renderer: Renderer) => Promise<Written>;
   createRenderer: () => Promise<Renderer>;
 }
 
-/** Builds the server with its dependencies injected. One renderer per server, opened on first call. */
-export function createServer(deps: SketchDeps): McpServer {
+/** Builds the server with its dependencies injected. One renderer per server, opened on first call and released on close. */
+export function createServer(deps: SketchDeps, onClose?: () => void): McpServer {
   const server = new McpServer({ name: "excalix", version: "0.1.0" });
   let renderer: Promise<Renderer> | undefined;
 
@@ -55,17 +55,17 @@ export function createServer(deps: SketchDeps): McpServer {
     const opened = renderer;
     renderer = undefined;
     void opened?.then((it) => it.close()).catch(() => {});
+    onClose?.();
   };
 
   server.registerTool("sketch", { description: DESCRIPTION, inputSchema }, async (args) => {
     const { out, ...spec } = args;
     try {
-      const files = await deps.writeSketch(spec, resolve(out), await renderReady());
-      const png = await readFile(files.png);
+      const { files, result } = await deps.writeSketch(spec, resolve(out ?? defaultOut(spec.title)), await renderReady());
       return {
         content: [
           { type: "text", text: [files.excalidraw, files.svg, files.png].join("\n") },
-          { type: "image", data: png.toString("base64"), mimeType: "image/png" },
+          { type: "image", data: Buffer.from(result.png).toString("base64"), mimeType: "image/png" },
         ],
       };
     } catch (error) {
@@ -79,17 +79,18 @@ export function createServer(deps: SketchDeps): McpServer {
 
 /** Serves the sketch tool over stdio. Resolves when the transport closes. */
 export async function serveMcp(): Promise<void> {
-  const server = createServer({ writeSketch, createRenderer: createBrowserRenderer });
   const transport = new StdioServerTransport();
-  await server.connect(transport);
-  process.stdin.once("end", () => void transport.close());
-  await new Promise<void>((done) => {
-    const releaseRenderer = server.server.onclose;
-    server.server.onclose = () => {
-      releaseRenderer?.();
-      done();
-    };
+  const closed = new Promise<void>((done) => {
+    const server = createServer({ writeSketch, createRenderer: createBrowserRenderer }, done);
+    void server.connect(transport);
   });
+  process.stdin.once("end", () => void transport.close());
+  await closed;
+}
+
+function defaultOut(title: string | undefined): string {
+  const slug = (title ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `diagrams/${slug || "diagram"}`;
 }
 
 function failure(text: string) {
