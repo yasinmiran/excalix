@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
-import { ARROWHEAD_ROOM, END_SPACING, borderSide } from "./layout.js";
+import { ARROWHEAD_ROOM, END_SPACING, LOOP_LABEL_RUN, borderSide } from "./layout.js";
 import { sketch } from "./pipeline.js";
 import { parseSpec } from "./spec.js";
 import { arrowheads } from "./style.js";
@@ -33,6 +33,7 @@ export type Invariant =
   | "arrowsClearNodes"
   | "headRoom"
   | "endsApart"
+  | "loopLabelRun"
   | "insideBounds";
 
 /** Layout defects a suite still has, keyed by spec file. An entry turns its cell into an it.fails. */
@@ -47,6 +48,7 @@ const TITLES: Record<Invariant, string> = {
   arrowsClearNodes: "no arrow passes through a node it does not join",
   headRoom: `every arrowhead sits on a segment of at least ${ARROWHEAD_ROOM}px`,
   endsApart: `arrow ends on one side of a node stay ${END_SPACING}px apart`,
+  loopLabelRun: `a self loop's outer segment runs ${LOOP_LABEL_RUN}px past its label at both ends`,
   insideBounds: "every box but the title starts inside the layout bounds",
 };
 
@@ -68,6 +70,7 @@ interface Arrow {
   from: string;
   to: string;
   heads: { start: boolean; end: boolean };
+  label?: Box;
 }
 
 interface Scene {
@@ -117,6 +120,7 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       );
       check("headRoom", (scene) => scene.arrows.flatMap(shortHeadSegments));
       check("endsApart", crowdedSides);
+      check("loopLabelRun", (scene) => scene.arrows.flatMap(buriedLoopSegment));
       check("insideBounds", (scene) =>
         scene.bounded.filter(({ box }) => box.x < 0 || box.y < 0).map((item) => `${boxAt(item)} starts left of x=0 or above y=0`),
       );
@@ -159,6 +163,7 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
       from: edge.from,
       to: edge.to,
       heads: { start: start !== null, end: end !== null },
+      ...(edge.label === undefined ? {} : { label: element(`${edgeKey(index)}:label`) }),
     };
   });
 
@@ -213,6 +218,39 @@ function crowdedSides(scene: Scene): string[] {
       return gap + SLACK >= END_SPACING ? [] : [`${key}: ${previous.name} and ${end.name} are ${round(gap)}px apart`];
     });
   });
+}
+
+// Excalidraw blanks the line behind a bound label, so a self loop whose outer segment is no longer than the
+// label centred on it comes out as two stubs with a word between them instead of a loop.
+function buriedLoopSegment(arrow: Arrow): string[] {
+  const { label } = arrow;
+  if (arrow.from !== arrow.to || !label || arrow.points.length < 2) return [];
+  const [from, to] = nearestSegment(arrow.points, { x: label.x + label.width / 2, y: label.y + label.height / 2 });
+  const vertical = Math.abs(to.y - from.y) > Math.abs(to.x - from.x);
+  const [start, end] = vertical ? [from.y, to.y] : [from.x, to.x];
+  const [low, high] = [Math.min(start, end), Math.max(start, end)];
+  const [labelLow, labelSpan] = vertical ? [label.y, label.height] : [label.x, label.width];
+  const runs = [labelLow - low, high - labelLow - labelSpan];
+  if (runs.every((run) => run + SLACK >= LOOP_LABEL_RUN)) return [];
+  return [`${arrow.name} label sits on a ${round(high - low)}px segment showing ${runs.map(round).join("px and ")}px of line`];
+}
+
+function nearestSegment(points: Point[], target: Point): [Point, Point] {
+  let best: { distance: number; segment: [Point, Point] } = { distance: Infinity, segment: [points[0]!, points[1]!] };
+  for (let i = 1; i < points.length; i++) {
+    const segment: [Point, Point] = [points[i - 1]!, points[i]!];
+    const distance = distanceToSegment(target, ...segment);
+    if (distance < best.distance) best = { distance, segment };
+  }
+  return best.segment;
+}
+
+function distanceToSegment(target: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const squared = dx * dx + dy * dy;
+  const s = squared === 0 ? 0 : Math.max(0, Math.min(1, ((target.x - a.x) * dx + (target.y - a.y) * dy) / squared));
+  return Math.hypot(target.x - (a.x + dx * s), target.y - (a.y + dy * s));
 }
 
 // An arrow element stores its origin at the first polyline point, which is rarely the top-left corner.

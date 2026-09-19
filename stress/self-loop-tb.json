@@ -1,0 +1,28 @@
+{
+  "title": "labelled self loop, top to bottom",
+  "direction": "tb",
+  "nodes": [
+    {
+      "id": "a",
+      "label": "stream processor",
+      "kind": "service"
+    },
+    {
+      "id": "b",
+      "label": "Kafka",
+      "kind": "queue"
+    }
+  ],
+  "edges": [
+    {
+      "from": "b",
+      "to": "a"
+    },
+    {
+      "from": "a",
+      "to": "a",
+      "label": "retries",
+      "style": "async"
+    }
+  ]
+}

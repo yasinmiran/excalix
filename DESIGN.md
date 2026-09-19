@@ -169,7 +169,9 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
   too and the text is centred on the loop's outer segment. The option is read
   from the containing parent, never from the node, so it goes on the root and
   on every group, and it is measured in the layered algorithm's internal frame,
-  which is transposed for DOWN
+  which is transposed for DOWN. How far apart the loop's two feet sit, and so
+  how long that outer segment comes out, is the node side's business rather
+  than this option's: see `LOOP_LABEL_RUN` below
 
 ### Room for an arrowhead
 
@@ -195,6 +197,20 @@ with two or more ends on one side grows along that side to `(ends + 1) * 32`.
 Left and right ends grow the height, top and bottom ends grow the width, and
 the label stays centred in whatever the node becomes, so a hub with eight
 spokes on one side turns into a tall bar, which is what a hub is.
+
+A labelled self loop wants more than 32 between its two feet. Both feet land on
+one side, the segment joining them is what the label is centred on, and
+Excalidraw blanks the line behind a bound label, so a 32px segment under a 20px
+line of text leaves 6px of line showing at each end: in `stress/multi-region-tb`
+that came out as the word `retries` with a stub either side of it and no loop to
+be seen. Such a side is spaced at the label's own extent along the segment
+(its height on a left or right side, its width on a top or bottom one) plus its
+12px clearance and a further `LOOP_LABEL_RUN` at each end, in place of 32.
+`LOOP_LABEL_RUN` is 16, read off renders at 12, 16 and 20. A dashed stroke is
+`[8, 8 + strokeWidth]`, so at 12 an async loop's 24px of showing line can come
+out as a single tick, and at 16 it does not; 20 reads no better than 16 and
+every such node pays three times the difference, because the side is
+`(ends + 1)` times the spacing. An unlabelled self loop keeps the 32.
 
 ### Passes
 
@@ -405,8 +421,8 @@ agent stops being able to read the picture it asked for. The export is 2x and a
 viewer scales the longest side to around 1568 pixels, so past 6000 the reduction
 is over 4x and a 20pt node label lands under 10 pixels in the copy being read,
 which is where thin lines and small labels start to go missing. Over `examples/` and `stress/` it speaks up for
-two specs, the twenty-node region pair at 9133 wide and the fourteen-box chain
-at 6145, and stays quiet for the rest, the tall twenty-node variant included.
+three specs, the two twenty-node region variants at 9565 wide and 6500 tall and
+the fourteen-box chain at 6145, and stays quiet for the rest.
 Nothing else about the output changes, so a diagram that still reads prints
 exactly what it printed before.
 
@@ -477,10 +493,11 @@ when stdin ends. Failures return `isError: true` and no structured content.
 - `src/test-support.ts` is the shared harness: the spec corpus (`specFiles`,
   `readSpec`), `measuringOnly` (a renderer that measures and stubs svg and png,
   because the invariants read elements only), and `describeGeometry`, which
-  registers nine cells per spec: node overlap, nesting, edge labels clear of
+  registers ten cells per spec: node overlap, nesting, edge labels clear of
   nodes and of each other, arrows clear of group labels and of the nodes they
   do not join, a full `ARROWHEAD_ROOM` segment under every arrowhead, arrow
-  ends `END_SPACING` apart on a shared node side, and bounds. A spec
+  ends `END_SPACING` apart on a shared node side, a `LOOP_LABEL_RUN` of line
+  past each end of a self loop label, and bounds. A spec
   dropped in `examples/` or `stress/` is covered without touching a test.
   Defects a suite still has go in the `KNOWN` table it passes in, which turns
   those cells into `it.fails` with the reason in the test name, so fixing one

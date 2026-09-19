@@ -36,6 +36,11 @@ type Side = "left" | "right" | "top" | "bottom";
 export const ARROWHEAD_ROOM = 36;
 /** Distance kept between two arrow ends on the same side of a node: an arrowhead is 17px wide. */
 export const END_SPACING = 32;
+/**
+ * Line left showing on each side of a self loop's label, past the label's own clearance. Read off renders
+ * at 12, 16 and 20: at 12 an async loop's outer segment is a tick mark, and 20 reads no better than 16.
+ */
+export const LOOP_LABEL_RUN = 16;
 
 // ELK reads a spacing from the node that contains what is being spaced, so a group has to repeat
 // every value or its children fall back to the defaults.
@@ -244,29 +249,45 @@ export function borderSide(box: Box, point: Point): Side | undefined {
 // node in the graph. Lengthening the crowded side is the targeted one; the label stays centred in it.
 function spreadEnds(input: LayoutInput, probe: LayoutResult): LayoutInput {
   const ends = new Map<string, number>();
-  const count = (id: string, point: Point): void => {
+  const spacing = new Map<string, number>();
+  const count = (id: string, point: Point, loopLabel?: TextSize): void => {
     const box = probe.nodes[id];
     const side = box && borderSide(box, point);
-    if (side) ends.set(`${id}:${side}`, (ends.get(`${id}:${side}`) ?? 0) + 1);
+    if (!side) return;
+    const key = `${id}:${side}`;
+    ends.set(key, (ends.get(key) ?? 0) + 1);
+    if (loopLabel) spacing.set(key, Math.max(spacing.get(key) ?? 0, outerSegment(side, loopLabel)));
   };
   for (const edge of input.edges) {
     const { points } = probe.edges[edge.id]!;
-    count(edge.from, points[0]!);
-    count(edge.to, points[points.length - 1]!);
+    const loopLabel = edge.from === edge.to ? edge.label : undefined;
+    count(edge.from, points[0]!, loopLabel);
+    count(edge.to, points[points.length - 1]!, loopLabel);
   }
 
   let grown = false;
   const nodes = input.nodes.map((node) => {
-    const room = (...sides: Side[]): number => {
-      const most = Math.max(...sides.map((side) => ends.get(`${node.id}:${side}`) ?? 0));
-      return most < 2 ? 0 : (most + 1) * END_SPACING;
-    };
+    const room = (...sides: Side[]): number =>
+      Math.max(
+        ...sides.map((side) => {
+          const key = `${node.id}:${side}`;
+          const most = ends.get(key) ?? 0;
+          return most < 2 ? 0 : (most + 1) * Math.max(END_SPACING, spacing.get(key) ?? 0);
+        }),
+      );
     const width = Math.max(node.width, room("top", "bottom"));
     const height = Math.max(node.height, room("left", "right"));
     grown ||= width !== node.width || height !== node.height;
     return { ...node, width, height };
   });
   return grown ? { ...input, nodes } : input;
+}
+
+// A self loop's two feet sit on one node side and the segment joining them carries the label, which
+// Excalidraw draws over a blanked stretch of line. Below this the loop is two stubs with a word between them.
+function outerSegment(side: Side, label: TextSize): number {
+  const along = side === "left" || side === "right" ? label.height : label.width;
+  return Math.ceil(along + (LABEL_MARGIN + LOOP_LABEL_RUN) * 2);
 }
 
 /** Extra left padding for the groups whose label the previous pass had to leave under an arrow. */
