@@ -88,7 +88,7 @@ interface SceneElement extends Box {
   points?: [number, number][];
 }
 
-/** Registers the nine layout invariants for every committed spec, measured however the caller measures. */
+/** Registers the ten layout invariants for every committed spec, measured however the caller measures. */
 export function describeGeometry(title: string, measurer: () => TextMeasurer, known: KnownDefects = {}): void {
   for (const file of specFiles) {
     describe(`${title} ${file}`, () => {

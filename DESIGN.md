@@ -432,7 +432,7 @@ same whether the tool ran or not.
 suggestion to split the diagram or shorten its labels. The threshold is where an
 agent stops being able to read the picture it asked for. The export is 2x and a
 viewer scales the longest side to around 1568 pixels, so past 6000 the reduction
-is over 4x and a 20pt node label lands under 10 pixels in the copy being read,
+approaches 4x and a 20pt node label lands around 10 pixels in the copy being read,
 which is where thin lines and small labels start to go missing. Over
 `examples/` and `stress/` it speaks up for three specs, the two twenty-node
 region variants at 9578 wide and 6500 tall and the fourteen-box chain at 6158,

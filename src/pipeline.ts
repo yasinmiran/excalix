@@ -55,7 +55,7 @@ export function pngSize(png: Uint8Array): { width: number; height: number } {
 }
 
 // An agent reads the PNG downscaled to roughly 1568px on its longest side. The export is 2x, so a 20pt node label
-// is 40px in the file; past 6000 the reduction is over 4x and that label lands under 10px in the copy being read.
+// is 40px in the file; past 6000 the reduction approaches 4x and that label lands around 10px in the copy being read.
 const LEGIBLE_PIXELS = 6000;
 
 /** One line about a diagram too big to read once it is scaled down, or undefined while it still reads. */
