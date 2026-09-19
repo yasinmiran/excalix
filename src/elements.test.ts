@@ -5,6 +5,7 @@ import type {
 } from "excalidraw-types/element/src/types";
 import { describe, expect, it } from "vitest";
 import { EXCALIX_EPOCH, buildElements, toDocument } from "./elements.js";
+import { fractionalIndex } from "./fractional-index.js";
 import { estimateMeasurer } from "./render/estimate.js";
 import { FONT, nodeSize } from "./style.js";
 import type { LayoutResult, Measured, Point, Spec } from "./types.js";
@@ -130,13 +131,20 @@ describe("buildElements", () => {
   it("fills the base with the contract's constants", () => {
     for (const element of elements) {
       expect(element).toMatchObject({
-        angle: 0, opacity: 100, version: 1, index: null, isDeleted: false, frameId: null,
+        angle: 0, opacity: 100, version: 1, isDeleted: false, frameId: null,
         updated: EXCALIX_EPOCH, created: null, link: null, locked: false,
       });
       expect(element.id).toMatch(/^[0-9A-Za-z]{20}$/);
       expect(element.seed).toBeGreaterThanOrEqual(0);
       expect(element.seed).toBeLessThan(2 ** 31);
       expect(element.versionNonce).not.toBe(element.seed);
+    }
+  });
+
+  it("indexes elements by array position, every bound text above its container", () => {
+    expect(elements.map((element) => element.index)).toEqual(elements.map((_, position) => fractionalIndex(position)));
+    for (const text of texts.filter((t) => t.containerId)) {
+      expect(text.index! > byId.get(text.containerId!)!.index!).toBe(true);
     }
   });
 

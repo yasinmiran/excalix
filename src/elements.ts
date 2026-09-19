@@ -8,6 +8,7 @@ import type {
   FixedPoint,
 } from "excalidraw-types/element/src/types";
 import type { LocalPoint, Radians } from "excalidraw-types/math/src/types";
+import { fractionalIndex } from "./fractional-index.js";
 import { createIdSource, edgeKey, hashSpec, type IdSource } from "./ids.js";
 import { EDGE, EDGE_STYLES, FONT, GROUP_STYLE, NODE, NODE_STYLES, STROKE, TITLE_GAP, arrowheads } from "./style.js";
 import type { Box, EdgeSpec, GroupSpec, LayoutResult, Measured, NodeSpec, Point, Spec, TextSize } from "./types.js";
@@ -113,7 +114,9 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
       }),
     );
   }
-  return elements;
+  // Restore rewrites an element whose index is not a valid order key ascending with its neighbours,
+  // and that rewrite mutates the element, so version, versionNonce and updated move with it.
+  return elements.map((element, position) => ({ ...element, index: fractionalIndex(position) }));
 }
 
 /** Wraps elements in a .excalidraw document. */

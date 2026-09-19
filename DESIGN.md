@@ -196,12 +196,13 @@ other branded field silently becomes `any`.
 
 `Radians`, `LocalPoint` and the unitless `lineHeight` are branded numerics
 whose constructors live in those uninstalled packages, so `elements.ts` exports
-`radians`, `localPoint` and `lineHeight`. They are the only place a brand is
-asserted; the tests build elements through them too.
+`radians`, `localPoint` and `lineHeight`. Those three are the only brands
+`elements.ts` asserts; the tests build elements through them too. The fourth
+brand, `FractionalIndex`, belongs to `fractional-index.ts` below.
 
 Every element carries the full base: `id, x, y, width, height, angle: 0,
 strokeColor, backgroundColor, fillStyle, strokeWidth, strokeStyle, roughness,
-opacity, roundness, seed, version: 1, versionNonce, index: null, isDeleted:
+opacity, roundness, seed, version: 1, versionNonce, index, isDeleted:
 false, groupIds, frameId: null, boundElements, updated: EXCALIX_EPOCH,
 created: null, link: null, locked: false`.
 
@@ -243,12 +244,47 @@ Determinism: `ids.ts` derives every id, `seed`, and `versionNonce` from
 `sha256(specHash + ":" + key)` where specHash is the sha256 of the canonical
 JSON of the parsed spec and key is like `node:api`, `node:api:label`,
 `edge:3`, `edge:3:label`, `group:aws`, `group:aws:label`, `title`. Ids are 20
-chars of base62 from the hash. Seeds are 31-bit positive integers. Same spec
+chars of base62 from the hash. Seeds are 31-bit positive integers. `index` is
+the one field that comes from array position instead of the hash. Same spec
 in, byte-identical `.excalidraw` and SVG out.
 
 The `.excalidraw` document: `{ type: "excalidraw", version: 2, source:
 "excalix", elements, appState: { viewBackgroundColor: "#ffffff", gridSize: 20
 }, files: {} }`.
+
+## Fractional indices (src/fractional-index.ts)
+
+`index` is an order key in the format of rocicorp's `fractional-indexing`, which
+Excalidraw vendors. `fractionalIndex(position)` returns the key for a position
+in the element array, and `buildElements` stamps them on in a final pass once
+the array order is settled. A null or out-of-order key sends restore through
+`syncInvalidIndices`, which rewrites it with `mutateElement` and so bumps
+`version`, `versionNonce` and `updated` on every element: without valid keys
+the whole file is rewritten the first time someone opens and saves it.
+
+What this build accepts, from `validateOrderKey` and `isValidFractionalIndex`
+in the dev bundle:
+
+- every character a base62 digit, `0-9A-Za-z`, which is also ASCII order, so a
+  valid key sorts under plain string comparison
+- an integer part whose length its head letter encodes: `a` two characters
+  through `z` twenty-seven, and `A`..`Z` counting back down, 27 through 2, for
+  the keys below `a0`. `A` followed by 26 zeros is reserved and always invalid
+- an optional fractional part after the integer part, which may not end in `0`
+- a key strictly between its neighbours in the array
+
+So the keys here are integer parts counting up, `a0`..`az`, `b00`..`bzz`,
+`c000`..`czzz` and on, 62 keys at the `a` head and 62^n at the nth. That is
+digit for digit what the bundle's own `generateNKeysBetween(undefined,
+undefined, n)` produces, so restore finds nothing to fix. The bundle cannot be
+imported in Node (it reads `devicePixelRatio` at load), hence a local generator
+rather than a call into it.
+
+One rule beyond ascending: `validateFractionalIndices` with
+`includeBoundTextValidation` demands that a bound text's key sit above its
+container's, and the editor throws on a violation in dev and test builds.
+`syncInvalidIndices` does not check it, so restore will not repair it. It holds
+here because every container is emitted immediately before its text.
 
 ## Render (src/render/)
 
@@ -287,9 +323,8 @@ The `.excalidraw` document: `{ type: "excalidraw", version: 2, source:
   `exportToClipboard({ type: "json" })` serialises what `restoreElements`
   returned, and on this insecure origin `navigator.clipboard` is absent, so the
   bundle copies that JSON through `execCommand`, which the test intercepts.
-  Restore always rewrites `index`, which excalix leaves null, and that
-  assignment mutates the element, which bumps `version`, `versionNonce` and
-  `updated`; those four are the only fields the comparison ignores.
+  The comparison ignores no field: restore is a true no-op, so the restored
+  elements are deep-equal to the built ones.
 - `estimate.ts` exports `estimateMeasurer: TextMeasurer` using 0.6 * fontSize
   per char, for unit tests that must not launch a browser.
 

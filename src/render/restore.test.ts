@@ -6,10 +6,6 @@ import { measuringOnly, readSpec, specFiles } from "../test-support.js";
 import type { Renderer } from "../types.js";
 import { createBrowserRenderer, openBundlePage } from "./browser.js";
 
-// Restore assigns a fractional index to every element that ships with index: null, and that
-// assignment mutates the element, which bumps the other three.
-const REGENERATED = new Set(["index", "version", "versionNonce", "updated"]);
-
 interface ClipboardUtils {
   exportToClipboard(args: { type: "json"; data: { elements: unknown[]; appState: object; files: object } }): Promise<void>;
 }
@@ -41,10 +37,6 @@ async function restoreInPage(elements: unknown[]): Promise<unknown[]> {
   return (JSON.parse(copied) as { elements: unknown[] }).elements;
 }
 
-function comparable(element: ExcalidrawElement): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(element).filter(([field]) => !REGENERATED.has(field)));
-}
-
 describe("[browser] Excalidraw restore", () => {
   let renderer: Renderer;
   let browser: Browser;
@@ -67,10 +59,7 @@ describe("[browser] Excalidraw restore", () => {
 
       const restored = (await page.evaluate(restoreInPage, built as unknown[])) as ExcalidrawElement[];
 
-      expect(restored.map(comparable)).toEqual(built.map(comparable));
-      expect(restored.map((element) => ({ indexed: typeof element.index === "string", version: element.version }))).toEqual(
-        built.map((element) => ({ indexed: true, version: element.version + 1 })),
-      );
+      expect(restored).toEqual(built);
     });
   }
 });
