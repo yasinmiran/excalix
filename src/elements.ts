@@ -87,7 +87,9 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
       ...nodeElements(node, ids, box(layout.nodes, node.id), measured.nodeLabels[node.id], chainOf(node.group), arrowsByNode.get(node.id) ?? []),
     );
   const pushGroup = (group: GroupSpec): void => {
-    elements.push(...groupElements(group, ids, box(layout.groups, group.id), measured.groupLabels[group.id], chainOf(group.id)));
+    const at = layout.groupLabels[group.id];
+    if (!at) throw new Error(`layout has no label position for group ${group.id}`);
+    elements.push(...groupElements(group, ids, box(layout.groups, group.id), measured.groupLabels[group.id], chainOf(group.id), at));
     for (const node of nodesIn.get(group.id) ?? []) pushNode(node);
     for (const child of groupsIn.get(group.id) ?? []) pushGroup(child);
   };
@@ -130,7 +132,14 @@ export function toDocument(elements: ExcalidrawElement[]): string {
   );
 }
 
-function groupElements(group: GroupSpec, ids: IdSource, box: Box, label: TextSize | undefined, groupIds: string[]): ExcalidrawElement[] {
+function groupElements(
+  group: GroupSpec,
+  ids: IdSource,
+  box: Box,
+  label: TextSize | undefined,
+  groupIds: string[],
+  labelAt: Point,
+): ExcalidrawElement[] {
   const key = `group:${group.id}`;
   const rect: ExcalidrawRectangleElement = {
     ...base(ids, key, box, groupIds, {
@@ -151,7 +160,7 @@ function groupElements(group: GroupSpec, ids: IdSource, box: Box, label: TextSiz
       text: group.label,
       fontSize: FONT.group,
       color: GROUP_STYLE.labelColor,
-      position: { x: box.x + GROUP_STYLE.padding, y: box.y + GROUP_STYLE.padding },
+      position: labelAt,
       size: label ?? { width: 0, height: 0 },
       groupIds,
     }),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { LABEL_MARGIN, layout } from "./layout.js";
+import { LABEL_MARGIN, layout, placeGroupLabel } from "./layout.js";
 import { FONT, nodeSize } from "./style.js";
-import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedLabel, TextSize } from "./types.js";
+import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedEdge, RoutedLabel, TextSize } from "./types.js";
 
 function estimate(text: string, fontSize: number): TextSize {
   return { width: text.length * fontSize * 0.6, height: fontSize * FONT.lineHeight };
@@ -295,5 +295,23 @@ describe("layout edge cases", () => {
     });
     const label = estimate("empty", FONT.group);
     expect(result.groups.g).toMatchObject({ width: label.width + 32, height: label.height + 32 });
+  });
+});
+
+describe("placeGroupLabel", () => {
+  const box = { x: 0, y: 0, width: 300, height: 200 };
+  const label = { width: 80, height: 20 };
+  const down = (x: number): RoutedEdge => ({ points: [{ x, y: 0 }, { x, y: 100 }] });
+
+  it("keeps the label in the corner when nothing crosses the strip", () => {
+    expect(placeGroupLabel(box, label, [down(200)])).toEqual({ x: 16, y: 16 });
+  });
+
+  it("slides the label past a crossing arrow", () => {
+    expect(placeGroupLabel(box, label, [down(60)])).toEqual({ x: 72, y: 16 });
+  });
+
+  it("falls back to the corner when no spot in the strip is free", () => {
+    expect(placeGroupLabel(box, label, [down(60), down(140), down(220)])).toEqual({ x: 16, y: 16 });
   });
 });

@@ -27,14 +27,7 @@ const TITLES: Record<Invariant, string> = {
 
 // Layout defects the pipeline still has. Fixing one makes its it.fails pass, which fails the suite
 // until the entry is deleted, so this table can never drift ahead of the code.
-const KNOWN: Record<string, Partial<Record<Invariant, string>>> = {
-  "stress/dense-tb.json": {
-    arrowsClearGroupLabels: 'the arrows into "redis" enter the data group from above, through its label',
-  },
-  "stress/nogroupnodes.json": {
-    arrowsClearGroupLabels: "an arrow entering the leftmost child of a group from above passes through the group label",
-  },
-};
+const KNOWN: Record<string, Partial<Record<Invariant, string>>> = {};
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 

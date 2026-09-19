@@ -12,6 +12,7 @@ import type {
   Point,
   RoutedEdge,
   RoutedLabel,
+  TextSize,
 } from "./types.js";
 
 const ROOT = ":root";
@@ -20,12 +21,21 @@ const PADDING = GROUP_STYLE.padding;
 export const LABEL_MARGIN = 12;
 // Both options are read from the label, not from the graph, so setting them anywhere else does nothing.
 const LABEL_OPTIONS: LayoutOptions = { "elk.edgeLabels.placement": "CENTER", "elk.edgeLabels.inline": "true" };
+// Gap kept beside a group label so an arrowhead next to it stays off the text.
+const LABEL_CLEARANCE = 12;
 
 const elk = new ELK();
 
 /** Lays out nodes, groups and edges with ELK. Absolute coordinates, bounds at (0, 0). */
 export async function layout(input: LayoutInput): Promise<LayoutResult> {
-  const laid = await elk.layout(toElkGraph(input));
+  const first = await layoutWith(input, {});
+  const gutters = labelGutters(input, first);
+  return normalise(Object.keys(gutters).length === 0 ? first : await layoutWith(input, gutters));
+}
+
+// One ELK pass. Each gutter entry widens that group's left padding by its value.
+async function layoutWith(input: LayoutInput, gutters: Record<string, number>): Promise<LayoutResult> {
+  const laid = await elk.layout(toElkGraph(input, gutters));
   const boxes = new Map<string, Box>();
   collectBoxes(laid, { x: 0, y: 0 }, boxes);
 
@@ -37,14 +47,19 @@ export async function layout(input: LayoutInput): Promise<LayoutResult> {
   const edges: Record<string, RoutedEdge> = {};
   for (const edge of laid.edges ?? []) edges[edge.id] = routeEdge(edge, boxes);
 
-  return normalise({ nodes, groups, edges, bounds: bounds(nodes, groups, edges, input.edges) });
+  const routed = Object.values(edges);
+  const groupLabels = Object.fromEntries(input.groups.map((g) => [g.id, placeGroupLabel(groups[g.id]!, g.label, routed)]));
+
+  return { nodes, groups, edges, groupLabels, bounds: bounds(nodes, groups, edges, input.edges) };
 }
 
-function toElkGraph(input: LayoutInput): ElkNode {
+function toElkGraph(input: LayoutInput, gutters: Record<string, number>): ElkNode {
   const loops = selfLoopSpacing(input);
   const childrenOf = (parent: string | undefined): ElkNode[] => [
     ...input.nodes.filter((n) => n.group === parent).map(leaf),
-    ...input.groups.filter((g) => g.parent === parent).map((g) => groupNode(g, input.direction, childrenOf(g.id), loops)),
+    ...input.groups
+      .filter((g) => g.parent === parent)
+      .map((g) => groupNode(g, input.direction, childrenOf(g.id), loops, gutters[g.id] ?? 0)),
   ];
   return {
     id: ROOT,
@@ -78,9 +93,10 @@ function leaf(node: LayoutNode): ElkNode {
   return { id: node.id, width: node.width, height: node.height };
 }
 
-function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[], loops: LayoutOptions): ElkNode {
+function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[], loops: LayoutOptions, gutter: number): ElkNode {
   const top = group.label.height + PADDING;
-  const width = group.label.width + PADDING * 2;
+  const left = PADDING + gutter;
+  const width = group.label.width + PADDING + left;
   const height = top + PADDING;
   if (children.length === 0) return { id: group.id, width, height };
   // ELK 0.12 applies a compound node's minimum size in the layered algorithm's internal frame, which is transposed for DOWN.
@@ -89,7 +105,7 @@ function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]
     id: group.id,
     children,
     layoutOptions: {
-      "elk.padding": `[top=${top},left=${PADDING},bottom=${PADDING},right=${PADDING}]`,
+      "elk.padding": `[top=${top},left=${left},bottom=${PADDING},right=${PADDING}]`,
       "elk.nodeSize.constraints": "MINIMUM_SIZE",
       "elk.nodeSize.minimum": minimum,
       ...loops,
@@ -176,6 +192,53 @@ function center(box: Box): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+/** Leftmost spot in the group's top padding where no edge crosses the label, or the top-left corner when the strip is full. */
+export function placeGroupLabel(group: Box, label: TextSize, edges: RoutedEdge[]): Point {
+  const corner = { x: group.x + PADDING, y: group.y + PADDING };
+  const limit = group.x + group.width - PADDING - label.width;
+  let x = corner.x;
+  for (const [from, to] of forbiddenSpans(label, edges, corner.y, LABEL_CLEARANCE)) {
+    if (from >= x) break;
+    x = Math.max(x, to);
+  }
+  return x > limit ? corner : { x, y: corner.y };
+}
+
+/** Extra left padding for the groups whose label the previous pass had to leave under an arrow. */
+function labelGutters(input: LayoutInput, result: LayoutResult): Record<string, number> {
+  const edges = Object.values(result.edges);
+  const shifts = input.groups.flatMap((group) => {
+    const at = result.groupLabels[group.id]!;
+    const crossed = forbiddenSpans(group.label, edges, at.y, 0).filter(([from, to]) => from < at.x && at.x < to);
+    if (crossed.length === 0) return [];
+    return [[group.id, Math.ceil(Math.max(...crossed.map(([from]) => at.x - from)) + LABEL_CLEARANCE)] as const];
+  });
+  return Object.fromEntries(shifts);
+}
+
+// Label starts that an edge would come within clearance of, as x ranges in ascending order.
+function forbiddenSpans(label: TextSize, edges: RoutedEdge[], top: number, clearance: number): [number, number][] {
+  const band = { top, bottom: top + label.height };
+  const spans: [number, number][] = [];
+  for (const edge of edges) {
+    for (let i = 1; i < edge.points.length; i++) {
+      const span = spanInBand(edge.points[i - 1]!, edge.points[i]!, band);
+      if (span) spans.push([span[0] - label.width - clearance, span[1] + clearance]);
+    }
+  }
+  return spans.sort((a, b) => a[0] - b[0]);
+}
+
+// Horizontal extent of the part of the segment that runs inside the band.
+function spanInBand(a: Point, b: Point, band: { top: number; bottom: number }): [number, number] | undefined {
+  const [low, high] = [Math.min(a.y, b.y), Math.max(a.y, b.y)];
+  if (high <= band.top || low >= band.bottom) return undefined;
+  if (low === high) return [Math.min(a.x, b.x), Math.max(a.x, b.x)];
+  const xAt = (y: number): number => a.x + ((b.x - a.x) * (y - a.y)) / (b.y - a.y);
+  const ends = [xAt(Math.max(low, band.top)), xAt(Math.min(high, band.bottom))];
+  return [Math.min(...ends), Math.max(...ends)];
+}
+
 function bounds(nodes: Record<string, Box>, groups: Record<string, Box>, edges: Record<string, RoutedEdge>, inputEdges: LayoutEdge[]): Box {
   let minX = Infinity;
   let minY = Infinity;
@@ -206,6 +269,7 @@ function normalise(result: LayoutResult): LayoutResult {
   return {
     nodes: mapValues(result.nodes, moveBox),
     groups: mapValues(result.groups, moveBox),
+    groupLabels: mapValues(result.groupLabels, movePoint),
     edges: mapValues(result.edges, (edge) => ({
       points: edge.points.map(movePoint),
       ...(edge.label ? { label: { ...edge.label, ...movePoint(edge.label) } } : {}),

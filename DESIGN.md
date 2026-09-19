@@ -72,8 +72,8 @@ Fixed per kind. No caller-facing colour, font, or shape options exist.
 | external  | rectangle, rounded       | transparent | solid   | `#1e1e1e` | strokeStyle `dashed`           |
 
 - group: rectangle, sharp, fill `#f8f9fa`, stroke `#868e96` (grey so boundaries
-  recede behind the flow), strokeStyle `dashed`, strokeWidth 1, label text
-  top-left inside, fontSize 16, colour `#495057`
+  recede behind the flow), strokeStyle `dashed`, strokeWidth 1, label text in the
+  top padding strip, fontSize 16, colour `#495057`
 - edges: `sync` solid, `async` dashed; strokeColor `#1e1e1e`, strokeWidth 2;
   endArrowhead `"arrow"`; `arrows: "both"` also sets startArrowhead; `"none"`
   sets neither
@@ -112,16 +112,31 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
   the root and on every group, and it is measured in the layered algorithm's
   internal frame, which is transposed for DOWN
 
+Group labels own the top padding strip, but ELK routes edges through it, so the
+layout places them after routing: each label goes at the leftmost x in its strip
+where no edge segment crosses the text box or runs within 12px to either side of
+it, and at the top-left corner when the strip has no free slot. The 12px is
+roughly an arrowhead's half width, which is what reaches the text when only the
+line misses it.
+
+A corner fallback that still leaves the label under an arrow triggers one more
+ELK pass, with that group's left padding widened by enough to clear the leftmost
+crossing. The widened gutter moves the crossing edges away from the corner
+instead of moving the label away from it, so the label stays where a reader
+looks for it. Placement then runs again on the new geometry and can still fall
+back. Exactly one extra pass, never a loop, so the output stays deterministic.
+
 Gotcha: ELK returns child coordinates relative to their parent node and edge
 sections relative to the edge's containing node. Convert everything to absolute
 before returning. Label positions likewise.
 
 Output `LayoutResult`: absolute boxes for nodes and groups, a polyline per edge
 whose first and last points lie on the source and target borders, a label per
-labelled edge, and overall bounds. A label is the top-left of the text plus the
-arc-length parameter of its centre along the polyline: the centre of the box
-ELK reserved is snapped onto the polyline here, so bounds cover the final text
-boxes. Normalise so bounds start at (0, 0).
+labelled edge, a top-left point per group label, and overall bounds. An edge
+label is the top-left of the text plus the arc-length parameter of its centre
+along the polyline: the centre of the box ELK reserved is snapped onto the
+polyline here, so bounds cover the final text boxes. Normalise so bounds start
+at (0, 0).
 
 ## Elements (src/elements.ts)
 
@@ -155,11 +170,12 @@ created: null, link: null, locked: false`.
   `verticalAlign: "middle"`, `autoResize: true`, `baseFontSize: null`,
   `originalText === text`, `lineHeight: 1.25`, measured width and height,
   x/y centred inside the container.
-- Group: a `rectangle` plus a free `text` element (not bound) at the top-left
-  inside the padding. Excalidraw grouping: every element inside a group
-  (including nested group rects and their labels) lists the enclosing group ids
-  in `groupIds`, deepest first. The group's own rect and label list their own
-  group id first. This makes a group draggable as a unit on excalidraw.com.
+- Group: a `rectangle` plus a free `text` element (not bound) at the point the
+  layout chose for it in `groupLabels`. Excalidraw grouping: every element
+  inside a group (including nested group rects and their labels) lists the
+  enclosing group ids in `groupIds`, deepest first. The group's own rect and
+  label list their own group id first. This makes a group draggable as a unit
+  on excalidraw.com.
 - Arrow: `type: "arrow"`, `elbowed: false`, x/y = first polyline point, `points`
   relative to x/y starting at `[0, 0]`, `roundness: null` (orthogonal, sharp
   corners). Bindings use the fixed-point format: `startBinding: { elementId,

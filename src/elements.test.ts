@@ -56,6 +56,10 @@ const layout: LayoutResult = {
     aws: { x: 231, y: 0, width: 600, height: 420 },
     k8s: { x: 263, y: 52, width: 480, height: 180 },
   },
+  groupLabels: {
+    aws: { x: 247, y: 16 },
+    k8s: { x: 279, y: 68 },
+  },
   edges: {
     "edge:0": {
       points: [

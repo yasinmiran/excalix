@@ -101,6 +101,8 @@ export interface LayoutResult {
   nodes: Record<string, Box>;
   groups: Record<string, Box>;
   edges: Record<string, RoutedEdge>;
+  /** Top-left of each group label, inside the group's top padding and clear of the arrows where that is possible. */
+  groupLabels: Record<string, Point>;
   /** Bounding box of everything laid out. */
   bounds: Box;
 }
