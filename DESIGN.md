@@ -314,7 +314,8 @@ JSON of the parsed spec and key is like `node:api`, `node:api:label`,
 `edge:3`, `edge:3:label`, `group:aws`, `group:aws:label`, `title`. Ids are 20
 chars of base62 from the hash. Seeds are 31-bit positive integers. `index` is
 the one field that comes from array position instead of the hash. Same spec
-in, byte-identical `.excalidraw` and SVG out.
+in, byte-identical `.excalidraw` out, on macOS and Linux alike as long as the
+labels stay within what Excalifont covers (see Render).
 
 The `.excalidraw` document: `{ type: "excalidraw", version: 2, source:
 "excalix", elements, appState: { viewBackgroundColor: "#ffffff", gridSize: 20
@@ -377,6 +378,15 @@ here because every container is emitted immediately before its text.
   Segoe UI Emoji"`), width = widest line, height = lines * fontSize * 1.25.
   This matches Excalidraw's own measurement so bound labels don't re-wrap on
   load.
+- One answer on every platform: Chromium is launched with
+  `--font-render-hinting=none --enable-font-subpixel-positioning`, without which
+  Linux snaps glyph advances to whole pixels and every label comes out a pixel
+  or two off macOS. With them the platforms agree to about the fifth decimal,
+  so the width is rounded up to a whole pixel, which makes the box at most one
+  pixel wider than the text and the `.excalidraw` byte-identical on macOS and
+  Linux (checked by hashing `examples/` and four stress specs on both). The
+  exception is text Excalifont has no glyphs for, such as CJK and emoji: it falls
+  back to a system font and measures by platform (`stress/long.json`).
 - `svg(elements)`: `exportToSvg({ data: { elements, appState, files: {} },
   config: { padding: 24 } })` and return `outerHTML`. The SVG is
   self-contained: Excalidraw subsets the font with harfbuzz wasm on the main

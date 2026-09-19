@@ -31,6 +31,9 @@ describe("[browser] sketch over stdio", () => {
       command: process.execPath,
       args: ["--import", "tsx", join(root, "src/cli.ts"), "mcp"],
       cwd: root,
+      // The transport hands a child a minimal environment by default, which drops PLAYWRIGHT_BROWSERS_PATH
+      // wherever the browsers are not under the home directory.
+      env: process.env as Record<string, string>,
       stderr: "pipe",
     });
     transport.stderr?.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
@@ -50,8 +53,8 @@ describe("[browser] sketch over stdio", () => {
   it("draws a spec, writes the three files and returns the picture", async () => {
     const result = await client.callTool({ name: "sketch", arguments: { ...(readSpec("examples/order-pipeline.json") as object), out } });
 
-    expect(result.isError).toBeFalsy();
     const [text, image] = result.content as Block[];
+    expect(result.isError, text?.text).toBeFalsy();
     expect(text?.text).toBe(`${out}.excalidraw\n${out}.svg\n${out}.png`);
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
     expect([...Buffer.from(image!.data!, "base64").subarray(0, 8)]).toEqual(PNG_SIGNATURE);

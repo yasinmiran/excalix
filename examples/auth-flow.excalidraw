@@ -5,9 +5,9 @@
   "elements": [
     {
       "id": "lDhgnbXe0q7QEIqcea9T",
-      "x": 48.7,
+      "x": 48.2,
       "y": 0,
-      "width": 189,
+      "width": 190,
       "height": 57,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -43,9 +43,9 @@
     },
     {
       "id": "mvEWjM0aqpB1vCHaCQim",
-      "x": 93.43003387451172,
+      "x": 93.2,
       "y": 16,
-      "width": 99.53993225097656,
+      "width": 100,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -127,9 +127,9 @@
     },
     {
       "id": "rAfHRBX2QLut4Skj5xgS",
-      "x": 80.11004943847657,
+      "x": 79.7,
       "y": 189,
-      "width": 126.17990112304688,
+      "width": 127,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -223,9 +223,9 @@
     },
     {
       "id": "MpZayP0EgguCMPqc90bW",
-      "x": 82.74004669189453,
+      "x": 82.7,
       "y": 282,
-      "width": 120.91990661621094,
+      "width": 121,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -263,7 +263,7 @@
     },
     {
       "id": "hcwBVLiL0l8WNbkA7nMU",
-      "x": 390.6239471435547,
+      "x": 391,
       "y": 415,
       "width": 183,
       "height": 57,
@@ -301,9 +301,9 @@
     },
     {
       "id": "A31eGciZSAwpb1GF9Z3u",
-      "x": 415.09400939941406,
+      "x": 415,
       "y": 431,
-      "width": 134.05987548828125,
+      "width": 135,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -341,7 +341,7 @@
     },
     {
       "id": "wQB7vt3MqWQvq0xVOIAL",
-      "x": 199.6239471435547,
+      "x": 200,
       "y": 415,
       "width": 143,
       "height": 57,
@@ -379,9 +379,9 @@
     },
     {
       "id": "HbqLNDelHYJ4Im38wzwO",
-      "x": 224.0639877319336,
+      "x": 224,
       "y": 431,
-      "width": 94.11991882324219,
+      "width": 95,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -459,9 +459,9 @@
     },
     {
       "id": "xvsCUhWQPBph0f7dgmBE",
-      "x": 24.420028686523438,
+      "x": 24,
       "y": 524,
-      "width": 136.15994262695312,
+      "width": 137,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -499,7 +499,7 @@
     },
     {
       "id": "TqeGTytsKXgftwOgAkUQ",
-      "x": 621.6239471435547,
+      "x": 622,
       "y": 415,
       "width": 169,
       "height": 57,
@@ -537,9 +537,9 @@
     },
     {
       "id": "jHSrIr9BYwCDnE2tNJK9",
-      "x": 645.9139938354492,
+      "x": 646,
       "y": 431,
-      "width": 120.41990661621094,
+      "width": 121,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -640,9 +640,9 @@
     },
     {
       "id": "jLy3XyCkxu62cbWULxrc",
-      "x": 94.7600357055664,
+      "x": 94.69999999999999,
       "y": 105,
-      "width": 96.87992858886719,
+      "width": 97,
       "height": 20,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -801,9 +801,9 @@
     },
     {
       "id": "gMgqHVEuYOrP2hxiNLnQ",
-      "x": 45.188026428222656,
+      "x": 45,
       "y": 433.5,
-      "width": 94.62394714355469,
+      "width": 95,
       "height": 20,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -843,7 +843,7 @@
       "id": "EXHB74kRcmhMcVAVhYa2",
       "x": 126.30000000000001,
       "y": 323,
-      "width": 144.82394714355468,
+      "width": 145.2,
       "height": 92,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -877,11 +877,11 @@
           56
         ],
         [
-          144.82394714355468,
+          145.2,
           56
         ],
         [
-          144.82394714355468,
+          145.2,
           92
         ]
       ],
@@ -909,7 +909,7 @@
       "id": "KMJk2viddo3rqLi8ncay",
       "x": 160.1,
       "y": 323,
-      "width": 322.02394714355466,
+      "width": 322.4,
       "height": 92,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -943,11 +943,11 @@
           46
         ],
         [
-          322.02394714355466,
+          322.4,
           46
         ],
         [
-          322.02394714355466,
+          322.4,
           92
         ]
       ],
@@ -975,7 +975,7 @@
       "id": "EcGVvfD07k131OFQQkxr",
       "x": 193.89999999999998,
       "y": 323,
-      "width": 512.2239471435547,
+      "width": 512.6,
       "height": 92,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -1009,11 +1009,11 @@
           36
         ],
         [
-          512.2239471435547,
+          512.6,
           36
         ],
         [
-          512.2239471435547,
+          512.6,
           92
         ]
       ],
@@ -1041,7 +1041,7 @@
       "id": "JP7e9nIod075IGzn7idC",
       "x": 0,
       "y": -72,
-      "width": 146.0799560546875,
+      "width": 147,
       "height": 40,
       "angle": 0,
       "strokeColor": "#1e1e1e",

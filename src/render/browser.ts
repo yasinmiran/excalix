@@ -86,8 +86,12 @@ export async function openBundlePage(browser: Browser): Promise<Page> {
 }
 
 /** Starts headless Chromium with @excalidraw/utils loaded. Call close() when done. */
+// Linux Chromium hints glyphs and snaps their advances to whole pixels unless told otherwise, which makes every label
+// a pixel or two off what macOS and the Excalidraw editor measure. Both flags are no-ops where that is already the case.
+const TEXT_METRIC_FLAGS = ["--font-render-hinting=none", "--enable-font-subpixel-positioning"];
+
 export async function createBrowserRenderer(): Promise<Renderer> {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: TEXT_METRIC_FLAGS });
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => (closing ??= browser.close());
   try {
@@ -160,7 +164,9 @@ async function measureInPage({
       .replace(/\t/g, "        ")
       .split("\n")
       .map((line) => line || " ");
-    const width = Math.max(...lines.map((line) => context.measureText(line).width));
+    // Platforms agree on a width to about the fifth decimal and no further, so the whole pixel above it is what
+    // keeps the same spec byte-identical on macOS and Linux. The box is at most a pixel wider than the text.
+    const width = Math.ceil(Math.max(...lines.map((line) => context.measureText(line).width)));
     return { width, height: lines.length * fontSize * lineHeight };
   });
 }
