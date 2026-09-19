@@ -1,0 +1,297 @@
+{
+  "title": "multi-region data platform",
+  "direction": "tb",
+  "groups": [
+    {
+      "id": "eu",
+      "label": "eu-west-1 (primary)"
+    },
+    {
+      "id": "eu-pub",
+      "label": "public subnet",
+      "parent": "eu"
+    },
+    {
+      "id": "eu-priv",
+      "label": "private subnet",
+      "parent": "eu"
+    },
+    {
+      "id": "us",
+      "label": "us-east-1 (secondary)"
+    },
+    {
+      "id": "us-pub",
+      "label": "public subnet",
+      "parent": "us"
+    },
+    {
+      "id": "us-priv",
+      "label": "private subnet",
+      "parent": "us"
+    },
+    {
+      "id": "global",
+      "label": "global control plane"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "producers",
+      "label": "producer SDKs",
+      "kind": "client"
+    },
+    {
+      "id": "dashboards",
+      "label": "dashboard users",
+      "kind": "client"
+    },
+    {
+      "id": "route53",
+      "label": "Route 53",
+      "kind": "external"
+    },
+    {
+      "id": "config-service",
+      "label": "config service",
+      "kind": "service",
+      "group": "global"
+    },
+    {
+      "id": "control-db",
+      "label": "DynamoDB\nglobal tables",
+      "kind": "datastore",
+      "group": "global"
+    },
+    {
+      "id": "eu-alb",
+      "label": "ALB",
+      "kind": "service",
+      "group": "eu-pub"
+    },
+    {
+      "id": "eu-ingest",
+      "label": "ingest API",
+      "kind": "service",
+      "group": "eu-priv"
+    },
+    {
+      "id": "eu-kafka",
+      "label": "Kafka",
+      "kind": "queue",
+      "group": "eu-priv"
+    },
+    {
+      "id": "eu-stream",
+      "label": "stream processor",
+      "kind": "service",
+      "group": "eu-priv"
+    },
+    {
+      "id": "eu-ch",
+      "label": "ClickHouse",
+      "kind": "datastore",
+      "group": "eu-priv"
+    },
+    {
+      "id": "eu-query",
+      "label": "query API",
+      "kind": "service",
+      "group": "eu-priv"
+    },
+    {
+      "id": "eu-redis",
+      "label": "Redis",
+      "kind": "cache",
+      "group": "eu-priv"
+    },
+    {
+      "id": "us-alb",
+      "label": "ALB",
+      "kind": "service",
+      "group": "us-pub"
+    },
+    {
+      "id": "us-ingest",
+      "label": "ingest API",
+      "kind": "service",
+      "group": "us-priv"
+    },
+    {
+      "id": "us-kafka",
+      "label": "Kafka",
+      "kind": "queue",
+      "group": "us-priv"
+    },
+    {
+      "id": "us-stream",
+      "label": "stream processor",
+      "kind": "service",
+      "group": "us-priv"
+    },
+    {
+      "id": "us-ch",
+      "label": "ClickHouse",
+      "kind": "datastore",
+      "group": "us-priv"
+    },
+    {
+      "id": "us-query",
+      "label": "query API",
+      "kind": "service",
+      "group": "us-priv"
+    },
+    {
+      "id": "us-redis",
+      "label": "Redis",
+      "kind": "cache",
+      "group": "us-priv"
+    },
+    {
+      "id": "pagerduty",
+      "label": "PagerDuty",
+      "kind": "external"
+    }
+  ],
+  "edges": [
+    {
+      "from": "producers",
+      "to": "eu-alb",
+      "label": "events"
+    },
+    {
+      "from": "producers",
+      "to": "us-alb",
+      "label": "events"
+    },
+    {
+      "from": "eu-alb",
+      "to": "eu-ingest"
+    },
+    {
+      "from": "us-alb",
+      "to": "us-ingest"
+    },
+    {
+      "from": "eu-ingest",
+      "to": "eu-kafka",
+      "label": "writes"
+    },
+    {
+      "from": "us-ingest",
+      "to": "us-kafka",
+      "label": "writes"
+    },
+    {
+      "from": "eu-kafka",
+      "to": "eu-stream"
+    },
+    {
+      "from": "us-kafka",
+      "to": "us-stream"
+    },
+    {
+      "from": "eu-stream",
+      "to": "eu-ch",
+      "label": "writes"
+    },
+    {
+      "from": "us-stream",
+      "to": "us-ch",
+      "label": "writes"
+    },
+    {
+      "from": "eu-query",
+      "to": "eu-ch",
+      "label": "reads"
+    },
+    {
+      "from": "us-query",
+      "to": "us-ch",
+      "label": "reads"
+    },
+    {
+      "from": "eu-query",
+      "to": "eu-redis",
+      "label": "caches"
+    },
+    {
+      "from": "us-query",
+      "to": "us-redis",
+      "label": "caches"
+    },
+    {
+      "from": "eu-kafka",
+      "to": "us-kafka",
+      "label": "MirrorMaker",
+      "style": "async"
+    },
+    {
+      "from": "eu-ch",
+      "to": "us-ch",
+      "label": "replicates",
+      "style": "async",
+      "arrows": "both"
+    },
+    {
+      "from": "eu-ingest",
+      "to": "config-service",
+      "label": "polls"
+    },
+    {
+      "from": "eu-query",
+      "to": "config-service",
+      "label": "polls"
+    },
+    {
+      "from": "us-ingest",
+      "to": "config-service",
+      "label": "polls"
+    },
+    {
+      "from": "us-query",
+      "to": "config-service",
+      "label": "polls"
+    },
+    {
+      "from": "config-service",
+      "to": "control-db"
+    },
+    {
+      "from": "dashboards",
+      "to": "route53"
+    },
+    {
+      "from": "route53",
+      "to": "eu-query",
+      "label": "latency routing"
+    },
+    {
+      "from": "route53",
+      "to": "us-query",
+      "label": "latency routing"
+    },
+    {
+      "from": "eu-stream",
+      "to": "eu-stream",
+      "label": "retries"
+    },
+    {
+      "from": "us-stream",
+      "to": "us-stream",
+      "label": "retries"
+    },
+    {
+      "from": "eu-stream",
+      "to": "pagerduty",
+      "label": "alerts",
+      "style": "async"
+    },
+    {
+      "from": "us-stream",
+      "to": "pagerduty",
+      "label": "alerts",
+      "style": "async"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "title": "ride-hailing backend",
+  "direction": "lr",
+  "groups": [
+    { "id": "aws", "label": "AWS account" },
+    { "id": "vpc", "label": "VPC", "parent": "aws" }
+  ],
+  "nodes": [
+    { "id": "rider_app", "label": "Rider app", "kind": "client" },
+    { "id": "driver_app", "label": "Driver app", "kind": "client" },
+    { "id": "cloudfront", "label": "CloudFront", "kind": "service", "group": "aws" },
+    { "id": "alb", "label": "ALB", "kind": "service", "group": "aws" },
+    { "id": "api_gateway", "label": "API gateway", "kind": "service", "group": "vpc" },
+    { "id": "trip_service", "label": "Trip service", "kind": "service", "group": "vpc" },
+    { "id": "matching_service", "label": "Matching service", "kind": "service", "group": "vpc" },
+    { "id": "pricing_service", "label": "Pricing service", "kind": "service", "group": "vpc" },
+    { "id": "notification_service", "label": "Notification service", "kind": "service", "group": "vpc" },
+    { "id": "billing_worker", "label": "Billing worker", "kind": "service", "group": "vpc" },
+    { "id": "aurora", "label": "Aurora Postgres", "kind": "datastore", "group": "vpc" },
+    { "id": "redis", "label": "Redis", "kind": "cache", "group": "vpc" },
+    { "id": "kinesis", "label": "Kinesis stream", "kind": "queue", "group": "vpc" },
+    { "id": "sns", "label": "SNS topic", "kind": "queue", "group": "vpc" },
+    { "id": "firebase", "label": "Firebase", "kind": "external" },
+    { "id": "stripe", "label": "Stripe", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "rider_app", "to": "cloudfront" },
+    { "from": "driver_app", "to": "cloudfront" },
+    { "from": "cloudfront", "to": "alb" },
+    { "from": "alb", "to": "api_gateway" },
+    { "from": "api_gateway", "to": "trip_service" },
+    { "from": "api_gateway", "to": "pricing_service" },
+    { "from": "api_gateway", "to": "kinesis", "label": "location updates" },
+    { "from": "kinesis", "to": "matching_service", "label": "consume", "style": "async" },
+    { "from": "matching_service", "to": "redis", "label": "driver locations" },
+    { "from": "pricing_service", "to": "redis", "label": "surge data" },
+    { "from": "trip_service", "to": "aurora" },
+    { "from": "trip_service", "to": "sns", "label": "trip completed", "style": "async" },
+    { "from": "sns", "to": "notification_service", "label": "consume", "style": "async" },
+    { "from": "sns", "to": "billing_worker", "label": "consume", "style": "async" },
+    { "from": "notification_service", "to": "firebase", "label": "push" },
+    { "from": "billing_worker", "to": "stripe", "label": "charge" }
+  ]
+}

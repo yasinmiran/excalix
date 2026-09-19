@@ -1,0 +1,37 @@
+{
+  "title": "app architecture",
+  "direction": "tb",
+  "groups": [
+    { "id": "frontend", "label": "frontend network" },
+    { "id": "backend", "label": "backend network" }
+  ],
+  "nodes": [
+    { "id": "browser", "label": "Browser", "kind": "client" },
+    { "id": "traefik", "label": "Traefik", "kind": "service", "group": "frontend" },
+    { "id": "web", "label": "Web", "kind": "service", "group": "frontend" },
+    { "id": "api", "label": "API", "kind": "service", "group": "backend" },
+    { "id": "mq", "label": "RabbitMQ", "kind": "queue", "group": "backend" },
+    { "id": "scheduler", "label": "Scheduler", "kind": "service", "group": "backend" },
+    { "id": "worker", "label": "Worker", "kind": "service", "group": "backend" },
+    { "id": "db", "label": "Postgres", "kind": "datastore", "group": "backend" },
+    { "id": "cache", "label": "Redis", "kind": "cache", "group": "backend" },
+    { "id": "minio", "label": "MinIO", "kind": "datastore", "group": "backend" },
+    { "id": "sendgrid", "label": "SendGrid", "kind": "external" },
+    { "id": "idp", "label": "example-idp", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "browser", "to": "traefik", "label": "HTTPS" },
+    { "from": "traefik", "to": "web", "label": "routes" },
+    { "from": "web", "to": "api", "label": "requests" },
+    { "from": "api", "to": "db", "label": "reads/writes" },
+    { "from": "api", "to": "cache", "label": "cache" },
+    { "from": "api", "to": "minio", "label": "objects" },
+    { "from": "api", "to": "idp", "label": "OIDC" },
+    { "from": "scheduler", "to": "mq", "label": "publish", "style": "async" },
+    { "from": "api", "to": "mq", "label": "publish", "style": "async" },
+    { "from": "mq", "to": "worker", "label": "consume", "style": "async" },
+    { "from": "worker", "to": "db", "label": "reads/writes" },
+    { "from": "worker", "to": "minio", "label": "objects" },
+    { "from": "worker", "to": "sendgrid", "label": "SMTP" }
+  ]
+}
