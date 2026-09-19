@@ -279,11 +279,23 @@ Validation errors return `isError: true` with the problem list.
 - Tests: vitest, colocated `*.test.ts`. Unit tests use `estimateMeasurer`.
   Render tests launch the browser and are tagged in their describe name with
   `[browser]`.
-- `src/geometry.test.ts` runs every spec in `examples/` and `stress/` through the
-  pipeline with `estimateMeasurer` and asserts overlap, nesting and bounds
-  invariants on the resulting boxes, so a new spec dropped in either directory is
-  covered without touching the test. Cells that fail today are marked `it.fails`
-  with the reason in the test name; fixing a defect makes its marker fail the
-  suite until the `KNOWN` entry goes with it.
+- `src/test-support.ts` is the shared harness: the spec corpus (`specFiles`,
+  `readSpec`), `measuringOnly` (a renderer that measures and stubs svg and png,
+  because the invariants read elements only), and `describeGeometry`, which
+  registers six cells per spec: node overlap, nesting, edge labels clear of
+  nodes and of each other, arrows clear of group labels, and bounds. A spec
+  dropped in `examples/` or `stress/` is covered without touching a test.
+  Defects a suite still has go in the `KNOWN` table it passes in, which turns
+  those cells into `it.fails` with the reason in the test name, so fixing one
+  fails the suite until its entry goes with it.
+- Both measurers run those cells: `src/geometry.test.ts` with `estimateMeasurer`,
+  `src/render/geometry.test.ts` with the real Excalifont metrics from a single
+  `createBrowserRenderer()` shared by the file. The estimate is rough enough that
+  a spec can be clean under it and broken in the rendered PNG, so the browser
+  suite is the one that speaks for the output.
+- `src/pipeline.test.ts` sketches every spec twice and compares the `.excalidraw`
+  strings byte for byte, so neither ELK pass can leak into the next sketch, and
+  reverses the keys inside one spec's JSON objects to show the output follows the
+  canonical form rather than key order.
 - No em dashes anywhere, including comments and docs.
 - Conventional commits, no AI attribution.
