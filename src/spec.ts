@@ -11,8 +11,8 @@ export class SpecError extends Error {
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-// Every problem reads "<path>: <what arrived>, <what is valid>". The second half lives on the schema
-// so the MCP SDK, which rejects a malformed call before parseSpec ever runs, relays the same wording.
+// Every problem reads "<path>: <what arrived>, <what is valid>". The halves live on the schema because
+// issue.input, the only source for the first half, reaches an error function and is stripped afterwards.
 function problem(expected: string) {
   return (issue: { input: unknown }) => `${arrived(issue.input)}, ${expected}`;
 }
@@ -45,15 +45,15 @@ function strict<T extends z.ZodRawShape>(shape: T, description: string) {
     .describe(description);
 }
 
+/** A string field, for the spec and for a caller's own keys, so both report a wrong type the same way. */
+export const stringField = z.string({ error: problem("expected a string") });
+
 function id(description: string) {
-  return z
-    .string({ error: problem("expected a string") })
-    .regex(ID_PATTERN, { error: problem('expected letters, digits, "_" and "-" only') })
-    .describe(description);
+  return stringField.regex(ID_PATTERN, { error: problem('expected letters, digits, "_" and "-" only') }).describe(description);
 }
 
 function text(description: string) {
-  return z.string({ error: problem("expected a string") }).describe(description);
+  return stringField.describe(description);
 }
 
 const kind = z
@@ -159,14 +159,24 @@ export function specSchemaWith<T extends z.ZodRawShape>(extra: T) {
 
 /** Validates raw JSON into a Spec with defaults applied. Throws SpecError. */
 export function parseSpec(input: unknown): Spec {
-  const parsed = specSchema.safeParse(input);
+  return parseSpecWith(specSchema, input);
+}
+
+/** The same for a schema from specSchemaWith, whose extra keys come back with the spec and share its problem list. */
+export function parseSpecWith<T extends Spec>(schema: z.ZodType<T>, input: unknown): T {
+  const parsed = schema.safeParse(input);
   if (parsed.success) {
     const problems = semanticProblems(parsed.data);
     if (problems.length > 0) throw new SpecError(problems);
     return parsed.data;
   }
-  const issuePaths = parsed.error.issues.map((issue) => formatPath(issue.path));
-  const alreadyReported = (problem: string) => issuePaths.some((path) => problem.startsWith(`${path}:`) || problem.startsWith(`${path}.`));
+  const prefixes = parsed.error.issues.flatMap((issue) => {
+    const path = formatPath(issue.path);
+    // An unknown key is a problem with that key alone. Any other rejection means the value never arrived,
+    // so a problem about a field inside it would be the same mistake reported a second time.
+    return issue.code === "unrecognized_keys" ? [`${path}:`] : [`${path}:`, `${path}.`];
+  });
+  const alreadyReported = (problem: string) => prefixes.some((prefix) => problem.startsWith(prefix));
   const semantic = semanticProblems(lenient(input)).filter((problem) => !alreadyReported(problem));
   throw new SpecError([...parsed.error.issues.map(formatIssue), ...semantic]);
 }

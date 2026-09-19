@@ -143,10 +143,42 @@ const failures: [name: string, input: unknown, problems: string[]][] = [
     withGroups([{ id: "aws", label: "AWS", fill: "blue" }]),
     ['groups[0]: unknown key "fill", expected one of "id", "label", "parent"'],
   ],
+  [
+    "an unknown key in a node next to a group that does not exist",
+    {
+      groups: [{ id: "aws", label: "AWS" }],
+      nodes: [{ id: "a", label: "A", kind: "service", group: "awz", shape: "hex" }],
+    },
+    [
+      'nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "group"',
+      'nodes[0].group: unknown group "awz", did you mean "aws"?',
+    ],
+  ],
+  [
+    "an unknown key in a node next to a blank label",
+    withNodes([{ id: "a", label: " ", kind: "service", shape: "hex" }]),
+    [
+      'nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "group"',
+      'nodes[0].label: got " ", expected text',
+    ],
+  ],
+  [
+    "an unknown key in an edge that also points nowhere",
+    withEdges([{ from: "a", to: "pg", colour: "red" }]),
+    [
+      'edges[0]: unknown key "colour", expected one of "from", "to", "label", "style", "arrows"',
+      'edges[0].to: unknown node "pg"',
+    ],
+  ],
   ["no nodes key at all", {}, ["nodes: missing, expected an array of nodes"]],
   ["an empty node list", { nodes: [] }, ["nodes: got an empty array, expected at least one node"]],
   ["nodes that are not a list", { nodes: 5 }, ["nodes: got 5, expected an array of nodes"]],
   ["a node that is not an object", { nodes: ["a"] }, ['nodes[0]: got "a", expected an object']],
+  [
+    "several nodes that are not objects, without inventing their fields",
+    { nodes: ["a", 5] },
+    ['nodes[0]: got "a", expected an object', "nodes[1]: got 5, expected an object"],
+  ],
   [
     "a node without a kind",
     withNodes([{ id: "a", label: "A" }]),

@@ -56,8 +56,14 @@ Defaults applied by parseSpec: `direction: "lr"`, `groups: []`, `edges: []`,
 `edge.style: "sync"`, `edge.arrows: "forward"`. Unknown keys are rejected (zod
 strict) so an agent's typo fails loudly instead of being ignored. When the
 schema fails, the reference checks still run over whatever shape the input has,
-so one round trip reports both the typo in a `kind` and the dangling edge. A
-path the schema already rejected is not reported twice.
+so one round trip reports both the typo in a `kind` and the dangling edge.
+
+One mistake is reported once. A schema problem hides a reference problem on the
+same path, so a bad id is named only by the schema. It also hides the problems
+inside a value the schema rejected outright, because those fields never
+arrived: a node that is a string has no label to be blank. An unknown key is
+the exception, being a problem with that one key: the rest of the object is
+real and its own problems come back alongside.
 
 ### Problem messages
 
@@ -80,13 +86,12 @@ groups[0].parent: "k8s" closes the cycle aws -> k8s -> aws
 The path is the one zod reports, with `spec` for the root; the value is
 JSON-quoted, except that an array or object is named rather than printed.
 
-The "what is valid" half of a schema problem lives on the zod schema, as an
-`error` function per field, not in the formatter. The MCP SDK rejects a call
-against the same schema before `parseSpec` ever runs (see MCP below), and it
-builds its text from `issue.message`, so keeping the wording on the schema is
-what makes both surfaces say the same thing. Note that `issue.input` reaches an
-`error` function but is stripped from the finished issue, so the `got ...` half
-can only be produced there.
+Both halves of a schema problem live on the zod schema, as an `error` function
+per field, not in the formatter: `issue.input` reaches an `error` function but
+is stripped from the finished issue, so the `got ...` half can only be produced
+there. `stringField` is that wording for a plain string, exported so a caller
+adding a key of its own, such as the MCP tool's `out`, reports a wrong type in
+the same words.
 
 An unknown id gets `, did you mean "x"?` when one existing id of the expected
 kind is within a small edit distance: 1 for a target of four characters or
@@ -96,7 +101,9 @@ The matcher is a plain Levenshtein in `spec.ts`, no dependency.
 `specSchemaWith(extra)` is the spec schema with extra top-level keys, used by
 the MCP tool for `out`. Zod's `.extend()` would drop the root description and
 leave the unknown-key message listing keys that no longer match, so callers that
-add a key go through this instead.
+add a key go through this instead. `parseSpecWith(schema, input)` runs the same
+two passes over such a schema and returns the extra keys with the spec;
+`parseSpec` is that with the plain one.
 
 ## Visual vocabulary (src/style.ts)
 
@@ -344,15 +351,16 @@ excalix mcp                                   stdio MCP server
 
 `schema` prints `z.toJSONSchema(specSchema, { io: "input" })`, which is the
 schema the `sketch` tool advertises minus `out`. The two are serialized
-separately, the MCP one by zod mini inside the SDK against draft 7, so
-`mcp.test.ts` compares them and the only differences allowed are `$schema` and
-`out`.
+separately, the MCP one against draft 7, so `mcp.test.ts` compares them and the
+only differences allowed are `$schema` and `out`.
 
 Errors go to stderr, one per line, exit code 1. No colour, no spinner.
 
 ## MCP (src/mcp.ts)
 
-`@modelcontextprotocol/sdk` `McpServer` over stdio. One tool, `sketch`.
+`@modelcontextprotocol/sdk` `Server` over stdio, with hand-written `tools/list`
+and `tools/call` handlers. One tool, `sketch`, which runs to completion inside
+the call (`execution.taskSupport: "forbidden"`).
 Input: `specSchemaWith({ out })`, where `out` is a basename, absolute or
 relative to the server's working directory, defaulting to
 `diagrams/<title slug>` or `diagrams/diagram`. The tool description doubles as
@@ -370,19 +378,21 @@ that a long label stretched the layout without it having to measure the image.
 The text block stays as three bare paths: a client that ignores structured
 content is no worse off than before.
 
+One validation surface. The handler calls `parseSpecWith(inputSchema, ...)`
+itself, so schema problems and reference problems arrive in one `isError` text
+block, the same lines `excalix validate` prints, and a spec wrong in both ways
+costs one call. `McpServer` cannot do this: it parses the arguments against the
+advertised schema before the handler runs and answers in its own frame, and it
+reads one schema for both advertising and parsing, so a permissive parse would
+advertise a permissive schema. Hence the low-level `Server`: `tools/list`
+serves the tool verbatim, with both schemas serialized by `z.toJSONSchema`
+against draft 7, and `tools/call` owns everything else. Validating in the
+handler also means a bad spec never launches Chromium, as with `excalix render`.
+A tool name we do not serve is a protocol error (`-32602`), not a result.
+
 One browser per server process, opened on the first call, dropped after a
 failed call so the next one starts fresh, and closed before the process exits
-when stdin ends. Failures return `isError: true`, which the SDK exempts from
-output-schema validation.
-
-Two validation surfaces, and they cannot be merged: the SDK parses the
-arguments against the advertised input schema before the handler runs, so a
-spec that breaks the schema never reaches `parseSpec`. Those problems come back
-in the SDK's own frame, `<message> at <path>` behind an
-`Input validation error:` prefix, carrying our wording from the schema.
-Everything `parseSpec` owns, the reference and uniqueness checks and the blank
-labels, comes back as the plain problem list. A spec that is wrong in both ways
-therefore costs two calls.
+when stdin ends. Failures return `isError: true` and no structured content.
 
 ## Conventions
 

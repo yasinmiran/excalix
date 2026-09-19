@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,6 +21,15 @@ const SPEC = {
     { id: "api", label: "Order API", kind: "service" },
   ],
   edges: [{ from: "web", to: "api", label: "POST /orders" }],
+};
+
+const KINDS = '"client", "service", "datastore", "queue", "cache", "external"';
+
+// Wrong against the schema, twice over, and wrong about its own ids: one call has to answer all three.
+const WRONG_BOTH_WAYS = {
+  title: "order pipeline",
+  nodes: [{ id: "web", label: "Web app", kind: "browser", colour: "blue" }],
+  edges: [{ from: "web", to: "api" }],
 };
 
 const disposers: (() => Promise<void>)[] = [];
@@ -82,6 +91,15 @@ async function cliSchema(): Promise<Record<string, unknown>> {
   return JSON.parse(printed[0]!) as Record<string, unknown>;
 }
 
+async function cliProblems(spec: unknown): Promise<string> {
+  const path = join(await mkdtemp(join(tmpdir(), "excalix-cli-")), "spec.json");
+  await writeFile(path, JSON.stringify(spec));
+  const printed: string[] = [];
+  const code = await main(["validate", path], { stdout: () => {}, stderr: (s) => printed.push(s) });
+  expect(code).toBe(1);
+  return printed.join("\n");
+}
+
 describe("sketch tool", () => {
   it("advertises the contract in the snapshot", async () => {
     await expect(page(await sketchTool())).toMatchFileSnapshot("./__snapshots__/sketch-tool.md");
@@ -96,7 +114,7 @@ describe("sketch tool", () => {
 
     expect(advertised.properties.out?.description).toContain("<out>.excalidraw");
     delete advertised.properties.out;
-    // Two serializers of one zod schema: the CLI's own, and zod mini's inside the MCP SDK, which targets draft 7.
+    // One zod schema, serialized twice: the tool targets draft 7, the CLI the draft zod defaults to.
     delete advertised.$schema;
     expect(printed.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
     delete printed.$schema;
@@ -148,29 +166,53 @@ describe("sketch tool", () => {
     await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1));
   });
 
-  // The SDK checks the advertised schema before the handler runs, so these problems arrive in its wording.
-  it("rejects a spec that breaks the schema before it reaches the pipeline", async () => {
-    const { client, out, writeSketch } = await harness();
+  // The promise the tool makes: one call, every problem, whichever half of the validation found it.
+  it("reports the schema and the semantic problems of one spec together", async () => {
+    const { client, createRenderer, out, writeSketch } = await harness();
 
-    const unknownKey = await client.callTool({ name: "sketch", arguments: { ...SPEC, out, colour: "blue" } });
-    const badKind = await client.callTool({
-      name: "sketch",
-      arguments: { ...SPEC, out, nodes: [{ id: "a", label: "A", kind: "db" }] },
-    });
+    const result = await client.callTool({ name: "sketch", arguments: { ...WRONG_BOTH_WAYS, out } });
 
-    expect(unknownKey.isError).toBe(true);
-    expect(textOf(unknownKey)).toBe(
-      'MCP error -32602: Input validation error: Invalid arguments for tool sketch: unknown key "colour", ' +
-        'expected one of "title", "direction", "groups", "nodes", "edges", "out"',
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      [
+        `nodes[0].kind: got "browser", expected one of ${KINDS}`,
+        'nodes[0]: unknown key "colour", expected one of "id", "label", "kind", "group"',
+        'edges[0].to: unknown node "api"',
+      ].join("\n"),
     );
-    expect(textOf(badKind)).toBe(
-      'MCP error -32602: Input validation error: Invalid arguments for tool sketch: got "db", expected one of ' +
-        '"client", "service", "datastore", "queue", "cache", "external" at nodes[0].kind',
-    );
+    expect(textOf(result)).toBe(await cliProblems(WRONG_BOTH_WAYS));
     expect(writeSketch).not.toHaveBeenCalled();
+    expect(createRenderer).not.toHaveBeenCalled();
   });
 
-  it("reports every spec problem", async () => {
+  it("reports an out that is not a string in the same list", async () => {
+    const { client } = await harness();
+
+    const result = await client.callTool({
+      name: "sketch",
+      arguments: { ...SPEC, edges: [{ from: "web", to: "apy" }], out: 5 },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe('out: got 5, expected a string\nedges[0].to: unknown node "apy", did you mean "api"?');
+  });
+
+  it("reports a call with no arguments at all", async () => {
+    const { client } = await harness();
+
+    const result = await client.callTool({ name: "sketch" });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe("spec: missing, expected an object");
+  });
+
+  it("refuses a tool it does not serve", async () => {
+    const { client } = await harness();
+
+    await expect(client.callTool({ name: "draw", arguments: {} })).rejects.toThrow('MCP error -32602: unknown tool "draw"');
+  });
+
+  it("reports the problems of a spec the pipeline rejects", async () => {
     const problems = ['nodes[1].id: duplicate id "web"', 'edges[0].to: unknown node "apy"'];
     const { client, out } = await harness({
       writeSketch: async () => {

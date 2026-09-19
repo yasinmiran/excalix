@@ -104,7 +104,7 @@ nodes[2].kind: got "db", expected one of "client", "service", "datastore", "queu
 
 `excalix mcp` is an MCP server with one tool, `sketch`. Its input is the spec plus an optional `out` basename (default `diagrams/<title slug>`, resolved against the server's working directory). It returns the three written paths and then the PNG inline, so the calling agent sees the diagram in the same turn it asked for it and can send back an adjusted spec. The same paths come back as structured content too, with the pixel size of that PNG next to them; a client that ignores structured content loses nothing.
 
-The tool advertises the spec schema that `excalix schema` prints, with `out` added. Both are serialized from the same zod schema, and a test compares them so the two cannot drift apart.
+The tool advertises the spec schema that `excalix schema` prints, with `out` added. Both are serialized from the same zod schema, and a test compares them so the two cannot drift apart. A spec it turns down comes back as the problem list `excalix validate` prints, every problem in the one call, so fixing a bad spec costs one round trip there too.
 
 Register it with Claude Code for every project:
 
