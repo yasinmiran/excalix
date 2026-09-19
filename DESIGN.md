@@ -240,5 +240,11 @@ Validation errors return `isError: true` with the problem list.
 - Tests: vitest, colocated `*.test.ts`. Unit tests use `estimateMeasurer`.
   Render tests launch the browser and are tagged in their describe name with
   `[browser]`.
+- `src/geometry.test.ts` runs every spec in `examples/` and `stress/` through the
+  pipeline with `estimateMeasurer` and asserts overlap, nesting and bounds
+  invariants on the resulting boxes, so a new spec dropped in either directory is
+  covered without touching the test. Cells that fail today are marked `it.fails`
+  with the reason in the test name; fixing a defect makes its marker fail the
+  suite until the `KNOWN` entry goes with it.
 - No em dashes anywhere, including comments and docs.
 - Conventional commits, no AI attribution.
