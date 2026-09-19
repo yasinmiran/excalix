@@ -27,7 +27,7 @@ The Chromium download is required. Excalidraw's export code and the font measure
 
 ```
 excalix render <spec.json> [-o <basename>]   write <basename>.excalidraw, .svg and .png
-excalix validate <spec.json>                 check the spec, print every problem
+excalix validate <spec.json>                 check the spec, print its counts or every problem
 excalix schema                               print the JSON Schema of the spec
 excalix mcp                                  serve the sketch tool over stdio
 ```
@@ -71,11 +71,13 @@ excalix mcp                                  serve the sketch tool over stdio
 | kind | what it is |
 |---|---|
 | `client` | people, browsers, mobile apps, anything that initiates requests |
-| `service` | an application component you run |
+| `service` | an application component you run, or managed infrastructure you configure inside your own boundary: load balancer, CDN, API gateway, DNS |
 | `datastore` | database or durable storage |
 | `queue` | message queue, topic, or stream |
 | `cache` | cache or in-memory store |
-| `external` | third-party system you don't run |
+| `external` | a system another company operates and you only call, such as a payment API or a hosted identity provider |
+
+The line between `service` and `external` is who operates the thing. An ALB or a CloudFront distribution is configuration you own, so it draws as a `service`; Stripe sits on somebody else's side of the boundary and you only call it, so it is `external`.
 
 `edge.style` says how the two ends talk, and `edge.arrows` says which ends get an arrowhead:
 
@@ -87,9 +89,13 @@ excalix mcp                                  serve the sketch tool over stdio
 | `both` | an arrowhead at each end, for a bidirectional link |
 | `none` | no arrowhead, a plain association |
 
-`direction` is `lr` by default, or `tb` for top to bottom; `examples/auth-flow.json` is a top-to-bottom one without groups. Groups nest through `parent`. Siblings keep the order the spec lists them in, as far as edge crossings allow, so it pays to write the nodes in reading order.
+`direction` is `lr` by default, or `tb` for top to bottom; `examples/auth-flow.json` is a top-to-bottom one without groups. Groups nest through `parent`, and a node names at most one of them: a component that spans two boundaries goes in the one it runs in, with an edge across the border for the other relationship.
+
+Siblings keep the order the spec lists them in, as far as edge crossings allow, so it pays to write the nodes in reading order. That is the whole of what order does. It places siblings next to each other and has no say in where an arrow is routed, so reshuffling the `edges` array to chase a route is wasted effort; what changes a layout is the direction of an edge, which nodes share a group, and `direction`.
 
 An edge label rides on its arrow and reserves that much width in the layout, which is why a short one is worth the effort: put a sentence on an edge and the whole diagram stretches to fit it. A `\n` in any label starts a new line. An edge may loop from a node back to itself, and two edges between the same pair stay two arrows.
+
+One diagram holds about twenty nodes before it stops being readable at a glance, and fewer when they run in a single chain, which stretches one way and stays thin the other. Beyond that the PNG gets big enough that anyone looking at it scaled down, an agent especially, starts mistaking a dashed arrow for the dashed border it runs beside. Split the system into an overview and a detail diagram instead; `render` and the `sketch` tool both add a line saying so once the longest side of the PNG passes 6000 pixels.
 
 Unknown keys are rejected, and `excalix validate` reports every problem at once, so a typo costs one round trip instead of several. Each line names the path, shows what it found and says what would have been valid, and an id that is nearly right comes back with the id it is nearly:
 
@@ -98,7 +104,7 @@ edges[0].to: unknown node "apy", did you mean "api"?
 nodes[2].kind: got "db", expected one of "client", "service", "datastore", "queue", "cache", "external"
 ```
 
-`excalix schema` prints the full JSON Schema.
+A spec with nothing wrong prints `ok: 7 nodes, 6 edges, 2 groups` and exits 0. `excalix schema` prints the full JSON Schema.
 
 ## For agents
 

@@ -13,7 +13,8 @@ parseSpec(json)            src/spec.ts        zod schema, semantic checks, defau
   -> layout(LayoutInput)   src/layout.ts      ELK layered, compound groups, orthogonal edges
   -> buildElements(...)    src/elements.ts    Excalidraw elements, deterministic ids/seeds
   -> svg / png             src/render/*.ts    @excalidraw/utils exportToSvg / exportToBlob in-page
-sketch()                   src/pipeline.ts    wires the above, returns SketchResult
+sketch()                   src/pipeline.ts    wires the above, returns SketchResult;
+                                              pngSize and sizeNote read the result's PNG header
 CLI                        src/cli.ts         excalix render|validate|schema|mcp
 MCP                        src/mcp.ts         stdio server, one tool: sketch
 ```
@@ -49,6 +50,9 @@ Validation (all problems reported at once, not first-fail):
 - labels non-empty after trim; at least one node
 - `node.group`, `group.parent`, `edge.from`, `edge.to` reference existing ids;
   edges reference nodes only, never groups
+- a node sits in exactly one group, so `group` is a single id. An array there is
+  an agent asking for two memberships, and the type error answers with the rule
+  rather than the syntax
 - group parents form a forest (no cycles)
 - self-edges are allowed; duplicate edges are allowed (they're distinct arrows)
 
@@ -76,6 +80,7 @@ nodes[0].kind: missing, expected one of "client", "service", "datastore", "queue
 nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "group"
 nodes[0].id: got "a b", expected letters, digits, "_" and "-" only
 nodes[0].label: got "  ", expected text
+nodes[0].group: got an array, expected one group id: a node sits in exactly one group, so name the one it runs in and let an edge across the boundary carry the other relationship
 nodes: got an empty array, expected at least one node
 nodes[1].id: duplicate id "api", expected an id no other node or group uses
 edges[0].from: "aws" is a group, expected a node
@@ -344,10 +349,27 @@ excalix render <spec.json> [-o <basename>]    writes <basename>.excalidraw, .svg
                                               default basename: spec path without extension;
                                               a trailing slash on -o means a directory;
                                               validates before launching Chromium
-excalix validate <spec.json>                  exit 0 or print all problems, exit 1
+excalix validate <spec.json>                  print "ok: 7 nodes, 6 edges, 2 groups", exit 0,
+                                              or print all problems, exit 1
 excalix schema                                JSON Schema of the spec to stdout
 excalix mcp                                   stdio MCP server
 ```
+
+`validate` says what it counted rather than nothing, because silence reads the
+same whether the tool ran or not.
+
+`render` prints the three paths, and one more line when `sizeNote` in
+`pipeline.ts` finds the PNG's longest side past 6000 pixels: the size, and the
+suggestion to split the diagram or shorten its labels. The threshold is where an
+agent stops being able to read the picture it asked for. The export is 2x and a
+viewer scales the longest side to around 1568 pixels, so past 6000 the reduction
+is over 4x and a 20pt node label lands under 10 pixels in the copy being read;
+that is the size at which a dashed arrow beside a dashed group border stops
+being distinguishable from it. Over `examples/` and `stress/` it speaks up for
+two specs, the twenty-node region pair at 7929 wide and the fourteen-box chain
+at 6601, and stays quiet for the rest, the tall twenty-node variant included.
+Nothing else about the output changes, so a diagram that still reads prints
+exactly what it printed before.
 
 `schema` prints `z.toJSONSchema(specSchema, { io: "input" })`, which is the
 schema the `sketch` tool advertises minus `out`. The two are serialized
@@ -365,9 +387,11 @@ Input: `specSchemaWith({ out })`, where `out` is a basename, absolute or
 relative to the server's working directory, defaulting to
 `diagrams/<title slug>` or `diagrams/diagram`. The tool description doubles as
 the style guide: it lists every kind and edge style with one line on when to
-use it, and says how the layout answers the spec (nodes in reading order, short
-edge labels, `\n` for a new line), so a calling agent never guesses. Every
-sentence in it has to change what the agent writes.
+use it, and says how the layout answers the spec (nodes in reading order and
+what that order does not decide, one group per node, short edge labels, `\n`
+for a new line, and the size at which a diagram wants splitting), so a calling
+agent never guesses. Every sentence in it has to change what the agent writes,
+which is the budget: something comes out when something goes in.
 
 Result content: a text block listing the three written paths, then an `image`
 block with the PNG (base64, `image/png`, taken from the in-memory result, never
@@ -375,8 +399,9 @@ re-read from disk) so the caller sees the diagram in the same turn.
 `structuredContent` repeats the three paths under an `outputSchema` and adds
 `pixels`, the PNG's own size read from its IHDR header, which tells an agent
 that a long label stretched the layout without it having to measure the image.
-The text block stays as three bare paths: a client that ignores structured
-content is no worse off than before.
+The text block stays as three bare paths, and one more line when `sizeNote`
+speaks up, the same one `excalix render` prints: a client that ignores
+structured content is no worse off than before.
 
 One validation surface. The handler calls `parseSpecWith(inputSchema, ...)`
 itself, so schema problems and reference problems arrive in one `isError` text
@@ -406,8 +431,10 @@ when stdin ends. Failures return `isError: true` and no structured content.
   `mcp.test.ts` writes it from `listTools()`, so any change to the wording or
   the schema turns up as a diff to read rather than a surprise in a client.
 - `spec.test.ts` holds one table row per way a spec can be wrong, each with the
-  exact text an agent gets back, and parses the example spec out of
-  `skills/excalix/SKILL.md` so the skill cannot rot.
+  exact text an agent gets back, and parses both specs out of
+  `skills/excalix/SKILL.md` so the skill cannot rot: the good one has to
+  validate, and the walkthrough's broken one has to produce the problem lines
+  the skill prints under it.
 - `src/test-support.ts` is the shared harness: the spec corpus (`specFiles`,
   `readSpec`), `measuringOnly` (a renderer that measures and stubs svg and png,
   because the invariants read elements only), and `describeGeometry`, which

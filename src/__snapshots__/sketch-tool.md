@@ -1,20 +1,24 @@
 # sketch
 
-Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure. Alongside the PNG you get back, an .excalidraw file lands on disk that opens on excalidraw.com for hand editing.
+Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.
 
 Node kinds:
 client: people, browsers, mobile apps, anything that initiates requests.
-service: an application component you run.
+service: an application component you run, or managed infrastructure you configure inside your own boundary: load balancer, CDN, API gateway, DNS.
 datastore: database or durable storage.
 queue: message queue, topic, or stream.
 cache: cache or in-memory store.
-external: third-party system you don't run.
+external: a system another company operates and you only call, such as a payment API or a hosted identity provider.
 
 Edge styles:
 sync: request/response, solid arrow.
 async: message or event, dashed arrow.
 
-List nodes in reading order, sources first: siblings keep the order you write them in as far as the routing allows. Keep edge labels to a few words, because an edge label sits on its arrow and reserves that much width. A \n in any label starts a new line.
+A node sits in exactly one group: name the group it runs in, and let an edge across the boundary carry any other relationship.
+
+List nodes in reading order, sources first. That is all order does: place siblings beside each other. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.
+
+Keep edge labels to a few words, because an edge label sits on its arrow and reserves that much width. A \n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
 
 Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.
 
@@ -99,7 +103,7 @@ Look at the returned image and call again with an adjusted spec if labels overla
               {
                 "type": "string",
                 "const": "service",
-                "description": "an application component you run"
+                "description": "an application component you run, or managed infrastructure you configure inside your own boundary: load balancer, CDN, API gateway, DNS"
               },
               {
                 "type": "string",
@@ -119,7 +123,7 @@ Look at the returned image and call again with an adjusted spec if labels overla
               {
                 "type": "string",
                 "const": "external",
-                "description": "third-party system you don't run"
+                "description": "a system another company operates and you only call, such as a payment API or a hosted identity provider"
               }
             ],
             "description": "what the node is; fixes its shape and colour"
@@ -127,7 +131,7 @@ Look at the returned image and call again with an adjusted spec if labels overla
           "group": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_-]+$",
-            "description": "id of the group this node sits inside"
+            "description": "id of the group this node sits inside, exactly one: name the group it runs in and let an edge across the boundary carry any other relationship"
           }
         },
         "required": [

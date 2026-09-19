@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { serveMcp } from "./mcp.js";
-import { writeSketch } from "./pipeline.js";
+import { sizeNote, writeSketch } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { parseSpec, SpecError, specSchema } from "./spec.js";
 
@@ -19,7 +19,7 @@ const USAGE = `excalix - architecture diagrams from a topology spec
 
 usage:
   excalix render <spec.json> [-o <basename>]   write <basename>.excalidraw, .svg and .png
-  excalix validate <spec.json>                 check the spec, print every problem
+  excalix validate <spec.json>                 check the spec, print its counts or every problem
   excalix schema                               print the JSON Schema of the spec
   excalix mcp                                  serve the sketch tool over stdio
   excalix --help                               show this message
@@ -73,10 +73,12 @@ async function render(argv: string[], io: Io): Promise<number> {
 
   const renderer = await createBrowserRenderer();
   try {
-    const { files } = await writeSketch(spec, out, renderer);
+    const { files, result } = await writeSketch(spec, out, renderer);
     io.stdout(files.excalidraw);
     io.stdout(files.svg);
     io.stdout(files.png);
+    const note = sizeNote(result.png);
+    if (note !== undefined) io.stdout(note);
   } finally {
     await renderer.close();
   }
@@ -90,8 +92,13 @@ async function validate(argv: string[], io: Io): Promise<number> {
     io.stderr("validate needs a spec file");
     return 1;
   }
-  parseSpec(await readSpec(specPath));
+  const spec = parseSpec(await readSpec(specPath));
+  io.stdout(`ok: ${count(spec.nodes.length, "node")}, ${count(spec.edges.length, "edge")}, ${count(spec.groups.length, "group")}`);
   return 0;
+}
+
+function count(n: number, thing: string): string {
+  return `${n} ${thing}${n === 1 ? "" : "s"}`;
 }
 
 async function readSpec(specPath: string): Promise<unknown> {

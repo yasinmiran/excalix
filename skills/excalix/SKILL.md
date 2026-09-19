@@ -30,21 +30,47 @@ JSON with `nodes` and `edges`, optional `title`, `direction` (`lr` default, or
 ```
 
 `kind` is one of `client` (browsers, apps, anything that initiates requests),
-`service` (a component you run), `datastore` (database or durable storage),
-`queue` (queue, topic or stream), `cache`, `external` (third-party you don't
-run). `edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows`
-is `forward` (default), `both` or `none`. Run `excalix schema` for the whole
-shape, and `excalix validate <spec.json>` to check one without rendering.
+`service`, `datastore` (database or durable storage), `queue` (queue, topic or
+stream), `cache` and `external`. The choice between `service` and `external` comes down
+to who operates the thing, not who wrote it. Anything inside your own boundary
+that you configure is a `service`, load balancers, CDNs, API gateways and DNS
+included.
+`external` means another company runs it and you only call it: a payment API, a
+hosted identity provider, an email sender.
 
-List the nodes in reading order, sources first. Siblings keep the order you
-write them in as far as the routing allows, so a spec that reads like the flow
-draws like it too.
+`edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows` is
+`forward` (default), `both` or `none`. Run `excalix schema` for the whole shape,
+and `excalix validate <spec.json>` to check one without rendering.
+
+A node carries one `group` at most, and it has to be a single id, so
+`"group": ["frontend", "backend"]` comes back rejected. A component that really
+does sit on two networks goes in the group it runs in, and an edge crossing the
+boundary carries the other relationship.
+
+List the nodes in reading order, sources first. Order places siblings relative
+to one another and does nothing more than that; it will not move an arrow onto a
+different route. When a route is what you want changed, the levers are the
+direction of the edge itself, which nodes share a group, and `direction`.
 
 Keep edge labels to a few words. A label sits on its arrow and reserves that
 much width, so a sentence on one edge pushes the whole diagram wide. `\n`
 anywhere in a label starts a new line, which is the way out when a node name is
 genuinely long. An edge from a node back to itself is fine, and so are two edges
 between the same pair; each one draws as its own arrow.
+
+## How much fits
+
+Twenty nodes is roughly the ceiling for one picture, and a dozen boxes in a
+single run reaches it sooner, since a chain stretches one way and stays thin the
+other. Past the ceiling the image is scaled down before you read it, until a
+dashed arrow running beside a group border is no longer distinguishable from the
+border itself, and you end up reporting things the coordinates do not say.
+
+A long chain still reads better as `lr` and a deep hierarchy as `tb`, so try
+`direction` first. When direction is not what is wrong, two diagrams is the
+ordinary answer: an overview that collapses each region to one node, then a
+detail diagram of the part under discussion. Rendering adds a line of its own
+once the longest side of the image passes 6000 pixels.
 
 ## Running it
 
@@ -57,6 +83,33 @@ First form inside a repo that has excalix installed, second form anywhere else.
 Writes `<basename>.excalidraw`, `.svg` and `.png`. End `-o` with a slash and it
 is a directory: `-o docs/diagrams/` writes `arch.excalidraw` and its siblings in
 there.
+
+## When it says no
+
+Every problem comes back at once, each line naming the path, what arrived and
+what would have been valid. This spec has two mistakes:
+
+```json
+{
+  "nodes": [
+    { "id": "cdn", "label": "CloudFront", "kind": "gateway" },
+    { "id": "api", "label": "Order API", "kind": "service" }
+  ],
+  "edges": [{ "from": "cdn", "to": "apy" }]
+}
+```
+
+`excalix validate` answers:
+
+```text
+nodes[0].kind: got "gateway", expected one of "client", "service", "datastore", "queue", "cache", "external"
+edges[0].to: unknown node "apy", did you mean "api"?
+```
+
+There is no `gateway` kind. CloudFront is infrastructure you configure inside
+your own boundary, so it is a `service`. The edge then points at an id nothing
+defines, and the suggestion says which one was meant. With both fixed the
+command prints `ok: 2 nodes, 1 edge, 0 groups` and exits 0.
 
 ## Then look at it
 

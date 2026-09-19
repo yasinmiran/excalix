@@ -48,9 +48,15 @@ function strict<T extends z.ZodRawShape>(shape: T, description: string) {
 /** A string field, for the spec and for a caller's own keys, so both report a wrong type the same way. */
 export const stringField = z.string({ error: problem("expected a string") });
 
-function id(description: string) {
-  return stringField.regex(ID_PATTERN, { error: problem('expected letters, digits, "_" and "-" only') }).describe(description);
+function id(description: string, base: z.ZodString = stringField) {
+  return base.regex(ID_PATTERN, { error: problem('expected letters, digits, "_" and "-" only') }).describe(description);
 }
+
+// An array here is a node asking to be in two groups at once, so the type error carries the rule rather than the syntax.
+const ONE_GROUP =
+  "expected one group id: a node sits in exactly one group, so name the one it runs in and let an edge across the boundary carry the other relationship";
+
+const groupRef = z.string({ error: problem(ONE_GROUP) });
 
 function text(description: string) {
   return stringField.describe(description);
@@ -60,11 +66,17 @@ const kind = z
   .union(
     [
       z.literal("client").describe("people, browsers, mobile apps, anything that initiates requests"),
-      z.literal("service").describe("an application component you run"),
+      z
+        .literal("service")
+        .describe(
+          "an application component you run, or managed infrastructure you configure inside your own boundary: load balancer, CDN, API gateway, DNS",
+        ),
       z.literal("datastore").describe("database or durable storage"),
       z.literal("queue").describe("message queue, topic, or stream"),
       z.literal("cache").describe("cache or in-memory store"),
-      z.literal("external").describe("third-party system you don't run"),
+      z
+        .literal("external")
+        .describe("a system another company operates and you only call, such as a payment API or a hosted identity provider"),
     ],
     { error: problem(oneOf(["client", "service", "datastore", "queue", "cache", "external"])) },
   )
@@ -114,7 +126,10 @@ const node = strict(
     id: id("unique id, referenced by edge.from, edge.to and group membership"),
     label: text("text drawn inside the box; a \\n starts a new line"),
     kind,
-    group: id("id of the group this node sits inside").optional(),
+    group: id(
+      "id of the group this node sits inside, exactly one: name the group it runs in and let an edge across the boundary carry any other relationship",
+      groupRef,
+    ).optional(),
   },
   "one box in the diagram",
 );

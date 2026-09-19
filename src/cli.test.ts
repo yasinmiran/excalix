@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
 }));
 
-vi.mock("./pipeline.js", () => ({ writeSketch: mocks.writeSketch }));
+// Only the sketch is faked; the size note is the real one, so the threshold the CLI prints at is the shipped one.
+vi.mock("./pipeline.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./pipeline.js")>()),
+  writeSketch: mocks.writeSketch,
+}));
 vi.mock("./render/browser.js", () => ({ createBrowserRenderer: mocks.createBrowserRenderer }));
 vi.mock("./mcp.js", () => ({ serveMcp: mocks.serveMcp }));
 vi.mock("./spec.js", async () => {
@@ -38,6 +42,16 @@ function collect(): { io: Io; out: string[]; err: string[] } {
 
 const renderer = { measurer: {}, svg: vi.fn(), png: vi.fn(), close: mocks.close };
 const specJson = { nodes: [{ id: "a", label: "A", kind: "service" }] };
+const parsed = { direction: "lr", groups: [], nodes: specJson.nodes, edges: [] };
+
+// Signature, chunk length, IHDR, then the two uint32s sizeNote reads.
+function png(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(24);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+  new DataView(bytes.buffer).setUint32(16, width);
+  new DataView(bytes.buffer).setUint32(20, height);
+  return bytes;
+}
 
 let dir: string;
 let specPath: string;
@@ -48,9 +62,10 @@ beforeEach(async () => {
   specPath = join(dir, "topology.json");
   await writeFile(specPath, JSON.stringify(specJson), "utf8");
   mocks.createBrowserRenderer.mockResolvedValue(renderer);
+  mocks.parseSpec.mockReturnValue(parsed);
   mocks.writeSketch.mockImplementation(async (_spec: unknown, basename: string) => ({
     files: { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` },
-    result: { excalidraw: "", svg: "", png: new Uint8Array() },
+    result: { excalidraw: "", svg: "", png: png(2404, 811) },
   }));
 });
 
@@ -68,6 +83,19 @@ describe("render", () => {
       join(dir, "topology.png"),
     ]);
     expect(mocks.close).toHaveBeenCalledOnce();
+  });
+
+  it("adds a line when the png is too big to read scaled down", async () => {
+    mocks.writeSketch.mockResolvedValue({
+      files: { excalidraw: "a.excalidraw", svg: "a.svg", png: "a.png" },
+      result: { excalidraw: "", svg: "", png: png(7929, 1775) },
+    });
+    const { io, out } = collect();
+
+    expect(await main(["render", specPath], io)).toBe(0);
+    expect(out[3]).toBe(
+      "note: 7929x1775 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.",
+    );
   });
 
   it("resolves -o against cwd", async () => {
@@ -137,13 +165,26 @@ describe("render", () => {
 });
 
 describe("validate", () => {
-  it("is silent when the spec parses", async () => {
+  it("says what it counted when the spec parses", async () => {
     const { io, out, err } = collect();
 
     expect(await main(["validate", specPath], io)).toBe(0);
     expect(mocks.parseSpec).toHaveBeenCalledWith(specJson);
-    expect(out).toEqual([]);
+    expect(out).toEqual(["ok: 1 node, 0 edges, 0 groups"]);
     expect(err).toEqual([]);
+  });
+
+  it("counts groups and edges too", async () => {
+    mocks.parseSpec.mockReturnValue({
+      direction: "lr",
+      groups: [{ id: "aws", label: "AWS" }],
+      nodes: [...parsed.nodes, { id: "b", label: "B", kind: "queue" }],
+      edges: [{ from: "a", to: "b", style: "sync", arrows: "forward" }],
+    });
+    const { io, out } = collect();
+
+    expect(await main(["validate", specPath], io)).toBe(0);
+    expect(out).toEqual(["ok: 2 nodes, 1 edge, 1 group"]);
   });
 
   it("prints every problem on its own line", async () => {

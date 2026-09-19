@@ -14,6 +14,9 @@ import type { Renderer } from "./types.js";
 const PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 9, 100, 0, 0, 3, 43]);
 const PIXELS = { width: 2404, height: 811 };
 
+// The same header at 7929 x 1775, past the size the tool speaks up about.
+const BIG_PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 30, 249, 0, 0, 6, 239]);
+
 const SPEC = {
   title: "order pipeline",
   nodes: [
@@ -144,6 +147,27 @@ describe("sketch tool", () => {
       png: `${out}.png`,
       pixels: PIXELS,
     });
+  });
+
+  it("adds one line to the text block when the png is too big to read scaled down", async () => {
+    const { client, out } = await harness({
+      writeSketch: async (_input, basename) => ({
+        files: { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` },
+        result: { excalidraw: "", svg: "", png: BIG_PNG },
+      }),
+    });
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    expect(textOf(result)).toBe(
+      [
+        `${out}.excalidraw`,
+        `${out}.svg`,
+        `${out}.png`,
+        "note: 7929x1775 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.",
+      ].join("\n"),
+    );
+    expect(result.structuredContent).toMatchObject({ pixels: { width: 7929, height: 1775 } });
   });
 
   it("defaults out to diagrams/<title slug>", async () => {

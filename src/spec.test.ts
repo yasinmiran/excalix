@@ -10,6 +10,12 @@ const example = JSON.parse(
   readFileSync(new URL("../examples/order-pipeline.json", import.meta.url), "utf8"),
 ) as unknown;
 
+const skill = readFileSync(new URL("../skills/excalix/SKILL.md", import.meta.url), "utf8");
+
+function fenced(language: string): string[] {
+  return [...skill.matchAll(new RegExp("```" + language + "\\n([\\s\\S]*?)```", "g"))].map((match) => match[1]!);
+}
+
 function problems(input: unknown): string[] {
   try {
     parseSpec(input);
@@ -53,13 +59,22 @@ describe("parseSpec", () => {
   });
 
   it("accepts the spec in the skill", () => {
-    const skill = readFileSync(new URL("../skills/excalix/SKILL.md", import.meta.url), "utf8");
-    const fenced = /```json\n([\s\S]*?)```/.exec(skill);
-    expect(fenced, "SKILL.md has no json example").not.toBeNull();
+    const [good] = fenced("json");
+    expect(good, "SKILL.md has no json example").toBeDefined();
 
-    const spec = parseSpec(JSON.parse(fenced![1]!) as unknown);
+    const spec = parseSpec(JSON.parse(good!) as unknown);
 
     expect(spec.nodes.length).toBeGreaterThan(0);
+  });
+
+  // The skill walks through one broken spec. Both halves of that walkthrough come from here, so neither can rot.
+  it("answers the skill's broken spec with the output the skill prints", () => {
+    const [, broken] = fenced("json");
+    const [printed] = fenced("text");
+    expect(broken, "SKILL.md has no broken example").toBeDefined();
+    expect(printed, "SKILL.md shows no output for it").toBeDefined();
+
+    expect(problems(JSON.parse(broken!) as unknown).join("\n")).toBe(printed!.trimEnd());
   });
 
   it("defaults direction, groups, edge style and edge arrows", () => {
@@ -112,6 +127,8 @@ describe("parseSpec", () => {
 });
 
 const KINDS = '"client", "service", "datastore", "queue", "cache", "external"';
+const ONE_GROUP =
+  "expected one group id: a node sits in exactly one group, so name the one it runs in and let an edge across the boundary carry the other relationship";
 
 // One row per way a spec can be wrong, with the text an agent gets back. Every line names the path,
 // shows what arrived, and says what would be valid.
@@ -288,6 +305,16 @@ const failures: [name: string, input: unknown, problems: string[]][] = [
     ['edges[0].to: unknown node "ap", did you mean "api"?'],
   ],
   [
+    "a node listing two groups",
+    withNodes([{ id: "a", label: "A", kind: "service", group: ["frontend", "backend"] }]),
+    [`nodes[0].group: got an array, ${ONE_GROUP}`],
+  ],
+  [
+    "a group membership that is not a string at all",
+    withNodes([{ id: "a", label: "A", kind: "service", group: 5 }]),
+    [`nodes[0].group: got 5, ${ONE_GROUP}`],
+  ],
+  [
     "a node in a group that does not exist",
     {
       groups: [{ id: "aws", label: "AWS" }],
@@ -429,11 +456,20 @@ describe("JSON Schema", () => {
   it("describes every enum value", () => {
     expect(nodeProps.kind.anyOf).toEqual([
       { type: "string", const: "client", description: "people, browsers, mobile apps, anything that initiates requests" },
-      { type: "string", const: "service", description: "an application component you run" },
+      {
+        type: "string",
+        const: "service",
+        description:
+          "an application component you run, or managed infrastructure you configure inside your own boundary: load balancer, CDN, API gateway, DNS",
+      },
       { type: "string", const: "datastore", description: "database or durable storage" },
       { type: "string", const: "queue", description: "message queue, topic, or stream" },
       { type: "string", const: "cache", description: "cache or in-memory store" },
-      { type: "string", const: "external", description: "third-party system you don't run" },
+      {
+        type: "string",
+        const: "external",
+        description: "a system another company operates and you only call, such as a payment API or a hosted identity provider",
+      },
     ]);
     expect((props.edges.items.properties as Json).style.anyOf).toEqual([
       { type: "string", const: "sync", description: "request/response, solid arrow" },

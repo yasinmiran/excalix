@@ -48,6 +48,23 @@ export async function writeFiles(result: SketchResult, basename: string): Promis
   return paths;
 }
 
+/** The PNG's own size, from the two big-endian uint32s in its IHDR chunk at byte 16 and 20. */
+export function pngSize(png: Uint8Array): { width: number; height: number } {
+  const header = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  return { width: header.getUint32(16), height: header.getUint32(20) };
+}
+
+// An agent reads the PNG downscaled to roughly 1568px on its longest side. The export is 2x, so a 20pt node label
+// is 40px in the file; past 6000 the reduction is over 4x and that label lands under 10px in the copy being read.
+const LEGIBLE_PIXELS = 6000;
+
+/** One line about a diagram too big to read once it is scaled down, or undefined while it still reads. */
+export function sizeNote(png: Uint8Array): string | undefined {
+  const { width, height } = pngSize(png);
+  if (Math.max(width, height) <= LEGIBLE_PIXELS) return undefined;
+  return `note: ${width}x${height} px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.`;
+}
+
 async function measureLabels(spec: Spec, measurer: TextMeasurer): Promise<Measured> {
   const nodeLabels = await measureKeyed(measurer, spec.nodes.map((n) => [n.id, n.label]), FONT.node);
   const groupLabels = await measureKeyed(measurer, spec.groups.map((g) => [g.id, g.label]), FONT.group);
