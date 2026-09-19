@@ -149,20 +149,59 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
 - `elk.layered.considerModelOrder.strategy: NODES_AND_EDGES`: siblings keep the
   order the spec lists them in, as far as crossings allow
 - group padding leaves room for the label: top = label.height + 16, others 16
-- `elk.spacing.nodeNode: 48`, `elk.layered.spacing.nodeNodeBetweenLayers: 48`,
-  `elk.spacing.edgeNode: 24`
+- spacing: `elk.spacing.nodeNode: 48`, `elk.spacing.edgeNode: 24`,
+  `elk.layered.spacing.nodeNodeBetweenLayers: 50`,
+  `elk.layered.spacing.edgeNodeBetweenLayers: 50`. ELK reads a spacing from the
+  node that contains what is being spaced, so all four go on the root and on
+  every group node. A group that omits them lays its children out on ELK's own
+  defaults, which put a bend 10px from the node it points at
 - edge labels: `elk.edgeLabels.placement: CENTER` and
   `elk.edgeLabels.inline: true` go in each label's own `layoutOptions`. ELK
   reads both from the label and ignores them on the graph, and without `inline`
   it reserves the box beside the edge instead of on it. The box handed to ELK is
   the measured text grown by a 12px margin on every side, so what ELK reserves
   is the text plus its clearance, centred on the route
-- self loops: ELK places their labels beside the loop even when the label asks
-  to be inline, so `elk.spacing.nodeSelfLoop` stands the loop off its node by
-  half the padded box and the text is centred on the loop's outer segment. The
-  option is read from the containing parent, never from the node, so it goes on
-  the root and on every group, and it is measured in the layered algorithm's
-  internal frame, which is transposed for DOWN
+- self loops: `elk.spacing.nodeSelfLoop` stands the loop off its node, and that
+  stand-off is the loop's closing segment, so it is never below
+  `ARROWHEAD_ROOM`. ELK also places a self loop's label beside the loop even
+  when the label asks to be inline, so the stand-off clears half the padded box
+  too and the text is centred on the loop's outer segment. The option is read
+  from the containing parent, never from the node, so it goes on the root and
+  on every group, and it is measured in the layered algorithm's internal frame,
+  which is transposed for DOWN
+
+### Room for an arrowhead
+
+Excalidraw sizes an arrowhead from the segment it ends on: `min(25, length *
+0.5)` for the `arrow` head, in `getArrowheadPoints` in the vendored bundle. A
+bend 10px short of its target therefore draws a 5px hook, not a head.
+`ARROWHEAD_ROOM` is 50, the length that earns the full 25, and it is the value
+of both `nodeNodeBetweenLayers` and `edgeNodeBetweenLayers`, because the
+straight run between two layers and the gap ELK leaves between a routing slot
+and a node are the two things that become an arrow's last segment. The same
+number bounds the self loop stand-off. It costs two pixels a gap on a chain of
+straight arrows, which already ran on the 48 of `nodeNode`, and about half
+again the long axis on the densest stress specs, where nearly every gap holds a
+bend. That is the price of a head that reads at a glance in a downscaled PNG.
+
+`END_SPACING` is 32, the distance held between two arrow ends on the same side
+of a node. An arrowhead is `2 * 25 * sin(20 degrees)` wide, about 17px, so 32
+leaves a clear gap between neighbours. ELK spreads the ends of a side evenly,
+at `side / (ends + 1)`, and its own lever for this, `elk.spacing.portPort` under
+a `PORTS` size constraint, also spaces a lone port off the corner and so
+inflates every node in the graph. The side itself is the cheaper lever: a node
+with two or more ends on one side grows along that side to `(ends + 1) * 32`.
+Left and right ends grow the height, top and bottom ends grow the width, and
+the label stays centred in whatever the node becomes, so a hub with eight
+spokes on one side turns into a tall bar, which is what a hub is.
+
+### Passes
+
+`layout` calls ELK up to three times and never in a loop: a probe pass, whose
+endpoint sides say how far each node has to grow; the pass that lays out the
+grown nodes; and, only when a group label came out from under an arrow at the
+corner, one more with that group's gutter widened. A pass count that depends on
+the geometry and not on a clock is what keeps the output byte-identical.
 
 Group labels own the top padding strip, but ELK routes edges through it, so the
 layout places them after routing: each label goes at the leftmost x in its strip
@@ -176,7 +215,7 @@ ELK pass, with that group's left padding widened by enough to clear the leftmost
 crossing. The widened gutter moves the crossing edges away from the corner
 instead of moving the label away from it, so the label stays where a reader
 looks for it. Placement then runs again on the new geometry and can still fall
-back. Exactly one extra pass, never a loop, so the output stays deterministic.
+back. Exactly one such pass, so the output stays deterministic.
 
 Gotcha: ELK returns child coordinates relative to their parent node and edge
 sections relative to the edge's containing node. Convert everything to absolute
@@ -438,8 +477,10 @@ when stdin ends. Failures return `isError: true` and no structured content.
 - `src/test-support.ts` is the shared harness: the spec corpus (`specFiles`,
   `readSpec`), `measuringOnly` (a renderer that measures and stubs svg and png,
   because the invariants read elements only), and `describeGeometry`, which
-  registers six cells per spec: node overlap, nesting, edge labels clear of
-  nodes and of each other, arrows clear of group labels, and bounds. A spec
+  registers nine cells per spec: node overlap, nesting, edge labels clear of
+  nodes and of each other, arrows clear of group labels and of the nodes they
+  do not join, a full `ARROWHEAD_ROOM` segment under every arrowhead, arrow
+  ends `END_SPACING` apart on a shared node side, and bounds. A spec
   dropped in `examples/` or `stress/` is covered without touching a test.
   Defects a suite still has go in the `KNOWN` table it passes in, which turns
   those cells into `it.fails` with the reason in the test name, so fixing one

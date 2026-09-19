@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
+import { ARROWHEAD_ROOM, END_SPACING, borderSide } from "./layout.js";
 import { sketch } from "./pipeline.js";
 import { parseSpec } from "./spec.js";
+import { arrowheads } from "./style.js";
 import type { Box, Point, Renderer, TextMeasurer } from "./types.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -28,6 +30,9 @@ export type Invariant =
   | "labelsClearNodes"
   | "labelsClearLabels"
   | "arrowsClearGroupLabels"
+  | "arrowsClearNodes"
+  | "headRoom"
+  | "endsApart"
   | "insideBounds";
 
 /** Layout defects a suite still has, keyed by spec file. An entry turns its cell into an it.fails. */
@@ -39,21 +44,34 @@ const TITLES: Record<Invariant, string> = {
   labelsClearNodes: "no edge label overlaps a node box",
   labelsClearLabels: "no two edge labels overlap",
   arrowsClearGroupLabels: "no arrow segment crosses a group label",
+  arrowsClearNodes: "no arrow passes through a node it does not join",
+  headRoom: `every arrowhead sits on a segment of at least ${ARROWHEAD_ROOM}px`,
+  endsApart: `arrow ends on one side of a node stay ${END_SPACING}px apart`,
   insideBounds: "every box but the title starts inside the layout bounds",
 };
+
+// ELK rounds its coordinates, so a distance counts as met when it misses by less than half a pixel.
+const SLACK = 0.5;
 
 interface Named {
   name: string;
   box: Box;
 }
 
+interface NamedNode extends Named {
+  id: string;
+}
+
 interface Arrow {
   name: string;
   points: Point[];
+  from: string;
+  to: string;
+  heads: { start: boolean; end: boolean };
 }
 
 interface Scene {
-  nodes: Named[];
+  nodes: NamedNode[];
   groupLabels: Named[];
   edgeLabels: Named[];
   arrows: Arrow[];
@@ -67,7 +85,7 @@ interface SceneElement extends Box {
   points?: [number, number][];
 }
 
-/** Registers the six layout invariants for every committed spec, measured however the caller measures. */
+/** Registers the nine layout invariants for every committed spec, measured however the caller measures. */
 export function describeGeometry(title: string, measurer: () => TextMeasurer, known: KnownDefects = {}): void {
   for (const file of specFiles) {
     describe(`${title} ${file}`, () => {
@@ -92,6 +110,13 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       check("labelsClearNodes", (scene) => overlapsAcross(scene.edgeLabels, scene.nodes));
       check("labelsClearLabels", (scene) => overlapsWithin(scene.edgeLabels));
       check("arrowsClearGroupLabels", (scene) => scene.arrows.flatMap((arrow) => scene.groupLabels.flatMap((label) => crossings(arrow, label))));
+      check("arrowsClearNodes", (scene) =>
+        scene.arrows.flatMap((arrow) =>
+          scene.nodes.filter((node) => node.id !== arrow.from && node.id !== arrow.to).flatMap((node) => crossings(arrow, node)),
+        ),
+      );
+      check("headRoom", (scene) => scene.arrows.flatMap(shortHeadSegments));
+      check("endsApart", crowdedSides);
       check("insideBounds", (scene) =>
         scene.bounded.filter(({ box }) => box.x < 0 || box.y < 0).map((item) => `${boxAt(item)} starts left of x=0 or above y=0`),
       );
@@ -118,7 +143,7 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
   const named = (name: string, key: string): Named => ({ name, box: element(key) });
   const group = (id: string): Named => named(`group ${id}`, `group:${id}`);
 
-  const nodes = spec.nodes.map((node) => named(`node ${node.id}`, `node:${node.id}`));
+  const nodes = spec.nodes.map((node) => ({ id: node.id, ...named(`node ${node.id}`, `node:${node.id}`) }));
   const nodeLabels = spec.nodes.map((node) => named(`node ${node.id} label`, `node:${node.id}:label`));
   const groups = spec.groups.map(({ id }) => group(id));
   const groupLabels = spec.groups.map(({ id }) => named(`group ${id} label`, `group:${id}:label`));
@@ -127,7 +152,14 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
   );
   const arrows = spec.edges.map((edge, index) => {
     const { x, y, points = [] } = element(edgeKey(index));
-    return { name: `edge ${index} ${edge.from}->${edge.to}`, points: points.map(([dx, dy]) => ({ x: x + dx, y: y + dy })) };
+    const { start, end } = arrowheads(edge.arrows);
+    return {
+      name: `edge ${index} ${edge.from}->${edge.to}`,
+      points: points.map(([dx, dy]) => ({ x: x + dx, y: y + dy })),
+      from: edge.from,
+      to: edge.to,
+      heads: { start: start !== null, end: end !== null },
+    };
   });
 
   return {
@@ -141,6 +173,46 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
     ],
     bounded: [...nodes, ...nodeLabels, ...groups, ...groupLabels, ...edgeLabels, ...arrows.map(polylineBox)],
   };
+}
+
+// Excalidraw draws an arrowhead min(25, segment / 2) long from the segment it ends on, so a short one
+// shrinks the head instead of the arrow.
+function shortHeadSegments(arrow: Arrow): string[] {
+  const ends: [boolean, Point | undefined, Point | undefined][] = [
+    [arrow.heads.end, arrow.points.at(-2), arrow.points.at(-1)],
+    [arrow.heads.start, arrow.points[1], arrow.points[0]],
+  ];
+  return ends.flatMap(([drawn, from, to]) => {
+    if (!drawn || !from || !to) return [];
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    return length + SLACK >= ARROWHEAD_ROOM ? [] : [`${arrow.name} ends on a segment of ${round(length)}px at ${pointAt(to)}`];
+  });
+}
+
+// Two arrowheads closer together than their own width read as one blob, so every end on a side has to
+// keep its distance from its neighbour along that side.
+function crowdedSides(scene: Scene): string[] {
+  const sides = new Map<string, { at: number; name: string }[]>();
+  const place = (id: string, point: Point, name: string): void => {
+    const node = scene.nodes.find((candidate) => candidate.id === id);
+    const side = node && borderSide(node.box, point);
+    if (!node || !side) return;
+    const key = `${node.name} ${side}`;
+    const along = side === "left" || side === "right" ? point.y : point.x;
+    sides.set(key, [...(sides.get(key) ?? []), { at: along, name }]);
+  };
+  for (const arrow of scene.arrows) {
+    place(arrow.from, arrow.points[0]!, arrow.name);
+    place(arrow.to, arrow.points.at(-1)!, arrow.name);
+  }
+  return [...sides].flatMap(([key, ends]) => {
+    const sorted = [...ends].sort((a, b) => a.at - b.at);
+    return sorted.slice(1).flatMap((end, index) => {
+      const previous = sorted[index]!;
+      const gap = end.at - previous.at;
+      return gap + SLACK >= END_SPACING ? [] : [`${key}: ${previous.name} and ${end.name} are ${round(gap)}px apart`];
+    });
+  });
 }
 
 // An arrow element stores its origin at the first polyline point, which is rarely the top-left corner.

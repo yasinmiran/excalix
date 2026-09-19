@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LABEL_MARGIN, layout, placeGroupLabel } from "./layout.js";
+import { ARROWHEAD_ROOM, END_SPACING, LABEL_MARGIN, layout, placeGroupLabel } from "./layout.js";
 import { FONT, nodeSize } from "./style.js";
 import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedEdge, RoutedLabel, TextSize } from "./types.js";
 
@@ -152,11 +152,14 @@ describe("layout on the order pipeline", () => {
     expect(overlaps(result.groups.aws!, result.nodes.stripe!)).toBe(false);
   });
 
-  it("keeps node sizes from the input", async () => {
+  it("never shrinks a node below its input size, and leaves a quiet one alone", async () => {
     const result = await run;
     for (const spec of orderPipeline.nodes) {
-      expect(result.nodes[spec.id]).toMatchObject({ width: spec.width, height: spec.height });
+      expect(result.nodes[spec.id]!.width, spec.id).toBeGreaterThanOrEqual(spec.width);
+      expect(result.nodes[spec.id]!.height, spec.id).toBeGreaterThanOrEqual(spec.height);
     }
+    const web = orderPipeline.nodes.find((n) => n.id === "web")!;
+    expect(result.nodes.web).toMatchObject({ width: web.width, height: web.height });
   });
 
   it("places labels only on labelled edges", async () => {
@@ -257,6 +260,33 @@ describe("layout edge cases", () => {
     expect(distanceToPolyline(routed.points, centreOf(routed.label!, size))).toBeLessThan(1);
     expect(overlaps(grow(labelBox(routed.label!, size), LABEL_MARGIN), result.nodes.a!)).toBe(false);
     expect(overlaps(grow(labelBox(routed.label!, size), LABEL_MARGIN), result.nodes.b!)).toBe(false);
+  });
+
+  it("grows a node along the side several arrows land on, in both directions", async () => {
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [],
+        nodes: [node("hub", "Hub", "service"), node("a", "A", "service"), node("b", "B", "service"), node("c", "C", "service")],
+        edges: [edge(0, "a", "hub"), edge(1, "b", "hub"), edge(2, "c", "hub")],
+      });
+      const hub = result.nodes.hub!;
+      expect(direction === "lr" ? hub.height : hub.width, direction).toBeGreaterThanOrEqual(4 * END_SPACING);
+    }
+  });
+
+  it("stands a self loop off its node far enough for a full arrowhead", async () => {
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [],
+        nodes: [node("a", "A", "service")],
+        edges: [edge(0, "a", "a")],
+      });
+      const { points } = result.edges["edge:0"]!;
+      const [last, end] = [points.at(-2)!, points.at(-1)!];
+      expect(Math.hypot(end.x - last.x, end.y - last.y), direction).toBeGreaterThanOrEqual(ARROWHEAD_ROOM);
+    }
   });
 
   it("stacks layers vertically for tb", async () => {

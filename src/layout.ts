@@ -23,14 +23,37 @@ export const LABEL_MARGIN = 12;
 const LABEL_OPTIONS: LayoutOptions = { "elk.edgeLabels.placement": "CENTER", "elk.edgeLabels.inline": "true" };
 // Gap kept beside a group label so an arrowhead next to it stays off the text.
 const LABEL_CLEARANCE = 12;
+// ELK rounds a border coordinate, so an endpoint counts as on the side it lands within half a pixel of.
+const ON_BORDER = 0.5;
+
+type Side = "left" | "right" | "top" | "bottom";
+
+/**
+ * Straight run an arrow needs at each end that carries a head. Excalidraw draws the head
+ * `min(25, segment / 2)` long, so anything shorter than this is a stub of a head.
+ */
+export const ARROWHEAD_ROOM = 50;
+/** Distance kept between two arrow ends on the same side of a node: an arrowhead is 17px wide. */
+export const END_SPACING = 32;
+
+// ELK reads a spacing from the node that contains what is being spaced, so a group has to repeat
+// every value or its children fall back to the defaults.
+const SPACING: LayoutOptions = {
+  "elk.spacing.nodeNode": "48",
+  "elk.spacing.edgeNode": "24",
+  "elk.layered.spacing.nodeNodeBetweenLayers": String(ARROWHEAD_ROOM),
+  "elk.layered.spacing.edgeNodeBetweenLayers": String(ARROWHEAD_ROOM),
+};
 
 const elk = new ELK();
 
 /** Lays out nodes, groups and edges with ELK. Absolute coordinates, bounds at (0, 0). */
 export async function layout(input: LayoutInput): Promise<LayoutResult> {
-  const first = await layoutWith(input, {});
-  const gutters = labelGutters(input, first);
-  return normalise(Object.keys(gutters).length === 0 ? first : await layoutWith(input, gutters));
+  const probe = await layoutWith(input, {});
+  const spread = spreadEnds(input, probe);
+  const first = spread === input ? probe : await layoutWith(spread, {});
+  const gutters = labelGutters(spread, first);
+  return normalise(Object.keys(gutters).length === 0 ? first : await layoutWith(spread, gutters));
 }
 
 // One ELK pass. Each gutter entry widens that group's left padding by its value.
@@ -68,9 +91,7 @@ function toElkGraph(input: LayoutInput, gutters: Record<string, number>): ElkNod
       "elk.direction": input.direction === "tb" ? "DOWN" : "RIGHT",
       "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       "elk.edgeRouting": "ORTHOGONAL",
-      "elk.spacing.nodeNode": "48",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "48",
-      "elk.spacing.edgeNode": "24",
+      ...SPACING,
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
       ...loops,
     },
@@ -79,14 +100,17 @@ function toElkGraph(input: LayoutInput, gutters: Record<string, number>): ElkNod
   };
 }
 
-// ELK places a self loop's label beside the loop even when the label asks to be inline, so the loop itself has
-// to stand far enough off the node for the padded box to fit centred on it. The option is read from the
-// containing parent, never from the node, and the layered algorithm measures it in a frame transposed for DOWN.
+// The stand-off is the loop's closing segment, so it carries the arrowhead. ELK also places a self loop's
+// label beside the loop even when the label asks to be inline, so the loop has to clear the node by at least
+// half the padded box as well. The option is read from the containing parent, never from the node, and the
+// layered algorithm measures it in a frame transposed for DOWN.
 function selfLoopSpacing(input: LayoutInput): LayoutOptions {
-  const room = input.edges
-    .filter((edge) => edge.from === edge.to && edge.label)
-    .map((edge) => (input.direction === "tb" ? edge.label!.width : edge.label!.height) / 2 + LABEL_MARGIN);
-  return room.length === 0 ? {} : { "elk.spacing.nodeSelfLoop": String(Math.max(...room)) };
+  const loops = input.edges.filter((edge) => edge.from === edge.to);
+  if (loops.length === 0) return {};
+  const room = loops.map((edge) =>
+    edge.label === undefined ? 0 : (input.direction === "tb" ? edge.label.width : edge.label.height) / 2 + LABEL_MARGIN,
+  );
+  return { "elk.spacing.nodeSelfLoop": String(Math.max(ARROWHEAD_ROOM, ...room)) };
 }
 
 function leaf(node: LayoutNode): ElkNode {
@@ -108,6 +132,7 @@ function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]
       "elk.padding": `[top=${top},left=${left},bottom=${PADDING},right=${PADDING}]`,
       "elk.nodeSize.constraints": "MINIMUM_SIZE",
       "elk.nodeSize.minimum": minimum,
+      ...SPACING,
       ...loops,
     },
   };
@@ -202,6 +227,45 @@ export function placeGroupLabel(group: Box, label: TextSize, edges: RoutedEdge[]
     x = Math.max(x, to);
   }
   return x > limit ? corner : { x, y: corner.y };
+}
+
+/** The node border an endpoint sits on, or undefined when it lies off the border. */
+export function borderSide(box: Box, point: Point): Side | undefined {
+  if (Math.abs(point.x - box.x) <= ON_BORDER) return "left";
+  if (Math.abs(point.x - (box.x + box.width)) <= ON_BORDER) return "right";
+  if (Math.abs(point.y - box.y) <= ON_BORDER) return "top";
+  if (Math.abs(point.y - (box.y + box.height)) <= ON_BORDER) return "bottom";
+  return undefined;
+}
+
+// ELK spreads the ends on a node side evenly, at side / (ends + 1) apart, and its own lever for this,
+// port spacing under a PORTS size constraint, holds a lone port off the corner too and so inflates every
+// node in the graph. Lengthening the crowded side is the targeted one; the label stays centred in it.
+function spreadEnds(input: LayoutInput, probe: LayoutResult): LayoutInput {
+  const ends = new Map<string, number>();
+  const count = (id: string, point: Point): void => {
+    const box = probe.nodes[id];
+    const side = box && borderSide(box, point);
+    if (side) ends.set(`${id}:${side}`, (ends.get(`${id}:${side}`) ?? 0) + 1);
+  };
+  for (const edge of input.edges) {
+    const { points } = probe.edges[edge.id]!;
+    count(edge.from, points[0]!);
+    count(edge.to, points[points.length - 1]!);
+  }
+
+  let grown = false;
+  const nodes = input.nodes.map((node) => {
+    const room = (...sides: Side[]): number => {
+      const most = Math.max(...sides.map((side) => ends.get(`${node.id}:${side}`) ?? 0));
+      return most < 2 ? 0 : (most + 1) * END_SPACING;
+    };
+    const width = Math.max(node.width, room("top", "bottom"));
+    const height = Math.max(node.height, room("left", "right"));
+    grown ||= width !== node.width || height !== node.height;
+    return { ...node, width, height };
+  });
+  return grown ? { ...input, nodes } : input;
 }
 
 /** Extra left padding for the groups whose label the previous pass had to leave under an arrow. */
