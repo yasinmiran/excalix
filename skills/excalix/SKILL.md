@@ -56,7 +56,9 @@ Keep edge labels to a few words. A label sits on its arrow and reserves that
 much width, so a sentence on one edge pushes the whole diagram wide. `\n`
 anywhere in a label starts a new line, which is the way out when a node name is
 genuinely long. An edge from a node back to itself is fine, and so are two edges
-between the same pair; each one draws as its own arrow.
+between the same pair; each one draws as its own arrow. A label on a self edge
+costs more than it looks: the node grows until the loop is long enough to carry
+the text, so give that one a single word or leave it bare.
 
 ## How much fits
 
