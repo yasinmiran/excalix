@@ -165,7 +165,7 @@ created: null, link: null, locked: false`.
   parameter along the polyline, so the label is stored at the on-path point
   nearest ELK's label centre with x/y set to match. ELK's label point only
   reserves space.
-- Title: free `text`, fontSize 28, top-left above the diagram bounds with 32px
+- Title: free `text`, fontSize 32, top-left above the diagram bounds with 32px
   gap. Only when the spec has a title.
 - Element order: Excalidraw needs the members of a group contiguous in the
   array, so each group emits one block (rect, label, its direct nodes, then its
