@@ -519,5 +519,11 @@ when stdin ends. Failures return `isError: true` and no structured content.
   export reaches it, so bumping `@excalidraw/utils` still means loading an
   example on excalidraw.com once and confirming that labels and arrow bindings
   do not move.
+- `src/render/mcp-stdio.test.ts` is the tool as a client meets it: the server as
+  a child process on stdio, real Chromium, real files. It draws
+  `examples/order-pipeline.json` and expects the `.excalidraw` it gets to equal
+  the committed one byte for byte, so an example that was not regenerated after
+  a layout change fails here. It also checks that the server exits without a
+  word on stderr when the client goes away.
 - No em dashes anywhere, including comments and docs.
-- Conventional commits, no AI attribution.
+- Conventional commits.
