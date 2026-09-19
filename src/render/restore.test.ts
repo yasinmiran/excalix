@@ -1,25 +1,14 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ExcalidrawElement } from "excalidraw-types/element/src/types";
 import { type Browser, type Page, chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sketch } from "../pipeline.js";
+import { measuringOnly, readSpec, specFiles } from "../test-support.js";
 import type { Renderer } from "../types.js";
 import { createBrowserRenderer, openBundlePage } from "./browser.js";
 
 // Restore assigns a fractional index to every element that ships with index: null, and that
 // assignment mutates the element, which bumps the other three.
 const REGENERATED = new Set(["index", "version", "versionNonce", "updated"]);
-
-const root = fileURLToPath(new URL("../..", import.meta.url));
-
-const specFiles = ["examples", "stress"].flatMap((dir) =>
-  readdirSync(join(root, dir))
-    .filter((name) => name.endsWith(".json"))
-    .sort()
-    .map((name) => `${dir}/${name}`),
-);
 
 interface ClipboardUtils {
   exportToClipboard(args: { type: "json"; data: { elements: unknown[]; appState: object; files: object } }): Promise<void>;
@@ -74,9 +63,7 @@ describe("[browser] Excalidraw restore", () => {
 
   for (const file of specFiles) {
     it(`leaves the elements of ${file} untouched`, async () => {
-      const input: unknown = JSON.parse(readFileSync(join(root, file), "utf8"));
-      const measuring: Renderer = { ...renderer, svg: async () => "", png: async () => new Uint8Array() };
-      const built = JSON.parse((await sketch(input, measuring)).excalidraw).elements as ExcalidrawElement[];
+      const built = JSON.parse((await sketch(readSpec(file), measuringOnly(renderer.measurer))).excalidraw).elements as ExcalidrawElement[];
 
       const restored = (await page.evaluate(restoreInPage, built as unknown[])) as ExcalidrawElement[];
 
