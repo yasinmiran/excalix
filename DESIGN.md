@@ -217,7 +217,8 @@ The `.excalidraw` document: `{ type: "excalidraw", version: 2, source:
 
 - `browser.ts` exports `createBrowserRenderer(): Promise<Renderer>` (see
   `Renderer` in types). One Chromium, one page, reused across calls; `close()`
-  tears it down.
+  tears it down. `openBundlePage(browser)` is that page without the renderer
+  around it, for the restore check below.
 - The page is served from a fake origin (`http://excalix.local/`) through
   `page.route`, mapping `/vendor/*` to
   `node_modules/@excalidraw/utils/dist/prod/*` on disk. The bundle is a
@@ -239,6 +240,16 @@ The `.excalidraw` document: `{ type: "excalidraw", version: 2, source:
   it, about 2 KB per script used.
 - `png(elements)`: `exportToBlob` with `mimeType: "image/png"`, padding 24,
   2x scale; return bytes.
+- `restore.test.ts` runs the elements of every spec in `examples/` and `stress/`
+  through Excalidraw's own restore inside the page and asserts nothing moves, so
+  a field restore rewrites fails the suite instead of silently changing the file
+  the first time someone opens it. The bundle exports no restore, but
+  `exportToClipboard({ type: "json" })` serialises what `restoreElements`
+  returned, and on this insecure origin `navigator.clipboard` is absent, so the
+  bundle copies that JSON through `execCommand`, which the test intercepts.
+  Restore always rewrites `index`, which excalix leaves null, and that
+  assignment mutates the element, which bumps `version`, `versionNonce` and
+  `updated`; those four are the only fields the comparison ignores.
 - `estimate.ts` exports `estimateMeasurer: TextMeasurer` using 0.6 * fontSize
   per char, for unit tests that must not launch a browser.
 
@@ -297,5 +308,13 @@ Validation errors return `isError: true` with the problem list.
   strings byte for byte, so neither ELK pass can leak into the next sketch, and
   reverses the keys inside one spec's JSON objects to show the output follows the
   canonical form rather than key order.
+- `src/render/restore.test.ts` picks up a new spec in either directory the same
+  way. It covers `restoreElements(elements, null)`, what every export path runs
+  minus the flag that deletes invisibly small elements, which excalix never
+  emits. Opening a file on excalidraw.com also runs the `repairBindings`
+  pass, which repairs containers and bindings and reorders bound text, and no
+  export reaches it, so bumping `@excalidraw/utils` still means loading an
+  example on excalidraw.com once and confirming that labels and arrow bindings
+  do not move.
 - No em dashes anywhere, including comments and docs.
 - Conventional commits, no AI attribution.

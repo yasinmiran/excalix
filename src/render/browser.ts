@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, resolve, sep } from "node:path";
-import { chromium, type Route } from "playwright";
+import { chromium, type Browser, type Page, type Route } from "playwright";
 import { FONT } from "../style.js";
 import type { Renderer, TextSize } from "../types.js";
 
@@ -74,18 +74,24 @@ async function serve(route: Route): Promise<void> {
   }
 }
 
+/** Opens a page on the fake origin with the @excalidraw/utils bundle loaded as window.excalix.utils. */
+export async function openBundlePage(browser: Browser): Promise<Page> {
+  const page = await browser.newPage();
+  await page.route("**/*", serve);
+  await page.goto(`${ORIGIN}/`);
+  await page.waitForFunction(() => "excalix" in window);
+  const loadError = await page.evaluate(() => (window as unknown as ExcalixWindow).excalix.error);
+  if (loadError) throw new Error(`@excalidraw/utils failed to load: ${loadError}`);
+  return page;
+}
+
 /** Starts headless Chromium with @excalidraw/utils loaded. Call close() when done. */
 export async function createBrowserRenderer(): Promise<Renderer> {
   const browser = await chromium.launch();
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => (closing ??= browser.close());
   try {
-    const page = await browser.newPage();
-    await page.route("**/*", serve);
-    await page.goto(`${ORIGIN}/`);
-    await page.waitForFunction(() => "excalix" in window);
-    const loadError = await page.evaluate(() => (window as unknown as ExcalixWindow).excalix.error);
-    if (loadError) throw new Error(`@excalidraw/utils failed to load: ${loadError}`);
+    const page = await openBundlePage(browser);
     await page.evaluate(registerFonts, { probe: exportData([fontProbe()]), family: "Excalifont" });
 
     return {
