@@ -131,8 +131,10 @@ Fixed per kind. No caller-facing colour, font, or shape options exist.
   endArrowhead `"arrow"`; `arrows: "both"` also sets startArrowhead; `"none"`
   sets neither
 - text: fontFamily Excalifont (`FONT_FAMILY.Excalifont`, numeric 5 in this
-  build, confirm from `excalidraw-types/common/src/constants.d.ts`), node labels
-  fontSize 20, edge labels 16, group labels 16, title 32, lineHeight 1.25
+  build; the vendored declaration types the constant as a plain number, so the
+  value has to be read off `node_modules/@excalidraw/utils/dist/dev/index.js`),
+  node labels fontSize 20, edge labels 16, group labels 16, title 32,
+  lineHeight 1.25
 - roughness 1, strokeWidth 2 for nodes, opacity 100 everywhere
 - node box = measured label + horizontal padding 24, vertical padding 16,
   minimum 120x56; an ellipse gets its label width scaled by sqrt(2) before
@@ -384,14 +386,15 @@ here because every container is emitted immediately before its text.
   or two off macOS. With them the platforms agree to about the fifth decimal,
   so the width is rounded up to a whole pixel, which makes the box at most one
   pixel wider than the text and the `.excalidraw` byte-identical on macOS and
-  Linux (checked by hashing `examples/` and four stress specs on both). The
-  exception is text Excalifont has no glyphs for, such as CJK and emoji: it falls
-  back to a system font and measures by platform (`stress/long.json`).
+  Linux (the stdio test redraws `examples/order-pipeline.json` and compares it
+  with the committed file, and CI runs that on Linux). The exception is text
+  Excalifont has no glyphs for, such as CJK and emoji: it falls back to a
+  system font and measures by platform (`stress/long.json`).
 - `svg(elements)`: `exportToSvg({ data: { elements, appState, files: {} },
   config: { padding: 24 } })` and return `outerHTML`. The SVG is
   self-contained: Excalidraw subsets the font with harfbuzz wasm on the main
   thread (one expected console error about workers per export) and inlines
-  it, about 2 KB per script used.
+  it, about 6 KB per script used.
 - `png(elements)`: `exportToBlob` with `mimeType: "image/png"`, padding 24,
   2x scale; return bytes.
 - `restore.test.ts` runs the elements of every spec in `examples/` and `stress/`
@@ -430,11 +433,10 @@ suggestion to split the diagram or shorten its labels. The threshold is where an
 agent stops being able to read the picture it asked for. The export is 2x and a
 viewer scales the longest side to around 1568 pixels, so past 6000 the reduction
 is over 4x and a 20pt node label lands under 10 pixels in the copy being read,
-which is where thin lines and small labels start to go missing. Over `examples/` and `stress/` it speaks up for
-three specs, the two twenty-node region variants at 9565 wide and 6500 tall and
-the fourteen-box chain at 6145, and stays quiet for the rest.
-Nothing else about the output changes, so a diagram that still reads prints
-exactly what it printed before.
+which is where thin lines and small labels start to go missing. Over
+`examples/` and `stress/` it speaks up for three specs, the two twenty-node
+region variants at 9578 wide and 6500 tall and the fourteen-box chain at 6158,
+and stays quiet for the rest.
 
 `schema` prints `z.toJSONSchema(specSchema, { io: "input" })`, which is the
 schema the `sketch` tool advertises minus `out`. The two are serialized
@@ -465,8 +467,8 @@ re-read from disk) so the caller sees the diagram in the same turn.
 `pixels`, the PNG's own size read from its IHDR header, which tells an agent
 that a long label stretched the layout without it having to measure the image.
 The text block stays as three bare paths, and one more line when `sizeNote`
-speaks up, the same one `excalix render` prints: a client that ignores
-structured content is no worse off than before.
+speaks up, the same one `excalix render` prints, so a client that ignores
+structured content loses nothing.
 
 One validation surface. The handler calls `parseSpecWith(inputSchema, ...)`
 itself, so schema problems and reference problems arrive in one `isError` text
@@ -489,8 +491,8 @@ when stdin ends. Failures return `isError: true` and no structured content.
 - ESM, Node 22, TypeScript strict. Named exports only.
 - No comments that restate code. Doc comment on exported functions, one line.
 - Tests: vitest, colocated `*.test.ts`. Unit tests use `estimateMeasurer`.
-  Render tests launch the browser and are tagged in their describe name with
-  `[browser]`.
+  Only the suites under `src/render/` launch a browser, and each tags its
+  describe name with `[browser]`.
 - `src/__snapshots__/sketch-tool.md` is the whole agent-facing contract, the
   tool description and every schema with its field descriptions, as one page.
   `mcp.test.ts` writes it from `listTools()`, so any change to the wording or

@@ -124,12 +124,12 @@ The repo's `.mcp.json` does the same at project scope through a relative path, w
 
 The spec is validated with zod. Labels are measured with canvas `measureText` against the real Excalifont in headless Chromium, because a label sized with the wrong metrics re-wraps when the file is opened in the editor. ELK lays out the graph in layers, with groups as compound nodes and orthogonal edges. The element builder derives every id and seed from a hash of the spec, and `@excalidraw/utils` exports the SVG and PNG inside the same browser page.
 
-[DESIGN.md](DESIGN.md) is the full contract, module by module. `stress/` holds adversarial specs (dense nested groups in both directions, self loops and repeated pairs, long labels, four-deep nesting); render them and look at the PNGs before trusting a layout change.
+[DESIGN.md](DESIGN.md) is the full contract, module by module. `stress/` holds adversarial specs (dense nested groups in both directions, self loops and repeated pairs, long labels, groups nested three deep); render them and look at the PNGs before trusting a layout change.
 
 ## Development
 
 ```
-pnpm test        vitest; src/render/browser.test.ts launches Chromium
+pnpm test        vitest; the suites under src/render/ launch Chromium
 pnpm typecheck   tsc --noEmit
 ```
 
