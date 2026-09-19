@@ -15,7 +15,14 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "excalidraw-types/*": ["node_modules/@excalidraw/utils/dist/types/*"]
+      "excalidraw-types/*": ["node_modules/@excalidraw/utils/dist/types/*"],
+      "@excalidraw/common": ["node_modules/@excalidraw/utils/dist/types/common/src/index.d.ts"],
+      "@excalidraw/common/*": ["node_modules/@excalidraw/utils/dist/types/common/src/*"],
+      "@excalidraw/element": ["node_modules/@excalidraw/utils/dist/types/element/src/index.d.ts"],
+      "@excalidraw/element/*": ["node_modules/@excalidraw/utils/dist/types/element/src/*"],
+      "@excalidraw/excalidraw/*": ["node_modules/@excalidraw/utils/dist/types/excalidraw/*"],
+      "@excalidraw/math": ["node_modules/@excalidraw/utils/dist/types/math/src/index.d.ts"],
+      "@excalidraw/math/*": ["node_modules/@excalidraw/utils/dist/types/math/src/*"]
     }
   },
   "include": ["src"]

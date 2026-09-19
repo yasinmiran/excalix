@@ -38,7 +38,7 @@ interface ExportData {
   files: Record<string, never>;
 }
 
-/** The slice of @excalidraw/utils this renderer calls; the shipped types depend on packages that are not installed. */
+/** The slice of @excalidraw/utils this renderer calls; it runs inside the page against the global the bundle assigns, not against an import. */
 interface Utils {
   exportToCanvas(args: { data: ExportData }): Promise<HTMLCanvasElement>;
   exportToSvg(args: { data: ExportData; config: { padding: number } }): Promise<SVGSVGElement>;

@@ -121,6 +121,18 @@ imports only; e.g. `import type { ExcalidrawElement } from
 "excalidraw-types/element/src/types"`). Read those declarations before writing
 a field: the binding and text formats here are newer than most online examples.
 
+Those declarations import `@excalidraw/math`, `@excalidraw/common`,
+`@excalidraw/element` and `@excalidraw/excalidraw` by bare specifier, and none
+of the four is installed as a package, so tsconfig maps each to its own
+directory of vendored declarations as well. Keep those entries: without them
+`skipLibCheck` swallows the unresolved imports and `angle`, `points` and every
+other branded field silently becomes `any`.
+
+`Radians`, `LocalPoint` and the unitless `lineHeight` are branded numerics
+whose constructors live in those uninstalled packages, so `elements.ts` exports
+`radians`, `localPoint` and `lineHeight`. They are the only place a brand is
+asserted; the tests build elements through them too.
+
 Every element carries the full base: `id, x, y, width, height, angle: 0,
 strokeColor, backgroundColor, fillStyle, strokeWidth, strokeStyle, roughness,
 opacity, roundness, seed, version: 1, versionNonce, index: null, isDeleted:

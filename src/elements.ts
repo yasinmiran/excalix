@@ -7,6 +7,7 @@ import type {
   ExcalidrawTextElement,
   FixedPoint,
 } from "excalidraw-types/element/src/types";
+import type { LocalPoint, Radians } from "excalidraw-types/math/src/types";
 import { createIdSource, edgeKey, hashSpec, type IdSource } from "./ids.js";
 import { EDGE, EDGE_STYLES, FONT, GROUP_STYLE, NODE, NODE_STYLES, STROKE, TITLE_GAP, arrowheads } from "./style.js";
 import type { Box, EdgeSpec, GroupSpec, LayoutResult, Measured, NodeSpec, Point, Spec, TextSize } from "./types.js";
@@ -18,6 +19,14 @@ const TRANSPARENT = "transparent";
 
 type ElementBase = Omit<ExcalidrawRectangleElement, "type">;
 type ShapeElement = ExcalidrawRectangleElement | ExcalidrawEllipseElement;
+
+/**
+ * Excalidraw's branded numerics. Only the declarations of the packages that own their
+ * constructors are vendored, so the brand is asserted here and nowhere else.
+ */
+export const radians = (value: number) => value as Radians;
+export const localPoint = (x: number, y: number) => [x, y] as LocalPoint;
+export const lineHeight = (value: number) => value as ExcalidrawTextElement["lineHeight"];
 
 interface Stroke {
   strokeColor: string;
@@ -226,7 +235,7 @@ function edgeElements(
     ),
     type: "arrow",
     boundElements: labelId ? [{ type: "text", id: labelId }] : [],
-    points: points.map((p) => [p.x - first.x, p.y - first.y]),
+    points: points.map((p) => localPoint(p.x - first.x, p.y - first.y)),
     startBinding: { elementId: nodeId(nodeIds, edge.from), fixedPoint: fixedPoint(box(nodeBoxes, edge.from), first), mode: "inside" },
     endBinding: { elementId: nodeId(nodeIds, edge.to), fixedPoint: fixedPoint(box(nodeBoxes, edge.to), last), mode: "inside" },
     startArrowhead: heads.start,
@@ -268,7 +277,7 @@ function textElement(ids: IdSource, options: TextOptions): ExcalidrawTextElement
     containerId: options.containerId ?? null,
     originalText: options.text,
     autoResize: true,
-    lineHeight: FONT.lineHeight as ExcalidrawTextElement["lineHeight"],
+    lineHeight: lineHeight(FONT.lineHeight),
     labelPosition: options.labelPosition ?? null,
   };
 }
@@ -280,7 +289,7 @@ function base(ids: IdSource, key: string, box: Box, groupIds: string[], stroke: 
     y: box.y,
     width: box.width,
     height: box.height,
-    angle: 0 as ElementBase["angle"],
+    angle: radians(0),
     ...stroke,
     opacity: 100,
     seed: ids.seed(key),

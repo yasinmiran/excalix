@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExcalidrawElement, ExcalidrawTextElement } from "excalidraw-types/element/src/types";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { lineHeight, localPoint, radians } from "../elements.js";
 import type { Renderer } from "../types.js";
 import { createBrowserRenderer } from "./browser.js";
 
@@ -16,7 +17,7 @@ function base(id: string, x: number, y: number, width: number, height: number) {
     y,
     width,
     height,
-    angle: 0 as never,
+    angle: radians(0),
     strokeColor: "#1e1e1e",
     backgroundColor: "transparent",
     fillStyle: "solid" as const,
@@ -53,7 +54,7 @@ function label(id: string, containerId: string, text: string, box: { x: number; 
     verticalAlign: "middle",
     containerId,
     autoResize: true,
-    lineHeight: 1.25 as ExcalidrawTextElement["lineHeight"],
+    lineHeight: lineHeight(1.25),
   };
 }
 
@@ -72,10 +73,7 @@ function scene(labelText: string, labelSize: { width: number; height: number }):
     {
       ...base("edge", 160, 32, 140, 0),
       type: "arrow",
-      points: [
-        [0, 0],
-        [140, 0],
-      ] as never,
+      points: [localPoint(0, 0), localPoint(140, 0)],
       startBinding: null,
       endBinding: null,
       startArrowhead: null,
