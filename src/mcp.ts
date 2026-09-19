@@ -5,10 +5,10 @@ import { z } from "zod";
 import { writeSketch } from "./pipeline.js";
 import type { Written } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
-import { SpecError, specSchema } from "./spec.js";
+import { SpecError, specSchemaWith } from "./spec.js";
 import type { Renderer } from "./types.js";
 
-const DESCRIPTION = `Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure. The same spec always draws the same picture. Alongside the PNG you get back, an .excalidraw file lands on disk that opens on excalidraw.com for hand editing.
+const DESCRIPTION = `Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure. Alongside the PNG you get back, an .excalidraw file lands on disk that opens on excalidraw.com for hand editing.
 
 Node kinds:
 client: people, browsers, mobile apps, anything that initiates requests.
@@ -22,9 +22,11 @@ Edge styles:
 sync: request/response, solid arrow.
 async: message or event, dashed arrow.
 
+List nodes in reading order, sources first: siblings keep the order you write them in as far as the routing allows. Keep edge labels to a few words, because an edge label sits on its arrow and reserves that much width. A \\n in any label starts a new line.
+
 Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.`;
 
-const inputSchema = specSchema.extend({
+const inputSchema = specSchemaWith({
   out: z
     .string()
     .optional()
@@ -32,6 +34,15 @@ const inputSchema = specSchema.extend({
       "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the server's working directory, which is the project directory when Claude Code launches the server. Defaults to diagrams/<title slug>.",
     ),
 });
+
+const outputSchema = {
+  excalidraw: z.string().describe("the .excalidraw file, the one to open on excalidraw.com"),
+  svg: z.string().describe("the .svg file"),
+  png: z.string().describe("the .png file, the same image as the image block in this result"),
+  pixels: z
+    .object({ width: z.number(), height: z.number() })
+    .describe("size of that png; a very wide one usually means a long label stretched the layout"),
+};
 
 export interface SketchDeps {
   writeSketch: (input: unknown, basename: string, renderer: Renderer) => Promise<Written>;
@@ -61,7 +72,7 @@ export function createServer(deps: SketchDeps, onClose?: () => void): McpServer 
     void release().then(() => onClose?.());
   };
 
-  server.registerTool("sketch", { description: DESCRIPTION, inputSchema }, async (args) => {
+  server.registerTool("sketch", { description: DESCRIPTION, inputSchema, outputSchema }, async (args) => {
     const { out, ...spec } = args;
     try {
       const { files, result } = await deps.writeSketch(spec, resolve(out ?? defaultOut(spec.title)), await renderReady());
@@ -70,6 +81,7 @@ export function createServer(deps: SketchDeps, onClose?: () => void): McpServer 
           { type: "text", text: [files.excalidraw, files.svg, files.png].join("\n") },
           { type: "image", data: Buffer.from(result.png).toString("base64"), mimeType: "image/png" },
         ],
+        structuredContent: { ...files, pixels: pngSize(result.png) },
       };
     } catch (error) {
       if (error instanceof SpecError) return failure(error.problems.join("\n"));
@@ -89,6 +101,12 @@ export async function serveMcp(): Promise<void> {
     const server = createServer({ writeSketch, createRenderer: createBrowserRenderer }, done);
     server.connect(transport).catch(fail);
   });
+}
+
+// A PNG carries its size as two big-endian uint32s in the IHDR chunk, at byte 16 and 20.
+function pngSize(png: Uint8Array): { width: number; height: number } {
+  const header = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  return { width: header.getUint32(16), height: header.getUint32(20) };
 }
 
 function defaultOut(title: string | undefined): string {

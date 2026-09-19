@@ -4,12 +4,15 @@ import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { main } from "./cli.js";
 import { createServer } from "./mcp.js";
 import type { SketchDeps } from "./mcp.js";
 import { SpecError } from "./spec.js";
 import type { Renderer } from "./types.js";
 
-const PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+// Signature, chunk length, IHDR, then the size the tool reads back: 2404 x 811.
+const PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 9, 100, 0, 0, 3, 43]);
+const PIXELS = { width: 2404, height: 811 };
 
 const SPEC = {
   title: "order pipeline",
@@ -55,35 +58,49 @@ async function harness(overrides: Partial<SketchDeps> = {}) {
   return { client, close, createRenderer, writeSketch, out: join(dir, "diagram") };
 }
 
-function choices(schema: unknown): unknown[] {
-  const node = schema as { enum?: unknown[]; anyOf?: { const?: unknown }[] };
-  return node.enum ?? (node.anyOf ?? []).map((member) => member.const);
+async function sketchTool(): Promise<Record<string, unknown>> {
+  const { client } = await harness();
+  const { tools } = await client.listTools();
+  const sketch = tools.find((tool) => tool.name === "sketch");
+  if (sketch === undefined) throw new Error("the server advertises no sketch tool");
+  return sketch as unknown as Record<string, unknown>;
+}
+
+// The contract an agent reads on every call, as one reviewable page: any wording or schema change is a diff.
+function page(tool: Record<string, unknown>): string {
+  const { name, description, ...rest } = tool;
+  const sections = Object.entries(rest)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `## ${key}\n\n\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``);
+  return `${[`# ${String(name)}`, String(description), ...sections].join("\n\n")}\n`;
+}
+
+async function cliSchema(): Promise<Record<string, unknown>> {
+  const printed: string[] = [];
+  const code = await main(["schema"], { stdout: (s) => printed.push(s), stderr: () => {} });
+  expect(code).toBe(0);
+  return JSON.parse(printed[0]!) as Record<string, unknown>;
 }
 
 describe("sketch tool", () => {
-  it("advertises a strict input schema carrying the spec", async () => {
-    const { client } = await harness();
+  it("advertises the contract in the snapshot", async () => {
+    await expect(page(await sketchTool())).toMatchFileSnapshot("./__snapshots__/sketch-tool.md");
+  });
 
-    const { tools } = await client.listTools();
-    const sketch = tools.find((tool) => tool.name === "sketch");
-
-    expect(sketch?.description).toContain("third-party system you don't run");
-    const schema = sketch?.inputSchema as {
-      additionalProperties?: unknown;
-      required?: string[];
-      properties: Record<string, { description?: string; items?: { properties?: Record<string, unknown> } }>;
+  it("advertises the same spec as excalix schema, plus out", async () => {
+    const advertised = structuredClone(await sketchTool()).inputSchema as {
+      $schema?: string;
+      properties: Record<string, { description?: string }>;
     };
-    expect(schema.additionalProperties).toBe(false);
-    expect(schema.properties.out?.description).toContain("<out>.excalidraw");
-    expect(choices(schema.properties.nodes?.items?.properties?.kind)).toEqual([
-      "client",
-      "service",
-      "datastore",
-      "queue",
-      "cache",
-      "external",
-    ]);
-    expect(schema.required).toEqual(["nodes"]);
+    const printed = await cliSchema();
+
+    expect(advertised.properties.out?.description).toContain("<out>.excalidraw");
+    delete advertised.properties.out;
+    // Two serializers of one zod schema: the CLI's own, and zod mini's inside the MCP SDK, which targets draft 7.
+    delete advertised.$schema;
+    expect(printed.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
+    delete printed.$schema;
+    expect(advertised).toEqual(printed);
   });
 
   it("returns the written paths and the png", async () => {
@@ -96,6 +113,19 @@ describe("sketch tool", () => {
     expect(text).toMatchObject({ type: "text", text: `${out}.excalidraw\n${out}.svg\n${out}.png` });
     expect(image).toMatchObject({ type: "image", mimeType: "image/png", data: Buffer.from(PNG).toString("base64") });
     expect(writeSketch.mock.calls[0]?.[0]).toMatchObject({ nodes: SPEC.nodes, direction: "lr", groups: [] });
+  });
+
+  it("repeats the paths and the png size as structured content", async () => {
+    const { client, out } = await harness();
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    expect(result.structuredContent).toEqual({
+      excalidraw: `${out}.excalidraw`,
+      svg: `${out}.svg`,
+      png: `${out}.png`,
+      pixels: PIXELS,
+    });
   });
 
   it("defaults out to diagrams/<title slug>", async () => {
@@ -118,13 +148,25 @@ describe("sketch tool", () => {
     await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1));
   });
 
-  it("rejects an unknown key", async () => {
+  // The SDK checks the advertised schema before the handler runs, so these problems arrive in its wording.
+  it("rejects a spec that breaks the schema before it reaches the pipeline", async () => {
     const { client, out, writeSketch } = await harness();
 
-    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out, colour: "blue" } });
+    const unknownKey = await client.callTool({ name: "sketch", arguments: { ...SPEC, out, colour: "blue" } });
+    const badKind = await client.callTool({
+      name: "sketch",
+      arguments: { ...SPEC, out, nodes: [{ id: "a", label: "A", kind: "db" }] },
+    });
 
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('Unrecognized key: "colour"');
+    expect(unknownKey.isError).toBe(true);
+    expect(textOf(unknownKey)).toBe(
+      'MCP error -32602: Input validation error: Invalid arguments for tool sketch: unknown key "colour", ' +
+        'expected one of "title", "direction", "groups", "nodes", "edges", "out"',
+    );
+    expect(textOf(badKind)).toBe(
+      'MCP error -32602: Input validation error: Invalid arguments for tool sketch: got "db", expected one of ' +
+        '"client", "service", "datastore", "queue", "cache", "external" at nodes[0].kind',
+    );
     expect(writeSketch).not.toHaveBeenCalled();
   });
 

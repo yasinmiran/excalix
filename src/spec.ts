@@ -11,13 +11,49 @@ export class SpecError extends Error {
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-function id(description: string) {
-  return z.string().regex(ID_PATTERN, 'letters, digits, "_" and "-" only').describe(description);
+// Every problem reads "<path>: <what arrived>, <what is valid>". The second half lives on the schema
+// so the MCP SDK, which rejects a malformed call before parseSpec ever runs, relays the same wording.
+function problem(expected: string) {
+  return (issue: { input: unknown }) => `${arrived(issue.input)}, ${expected}`;
 }
 
-function choice(values: readonly string[]) {
-  const list = values.map((value) => `"${value}"`).join(", ");
-  return (issue: { input: unknown }) => (issue.input === undefined ? "required" : `expected one of ${list}`);
+function arrived(input: unknown): string {
+  if (input === undefined) return "missing";
+  if (Array.isArray(input)) return input.length === 0 ? "got an empty array" : "got an array";
+  if (input === null) return "got null";
+  if (typeof input === "object") return "got an object";
+  return `got ${JSON.stringify(input)}`;
+}
+
+function quote(values: readonly string[]): string {
+  return values.map((value) => `"${value}"`).join(", ");
+}
+
+function oneOf(values: readonly string[]): string {
+  return `expected one of ${quote(values)}`;
+}
+
+function strict<T extends z.ZodRawShape>(shape: T, description: string) {
+  const allowed = oneOf(Object.keys(shape));
+  return z
+    .strictObject(shape, {
+      error: (issue) =>
+        issue.code === "unrecognized_keys"
+          ? `unknown ${issue.keys.length > 1 ? "keys" : "key"} ${quote(issue.keys)}, ${allowed}`
+          : problem("expected an object")(issue),
+    })
+    .describe(description);
+}
+
+function id(description: string) {
+  return z
+    .string({ error: problem("expected a string") })
+    .regex(ID_PATTERN, { error: problem('expected letters, digits, "_" and "-" only') })
+    .describe(description);
+}
+
+function text(description: string) {
+  return z.string({ error: problem("expected a string") }).describe(description);
 }
 
 const kind = z
@@ -30,15 +66,14 @@ const kind = z
       z.literal("cache").describe("cache or in-memory store"),
       z.literal("external").describe("third-party system you don't run"),
     ],
-    { error: choice(["client", "service", "datastore", "queue", "cache", "external"]) },
+    { error: problem(oneOf(["client", "service", "datastore", "queue", "cache", "external"])) },
   )
   .describe("what the node is; fixes its shape and colour");
 
 const direction = z
-  .union(
-    [z.literal("lr").describe("left to right"), z.literal("tb").describe("top to bottom")],
-    { error: choice(["lr", "tb"]) },
-  )
+  .union([z.literal("lr").describe("left to right"), z.literal("tb").describe("top to bottom")], {
+    error: problem(oneOf(["lr", "tb"])),
+  })
   .default("lr")
   .describe("which way the diagram flows");
 
@@ -48,7 +83,7 @@ const edgeStyle = z
       z.literal("sync").describe("request/response, solid arrow"),
       z.literal("async").describe("message or event, dashed arrow"),
     ],
-    { error: choice(["sync", "async"]) },
+    { error: problem(oneOf(["sync", "async"])) },
   )
   .default("sync")
   .describe("how the two ends talk");
@@ -60,48 +95,67 @@ const arrows = z
       z.literal("both").describe("an arrowhead at each end, for a bidirectional link"),
       z.literal("none").describe("no arrowhead, a plain association"),
     ],
-    { error: choice(["forward", "both", "none"]) },
+    { error: problem(oneOf(["forward", "both", "none"])) },
   )
   .default("forward")
   .describe("which ends of the arrow get an arrowhead");
 
-const group = z
-  .strictObject({
+const group = strict(
+  {
     id: id("unique id, referenced by node.group and group.parent"),
-    label: z.string().describe("text drawn inside the top-left corner of the box"),
+    label: text("text drawn inside the top-left corner of the box"),
     parent: id("id of the group this one nests inside").optional(),
-  })
-  .describe("a dashed boundary drawn around nodes, such as a VPC, cluster, or account");
+  },
+  "a dashed boundary drawn around nodes, such as a VPC, cluster, or account",
+);
 
-const node = z
-  .strictObject({
+const node = strict(
+  {
     id: id("unique id, referenced by edge.from, edge.to and group membership"),
-    label: z.string().describe("text drawn inside the box; a \\n starts a new line"),
+    label: text("text drawn inside the box; a \\n starts a new line"),
     kind,
     group: id("id of the group this node sits inside").optional(),
-  })
-  .describe("one box in the diagram");
+  },
+  "one box in the diagram",
+);
 
-const edge = z
-  .strictObject({
+const edge = strict(
+  {
     from: id("id of the node the arrow leaves"),
     to: id("id of the node the arrow points at"),
-    label: z.string().describe("text drawn on the arrow, such as the call it carries").optional(),
+    label: text("text drawn on the arrow, a few words at most: the arrow reserves the width").optional(),
     style: edgeStyle,
     arrows,
-  })
-  .describe("an arrow between two nodes; self edges and repeated pairs are allowed");
+  },
+  "an arrow between two nodes; self edges and repeated pairs are allowed",
+);
+
+const SPEC_DESCRIPTION = "an architecture topology: what exists and what talks to what";
+
+const shape = {
+  title: text("heading drawn above the diagram").optional(),
+  direction,
+  groups: z
+    .array(group, { error: problem("expected an array of groups") })
+    .default([])
+    .describe("boundaries, nestable through parent"),
+  nodes: z
+    .array(node, { error: problem("expected an array of nodes") })
+    .min(1, { error: problem("expected at least one node") })
+    .describe("every box in the diagram, in reading order"),
+  edges: z
+    .array(edge, { error: problem("expected an array of edges") })
+    .default([])
+    .describe("every arrow in the diagram"),
+};
 
 /** Zod schema of the spec as an agent writes it (before defaults). */
-export const specSchema = z
-  .strictObject({
-    title: z.string().describe("heading drawn above the diagram").optional(),
-    direction,
-    groups: z.array(group).default([]).describe("boundaries, nestable through parent"),
-    nodes: z.array(node).min(1).describe("every box in the diagram"),
-    edges: z.array(edge).default([]).describe("every arrow in the diagram"),
-  })
-  .describe("an architecture topology: what exists and what talks to what");
+export const specSchema = strict(shape, SPEC_DESCRIPTION);
+
+/** The spec schema plus keys of the caller's own, such as the MCP tool's `out`. */
+export function specSchemaWith<T extends z.ZodRawShape>(extra: T) {
+  return strict({ ...shape, ...extra }, SPEC_DESCRIPTION);
+}
 
 /** Validates raw JSON into a Spec with defaults applied. Throws SpecError. */
 export function parseSpec(input: unknown): Spec {
@@ -120,15 +174,15 @@ export function parseSpec(input: unknown): Spec {
 // Enough of a malformed spec to run the reference checks, so an agent sees every problem in one round trip.
 function lenient(input: unknown): Spec {
   const raw = isRecord(input) ? input : {};
-  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  const string = (value: unknown) => (typeof value === "string" ? value : "");
   const optional = (value: unknown) => (typeof value === "string" ? value : undefined);
   const records = (value: unknown) => (Array.isArray(value) ? value.map((entry) => (isRecord(entry) ? entry : {})) : []);
   return {
     title: optional(raw.title),
     direction: "lr",
-    groups: records(raw.groups).map((g) => ({ id: text(g.id), label: text(g.label), parent: optional(g.parent) })),
-    nodes: records(raw.nodes).map((n) => ({ id: text(n.id), label: text(n.label), kind: "service", group: optional(n.group) })),
-    edges: records(raw.edges).map((e) => ({ from: text(e.from), to: text(e.to), label: optional(e.label), style: "sync", arrows: "forward" })),
+    groups: records(raw.groups).map((g) => ({ id: string(g.id), label: string(g.label), parent: optional(g.parent) })),
+    nodes: records(raw.nodes).map((n) => ({ id: string(n.id), label: string(n.label), kind: "service", group: optional(n.group) })),
+    edges: records(raw.edges).map((e) => ({ from: string(e.from), to: string(e.to), label: optional(e.label), style: "sync", arrows: "forward" })),
   };
 }
 
@@ -154,18 +208,18 @@ function semanticProblems(spec: Spec): string[] {
   const nodeIds = new Set<string>();
 
   spec.groups.forEach((group, index) => {
-    if (groupIndex.has(group.id)) problems.push(`groups[${index}].id: duplicate id "${group.id}"`);
+    if (groupIndex.has(group.id)) problems.push(`groups[${index}].id: duplicate id "${group.id}", ${UNIQUE}`);
     else groupIndex.set(group.id, index);
-    if (group.label.trim() === "") problems.push(`groups[${index}].label: empty label for group "${group.id}"`);
+    problems.push(...blank(`groups[${index}].label`, group.label));
   });
 
   spec.nodes.forEach((node, index) => {
-    if (groupIndex.has(node.id) || nodeIds.has(node.id)) problems.push(`nodes[${index}].id: duplicate id "${node.id}"`);
+    if (groupIndex.has(node.id) || nodeIds.has(node.id)) problems.push(`nodes[${index}].id: duplicate id "${node.id}", ${UNIQUE}`);
     else nodeIds.add(node.id);
-    if (node.label.trim() === "") problems.push(`nodes[${index}].label: empty label for node "${node.id}"`);
+    problems.push(...blank(`nodes[${index}].label`, node.label));
   });
 
-  if (spec.title !== undefined && spec.title.trim() === "") problems.push("title: empty title");
+  if (spec.title !== undefined) problems.push(...blank("title", spec.title));
 
   spec.groups.forEach((group, index) => {
     if (group.parent === undefined) return;
@@ -180,11 +234,17 @@ function semanticProblems(spec: Spec): string[] {
   spec.edges.forEach((edge, index) => {
     problems.push(...reference(`edges[${index}].from`, edge.from, "node", groupIndex, nodeIds));
     problems.push(...reference(`edges[${index}].to`, edge.to, "node", groupIndex, nodeIds));
-    if (edge.label !== undefined && edge.label.trim() === "") problems.push(`edges[${index}].label: empty label`);
+    if (edge.label !== undefined) problems.push(...blank(`edges[${index}].label`, edge.label));
   });
 
   problems.push(...cycles(spec, groupIndex));
   return problems;
+}
+
+const UNIQUE = "expected an id no other node or group uses";
+
+function blank(path: string, value: string): string[] {
+  return value.trim() === "" ? [`${path}: got ${JSON.stringify(value)}, expected text`] : [];
 }
 
 function reference(
@@ -197,8 +257,36 @@ function reference(
   const isGroup = groupIndex.has(target);
   const isNode = nodeIds.has(target);
   if (expected === "group" ? isGroup : isNode) return [];
-  if (isGroup || isNode) return [`${path}: "${target}" is a ${isGroup ? "group" : "node"}, not a ${expected}`];
-  return [`${path}: unknown ${expected} "${target}"`];
+  if (isGroup || isNode) return [`${path}: "${target}" is a ${isGroup ? "group" : "node"}, expected a ${expected}`];
+  const near = nearest(target, expected === "group" ? [...groupIndex.keys()] : [...nodeIds]);
+  return [`${path}: unknown ${expected} "${target}"${near === undefined ? "" : `, did you mean "${near}"?`}`];
+}
+
+// A typo comes back with the id the caller probably meant. One edit for a short id, two for a longer one.
+function nearest(target: string, candidates: string[]): string | undefined {
+  let best: string | undefined;
+  let shortest = target.length <= 4 ? 2 : 3;
+  for (const candidate of candidates) {
+    const distance = editDistance(target.toLowerCase(), candidate.toLowerCase());
+    if (distance < shortest) {
+      best = candidate;
+      shortest = distance;
+    }
+  }
+  return best;
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = [...Array(b.length + 1).keys()];
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const substitution = previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1);
+      current.push(Math.min(substitution, previous[j]! + 1, current[j - 1]! + 1));
+    }
+    previous = current;
+  }
+  return previous[b.length]!;
 }
 
 function cycles(spec: Spec, groupIndex: Map<string, number>): string[] {
@@ -219,7 +307,8 @@ function cycles(spec: Spec, groupIndex: Map<string, number>): string[] {
         const key = [...cycle].sort().join(" ");
         if (!reported.has(key)) {
           reported.add(key);
-          problems.push(`groups[${groupIndex.get(current) ?? 0}].parent: cycle ${[...cycle, current].join(" -> ")}`);
+          const chain = [...cycle, current].join(" -> ");
+          problems.push(`groups[${groupIndex.get(current) ?? 0}].parent: "${cycle[1] ?? current}" closes the cycle ${chain}`);
         }
         break;
       }

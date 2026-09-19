@@ -56,7 +56,47 @@ Defaults applied by parseSpec: `direction: "lr"`, `groups: []`, `edges: []`,
 `edge.style: "sync"`, `edge.arrows: "forward"`. Unknown keys are rejected (zod
 strict) so an agent's typo fails loudly instead of being ignored. When the
 schema fails, the reference checks still run over whatever shape the input has,
-so one round trip reports both the typo in a `kind` and the dangling edge.
+so one round trip reports both the typo in a `kind` and the dangling edge. A
+path the schema already rejected is not reported twice.
+
+### Problem messages
+
+An agent fixes a spec from this text alone, so every line reads
+`<path>: <what arrived>, <what is valid>`:
+
+```
+nodes[0].kind: got "db", expected one of "client", "service", "datastore", "queue", "cache", "external"
+nodes[0].kind: missing, expected one of "client", "service", "datastore", "queue", "cache", "external"
+nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "group"
+nodes[0].id: got "a b", expected letters, digits, "_" and "-" only
+nodes[0].label: got "  ", expected text
+nodes: got an empty array, expected at least one node
+nodes[1].id: duplicate id "api", expected an id no other node or group uses
+edges[0].from: "aws" is a group, expected a node
+edges[0].to: unknown node "apy", did you mean "api"?
+groups[0].parent: "k8s" closes the cycle aws -> k8s -> aws
+```
+
+The path is the one zod reports, with `spec` for the root; the value is
+JSON-quoted, except that an array or object is named rather than printed.
+
+The "what is valid" half of a schema problem lives on the zod schema, as an
+`error` function per field, not in the formatter. The MCP SDK rejects a call
+against the same schema before `parseSpec` ever runs (see MCP below), and it
+builds its text from `issue.message`, so keeping the wording on the schema is
+what makes both surfaces say the same thing. Note that `issue.input` reaches an
+`error` function but is stripped from the finished issue, so the `got ...` half
+can only be produced there.
+
+An unknown id gets `, did you mean "x"?` when one existing id of the expected
+kind is within a small edit distance: 1 for a target of four characters or
+fewer, 2 above that, compared case-insensitively, first in spec order on a tie.
+The matcher is a plain Levenshtein in `spec.ts`, no dependency.
+
+`specSchemaWith(extra)` is the spec schema with extra top-level keys, used by
+the MCP tool for `out`. Zod's `.extend()` would drop the root description and
+leave the unknown-key message listing keys that no longer match, so callers that
+add a key go through this instead.
 
 ## Visual vocabulary (src/style.ts)
 
@@ -267,21 +307,47 @@ excalix schema                                JSON Schema of the spec to stdout
 excalix mcp                                   stdio MCP server
 ```
 
+`schema` prints `z.toJSONSchema(specSchema, { io: "input" })`, which is the
+schema the `sketch` tool advertises minus `out`. The two are serialized
+separately, the MCP one by zod mini inside the SDK against draft 7, so
+`mcp.test.ts` compares them and the only differences allowed are `$schema` and
+`out`.
+
 Errors go to stderr, one per line, exit code 1. No colour, no spinner.
 
 ## MCP (src/mcp.ts)
 
 `@modelcontextprotocol/sdk` `McpServer` over stdio. One tool, `sketch`.
-Input: the spec plus an optional `out` (basename, absolute or relative to
-cwd; defaults to `diagrams/<title slug>`, or `diagrams/diagram`). The tool
-description doubles as the style guide: it lists every kind and edge style with
-one line on when to use it, so a calling agent never guesses. Result content:
-a text block listing the three written paths, then an `image` block with the
-PNG (base64, `image/png`, taken from the in-memory result, never re-read from
-disk) so the caller sees the diagram in the same turn. One browser per server
-process, opened on the first call, dropped after a failed call so the next one
-starts fresh, and closed before the process exits when stdin ends.
-Validation errors return `isError: true` with the problem list.
+Input: `specSchemaWith({ out })`, where `out` is a basename, absolute or
+relative to the server's working directory, defaulting to
+`diagrams/<title slug>` or `diagrams/diagram`. The tool description doubles as
+the style guide: it lists every kind and edge style with one line on when to
+use it, and says how the layout answers the spec (nodes in reading order, short
+edge labels, `\n` for a new line), so a calling agent never guesses. Every
+sentence in it has to change what the agent writes.
+
+Result content: a text block listing the three written paths, then an `image`
+block with the PNG (base64, `image/png`, taken from the in-memory result, never
+re-read from disk) so the caller sees the diagram in the same turn.
+`structuredContent` repeats the three paths under an `outputSchema` and adds
+`pixels`, the PNG's own size read from its IHDR header, which tells an agent
+that a long label stretched the layout without it having to measure the image.
+The text block stays as three bare paths: a client that ignores structured
+content is no worse off than before.
+
+One browser per server process, opened on the first call, dropped after a
+failed call so the next one starts fresh, and closed before the process exits
+when stdin ends. Failures return `isError: true`, which the SDK exempts from
+output-schema validation.
+
+Two validation surfaces, and they cannot be merged: the SDK parses the
+arguments against the advertised input schema before the handler runs, so a
+spec that breaks the schema never reaches `parseSpec`. Those problems come back
+in the SDK's own frame, `<message> at <path>` behind an
+`Input validation error:` prefix, carrying our wording from the schema.
+Everything `parseSpec` owns, the reference and uniqueness checks and the blank
+labels, comes back as the plain problem list. A spec that is wrong in both ways
+therefore costs two calls.
 
 ## Conventions
 
@@ -290,6 +356,13 @@ Validation errors return `isError: true` with the problem list.
 - Tests: vitest, colocated `*.test.ts`. Unit tests use `estimateMeasurer`.
   Render tests launch the browser and are tagged in their describe name with
   `[browser]`.
+- `src/__snapshots__/sketch-tool.md` is the whole agent-facing contract, the
+  tool description and every schema with its field descriptions, as one page.
+  `mcp.test.ts` writes it from `listTools()`, so any change to the wording or
+  the schema turns up as a diff to read rather than a surprise in a client.
+- `spec.test.ts` holds one table row per way a spec can be wrong, each with the
+  exact text an agent gets back, and parses the example spec out of
+  `skills/excalix/SKILL.md` so the skill cannot rot.
 - `src/test-support.ts` is the shared harness: the spec corpus (`specFiles`,
   `readSpec`), `measuringOnly` (a renderer that measures and stubs svg and png,
   because the invariants read elements only), and `describeGeometry`, which
