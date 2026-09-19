@@ -4,6 +4,7 @@
   "description": "Architecture diagrams from a topology spec, rendered in Excalidraw's hand-drawn style. CLI and MCP.",
   "type": "module",
   "license": "MIT",
+  "packageManager": "pnpm@9.12.0",
   "repository": "github:yasinmiran/excalix",
   "engines": {
     "node": ">=22"
@@ -18,7 +19,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
