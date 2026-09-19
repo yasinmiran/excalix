@@ -36,6 +36,16 @@ run). `edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows`
 is `forward` (default), `both` or `none`. Run `excalix schema` for the whole
 shape, and `excalix validate <spec.json>` to check one without rendering.
 
+List the nodes in reading order, sources first. Siblings keep the order you
+write them in as far as the routing allows, so a spec that reads like the flow
+draws like it too.
+
+Keep edge labels to a few words. A label sits on its arrow and reserves that
+much width, so a sentence on one edge pushes the whole diagram wide. `\n`
+anywhere in a label starts a new line, which is the way out when a node name is
+genuinely long. An edge from a node back to itself is fine, and so are two edges
+between the same pair; each one draws as its own arrow.
+
 ## Running it
 
 ```
@@ -44,7 +54,9 @@ node /absolute/path/to/excalix/dist/cli.js render docs/arch.json -o docs/arch
 ```
 
 First form inside a repo that has excalix installed, second form anywhere else.
-Writes `<basename>.excalidraw`, `.svg` and `.png`.
+Writes `<basename>.excalidraw`, `.svg` and `.png`. End `-o` with a slash and it
+is a directory: `-o docs/diagrams/` writes `arch.excalidraw` and its siblings in
+there.
 
 ## Then look at it
 
@@ -59,4 +71,6 @@ Commit the spec JSON beside its outputs, so the next person regenerates the
 diagram instead of redrawing it.
 
 When the excalix MCP server is registered, the `sketch` tool does all of this in
-one call and hands back the PNG inline, which saves the read.
+one call and hands back the PNG inline, which saves the read. Its `out` is the
+same basename, resolved against the directory the server was started in rather
+than yours.

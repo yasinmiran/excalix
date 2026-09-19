@@ -87,13 +87,24 @@ excalix mcp                                  serve the sketch tool over stdio
 | `both` | an arrowhead at each end, for a bidirectional link |
 | `none` | no arrowhead, a plain association |
 
-`direction` is `lr` by default, or `tb` for top to bottom; `examples/auth-flow.json` is a top-to-bottom one without groups. Groups nest through `parent`. Siblings keep the order the spec lists them in, as far as edge crossings allow.
+`direction` is `lr` by default, or `tb` for top to bottom; `examples/auth-flow.json` is a top-to-bottom one without groups. Groups nest through `parent`. Siblings keep the order the spec lists them in, as far as edge crossings allow, so it pays to write the nodes in reading order.
 
-Unknown keys are rejected, and `excalix validate` reports every problem at once, so a typo costs one round trip instead of several. `excalix schema` prints the full JSON Schema.
+An edge label rides on its arrow and reserves that much width in the layout, which is why a short one is worth the effort: put a sentence on an edge and the whole diagram stretches to fit it. A `\n` in any label starts a new line. An edge may loop from a node back to itself, and two edges between the same pair stay two arrows.
+
+Unknown keys are rejected, and `excalix validate` reports every problem at once, so a typo costs one round trip instead of several. Each line names the path, shows what it found and says what would have been valid, and an id that is nearly right comes back with the id it is nearly:
+
+```
+edges[0].to: unknown node "apy", did you mean "api"?
+nodes[2].kind: got "db", expected one of "client", "service", "datastore", "queue", "cache", "external"
+```
+
+`excalix schema` prints the full JSON Schema.
 
 ## For agents
 
-`excalix mcp` is an MCP server with one tool, `sketch`. Its input is the spec plus an optional `out` basename (default `diagrams/<title slug>` under the server's working directory). It returns the three written paths and then the PNG inline, so the calling agent sees the diagram in the same turn it asked for it and can send back an adjusted spec.
+`excalix mcp` is an MCP server with one tool, `sketch`. Its input is the spec plus an optional `out` basename (default `diagrams/<title slug>`, resolved against the server's working directory). It returns the three written paths and then the PNG inline, so the calling agent sees the diagram in the same turn it asked for it and can send back an adjusted spec. The same paths come back as structured content too, with the pixel size of that PNG next to them; a client that ignores structured content loses nothing.
+
+The tool advertises the spec schema that `excalix schema` prints, with `out` added. Both are serialized from the same zod schema, and a test compares them so the two cannot drift apart.
 
 Register it with Claude Code for every project:
 
