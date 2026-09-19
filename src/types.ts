@@ -84,11 +84,17 @@ export interface LayoutInput {
   edges: LayoutEdge[];
 }
 
+/** Top-left of the label text, absolute. Its centre lies on the polyline. */
+export interface RoutedLabel extends Point {
+  /** Arc-length parameter of the centre along the polyline, 0..1. */
+  position: number;
+}
+
 export interface RoutedEdge {
   /** Absolute polyline from the source border to the target border, at least two points. */
   points: Point[];
-  /** Top-left of the label box, absolute. Present iff the input edge had a label. */
-  label?: Point;
+  /** Placement of the label text. Present iff the input edge had a label. */
+  label?: RoutedLabel;
 }
 
 export interface LayoutResult {

@@ -28,17 +28,8 @@ const TITLES: Record<Invariant, string> = {
 // Layout defects the pipeline still has. Fixing one makes its it.fails pass, which fails the suite
 // until the entry is deleted, so this table can never drift ahead of the code.
 const KNOWN: Record<string, Partial<Record<Invariant, string>>> = {
-  "examples/auth-flow.json": {
-    labelsClearNodes: 'the "verify token" label is re-centred on its path and eats into the users box',
-  },
-  "stress/dense-lr.json": {
-    labelsClearLabels: 'the labels of the two edges leaving "browser" overlap by a pixel vertically',
-  },
   "stress/dense-tb.json": {
     arrowsClearGroupLabels: 'the arrows into "redis" enter the data group from above, through its label',
-  },
-  "stress/loops.json": {
-    insideBounds: 'the "job" label is re-centred on its path after bounds were computed and ends up above y=0',
   },
   "stress/nogroupnodes.json": {
     arrowsClearGroupLabels: "an arrow entering the leftmost child of a group from above passes through the group label",

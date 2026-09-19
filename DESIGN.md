@@ -99,18 +99,29 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
 - group padding leaves room for the label: top = label.height + 16, others 16
 - `elk.spacing.nodeNode: 48`, `elk.layered.spacing.nodeNodeBetweenLayers: 48`,
   `elk.spacing.edgeNode: 24`
-- edge labels: `elk.edgeLabels.placement: CENTER`, `elk.edgeLabels.inline: true`,
-  sizes passed through with a 12px margin on every side so the text never
-  touches a neighbouring node (the returned label point is the text box, not
-  the padded one)
+- edge labels: `elk.edgeLabels.placement: CENTER` and
+  `elk.edgeLabels.inline: true` go in each label's own `layoutOptions`. ELK
+  reads both from the label and ignores them on the graph, and without `inline`
+  it reserves the box beside the edge instead of on it. The box handed to ELK is
+  the measured text grown by a 12px margin on every side, so what ELK reserves
+  is the text plus its clearance, centred on the route
+- self loops: ELK places their labels beside the loop even when the label asks
+  to be inline, so `elk.spacing.nodeSelfLoop` stands the loop off its node by
+  half the padded box and the text is centred on the loop's outer segment. The
+  option is read from the containing parent, never from the node, so it goes on
+  the root and on every group, and it is measured in the layered algorithm's
+  internal frame, which is transposed for DOWN
 
 Gotcha: ELK returns child coordinates relative to their parent node and edge
 sections relative to the edge's containing node. Convert everything to absolute
 before returning. Label positions likewise.
 
 Output `LayoutResult`: absolute boxes for nodes and groups, a polyline per edge
-whose first and last points lie on the source and target borders, label
-top-left points, and overall bounds. Normalise so bounds start at (0, 0).
+whose first and last points lie on the source and target borders, a label per
+labelled edge, and overall bounds. A label is the top-left of the text plus the
+arc-length parameter of its centre along the polyline: the centre of the box
+ELK reserved is snapped onto the polyline here, so bounds cover the final text
+boxes. Normalise so bounds start at (0, 0).
 
 ## Elements (src/elements.ts)
 
@@ -162,9 +173,9 @@ created: null, link: null, locked: false`.
 - Edge label: a `text` element bound to the arrow (`containerId` = arrow id,
   arrow `boundElements` includes it). Export and editor both ignore the stored
   x/y of arrow-bound text and place it from `labelPosition`, an arc-length
-  parameter along the polyline, so the label is stored at the on-path point
-  nearest ELK's label centre with x/y set to match. ELK's label point only
-  reserves space.
+  parameter along the polyline, so a label whose centre is off the path jumps
+  when the file is opened. Both x/y and `labelPosition` come straight from
+  `RoutedEdge.label`, which layout already put on the path.
 - Title: free `text`, fontSize 32, top-left above the diagram bounds with 32px
   gap. Only when the spec has a title.
 - Element order: Excalidraw needs the members of a group contiguous in the

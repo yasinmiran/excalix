@@ -64,7 +64,8 @@ const layout: LayoutResult = {
         { x: 231, y: 132.5 },
         { x: 295, y: 132.5 },
       ],
-      label: { x: 205.4, y: 110 },
+      // Centre (263, 132.5), which is 142 of the polyline's 174 units of arc length.
+      label: { x: 263 - measured.edgeLabels["edge:0"]!.width / 2, y: 132.5 - measured.edgeLabels["edge:0"]!.height / 2, position: 142 / 174 },
     },
     "edge:1": {
       points: [

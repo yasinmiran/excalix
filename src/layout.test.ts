@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { layout } from "./layout.js";
+import { LABEL_MARGIN, layout } from "./layout.js";
 import { FONT, nodeSize } from "./style.js";
-import type { Box, Kind, LayoutInput, LayoutResult, Point, TextSize } from "./types.js";
+import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedLabel, TextSize } from "./types.js";
 
 function estimate(text: string, fontSize: number): TextSize {
   return { width: text.length * fontSize * 0.6, height: fontSize * FONT.lineHeight };
@@ -63,6 +63,48 @@ function contains(outer: Box, inner: Box, pad: { top: number; side: number }): b
 
 function overlaps(a: Box, b: Box): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+function labelBox(label: RoutedLabel, size: TextSize): Box {
+  return { x: label.x, y: label.y, ...size };
+}
+
+function centreOf(label: RoutedLabel, size: TextSize): Point {
+  return { x: label.x + size.width / 2, y: label.y + size.height / 2 };
+}
+
+function grow(box: Box, by: number): Box {
+  return { x: box.x - by, y: box.y - by, width: box.width + by * 2, height: box.height + by * 2 };
+}
+
+function segments(points: Point[]): [Point, Point][] {
+  return points.slice(1).map((p, i) => [points[i]!, p]);
+}
+
+function distanceToPolyline(points: Point[], target: Point): number {
+  return Math.min(
+    ...segments(points).map(([a, b]) => {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const square = dx * dx + dy * dy;
+      const s = square === 0 ? 0 : Math.max(0, Math.min(1, ((target.x - a.x) * dx + (target.y - a.y) * dy) / square));
+      return Math.hypot(target.x - a.x - dx * s, target.y - a.y - dy * s);
+    }),
+  );
+}
+
+function pointAt(points: Point[], position: number): Point {
+  const lengths = segments(points).map(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y));
+  let remaining = position * lengths.reduce((total, length) => total + length, 0);
+  for (const [index, [a, b]] of segments(points).entries()) {
+    const length = lengths[index]!;
+    if (remaining <= length || index === lengths.length - 1) {
+      const s = length === 0 ? 0 : remaining / length;
+      return { x: a.x + (b.x - a.x) * s, y: a.y + (b.y - a.y) * s };
+    }
+    remaining -= length;
+  }
+  return points[0]!;
 }
 
 function allPoints(result: LayoutResult): Point[] {
@@ -131,6 +173,27 @@ describe("layout on the order pipeline", () => {
     }
   });
 
+  it("centres every label on its polyline at the stored position", async () => {
+    const result = await run;
+    for (const spec of orderPipeline.edges) {
+      if (!spec.label) continue;
+      const routed = result.edges[spec.id]!;
+      const centre = centreOf(routed.label!, spec.label);
+      expect(distanceToPolyline(routed.points, centre), spec.id).toBeLessThan(1);
+      expect(pointAt(routed.points, routed.label!.position).x, `${spec.id} x`).toBeCloseTo(centre.x, 6);
+      expect(pointAt(routed.points, routed.label!.position).y, `${spec.id} y`).toBeCloseTo(centre.y, 6);
+    }
+  });
+
+  it("keeps the clearance it reserved around every label", async () => {
+    const result = await run;
+    for (const spec of orderPipeline.edges) {
+      if (!spec.label) continue;
+      const reserved = grow(labelBox(result.edges[spec.id]!.label!, spec.label), LABEL_MARGIN);
+      for (const [id, box] of Object.entries(result.nodes)) expect(overlaps(reserved, box), `${spec.id} over ${id}`).toBe(false);
+    }
+  });
+
   it("normalises bounds to (0, 0) around everything", async () => {
     const result = await run;
     const points = allPoints(result);
@@ -139,6 +202,14 @@ describe("layout on the order pipeline", () => {
     expect(Math.max(...points.map((p) => p.x))).toBeLessThanOrEqual(result.bounds.width);
     expect(Math.max(...points.map((p) => p.y))).toBeLessThanOrEqual(result.bounds.height);
     expect(result.bounds).toMatchObject({ x: 0, y: 0 });
+    for (const spec of orderPipeline.edges) {
+      if (!spec.label) continue;
+      const box = labelBox(result.edges[spec.id]!.label!, spec.label);
+      expect(box.x, spec.id).toBeGreaterThanOrEqual(0);
+      expect(box.y, spec.id).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, spec.id).toBeLessThanOrEqual(result.bounds.width);
+      expect(box.y + box.height, spec.id).toBeLessThanOrEqual(result.bounds.height);
+    }
   });
 
   it("is deterministic", async () => {
@@ -155,6 +226,37 @@ describe("layout edge cases", () => {
       edges: [edge(0, "a", "a")],
     });
     expect(result.edges["edge:0"]!.points.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("stands a labelled self loop off its node in both directions", async () => {
+    const text = "retry until it sticks";
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [group("g", "Group")],
+        nodes: [node("a", "A", "service", "g"), node("b", "B", "service", "g")],
+        edges: [edge(0, "a", "a", text), edge(1, "a", "b")],
+      });
+      const routed = result.edges["edge:0"]!;
+      const size = estimate(text, FONT.edge);
+      expect(distanceToPolyline(routed.points, centreOf(routed.label!, size)), direction).toBeLessThan(1);
+      expect(overlaps(grow(labelBox(routed.label!, size), LABEL_MARGIN), result.nodes.a!), direction).toBe(false);
+    }
+  });
+
+  it("centres labels on the path for tb and across a group border", async () => {
+    const text = "crosses out";
+    const result = await layout({
+      direction: "tb",
+      groups: [group("g", "Group")],
+      nodes: [node("a", "A", "service", "g"), node("b", "B", "service")],
+      edges: [edge(0, "a", "b", text)],
+    });
+    const routed = result.edges["edge:0"]!;
+    const size = estimate(text, FONT.edge);
+    expect(distanceToPolyline(routed.points, centreOf(routed.label!, size))).toBeLessThan(1);
+    expect(overlaps(grow(labelBox(routed.label!, size), LABEL_MARGIN), result.nodes.a!)).toBe(false);
+    expect(overlaps(grow(labelBox(routed.label!, size), LABEL_MARGIN), result.nodes.b!)).toBe(false);
   });
 
   it("stacks layers vertically for tb", async () => {

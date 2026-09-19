@@ -244,8 +244,6 @@ function edgeElements(
   };
   if (edge.label === undefined) return [arrow];
   if (!label || !routed.label) throw new Error(`${key} has a label but no measure or label point`);
-  const center = { x: routed.label.x + label.width / 2, y: routed.label.y + label.height / 2 };
-  const { t, point } = nearestOnPolyline(points, center);
   return [
     arrow,
     textElement(ids, {
@@ -253,11 +251,11 @@ function edgeElements(
       text: edge.label,
       fontSize: FONT.edge,
       color: STROKE,
-      position: { x: point.x - label.width / 2, y: point.y - label.height / 2 },
+      position: routed.label,
       size: label,
       groupIds: [],
       containerId: arrow.id,
-      labelPosition: t,
+      labelPosition: routed.label.position,
       align: { textAlign: "center", verticalAlign: "middle" },
     }),
   ];
@@ -336,26 +334,6 @@ function groupBy<T, K>(items: T[], keyOf: (item: T) => K): Map<K, T[]> {
 function fixedPoint(box: Box, point: Point): FixedPoint {
   const nudge = (v: number) => (Math.abs(v - 0.5) < 1e-4 ? 0.5001 : v);
   return [nudge((point.x - box.x) / box.width), nudge((point.y - box.y) / box.height)];
-}
-
-/** Closest point on the polyline to target, with its arc-length parameter in 0..1. */
-function nearestOnPolyline(points: Point[], target: Point): { t: number; point: Point } {
-  let total = 0;
-  let best = { distance: Infinity, length: 0, point: points[0] ?? target };
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1];
-    const b = points[i];
-    if (!a || !b) continue;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length = Math.hypot(dx, dy);
-    const s = length === 0 ? 0 : Math.max(0, Math.min(1, ((target.x - a.x) * dx + (target.y - a.y) * dy) / (length * length)));
-    const point = { x: a.x + dx * s, y: a.y + dy * s };
-    const distance = Math.hypot(target.x - point.x, target.y - point.y);
-    if (distance < best.distance) best = { distance, length: total + length * s, point };
-    total += length;
-  }
-  return { t: total === 0 ? 0 : best.length / total, point: best.point };
 }
 
 function box(boxes: Record<string, Box>, id: string): Box {

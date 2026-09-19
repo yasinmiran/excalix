@@ -1,12 +1,25 @@
 import ELK from "elkjs/lib/elk.bundled.js";
-import type { ElkEdgeSection, ElkExtendedEdge, ElkNode } from "elkjs/lib/elk.bundled.js";
+import type { ElkEdgeSection, ElkExtendedEdge, ElkLabel, ElkNode, LayoutOptions } from "elkjs/lib/elk.bundled.js";
 import { GROUP_STYLE } from "./style.js";
-import type { Box, Direction, LayoutEdge, LayoutGroup, LayoutInput, LayoutNode, LayoutResult, Point, RoutedEdge } from "./types.js";
+import type {
+  Box,
+  Direction,
+  LayoutEdge,
+  LayoutGroup,
+  LayoutInput,
+  LayoutNode,
+  LayoutResult,
+  Point,
+  RoutedEdge,
+  RoutedLabel,
+} from "./types.js";
 
 const ROOT = ":root";
 const PADDING = GROUP_STYLE.padding;
-// Clearance ELK reserves around an edge label so the text never touches a neighbouring node.
-const LABEL_MARGIN = 12;
+/** Clearance reserved around an edge label so the text never touches a neighbouring node or label. */
+export const LABEL_MARGIN = 12;
+// Both options are read from the label, not from the graph, so setting them anywhere else does nothing.
+const LABEL_OPTIONS: LayoutOptions = { "elk.edgeLabels.placement": "CENTER", "elk.edgeLabels.inline": "true" };
 
 const elk = new ELK();
 
@@ -28,9 +41,10 @@ export async function layout(input: LayoutInput): Promise<LayoutResult> {
 }
 
 function toElkGraph(input: LayoutInput): ElkNode {
+  const loops = selfLoopSpacing(input);
   const childrenOf = (parent: string | undefined): ElkNode[] => [
     ...input.nodes.filter((n) => n.group === parent).map(leaf),
-    ...input.groups.filter((g) => g.parent === parent).map((g) => groupNode(g, input.direction, childrenOf(g.id))),
+    ...input.groups.filter((g) => g.parent === parent).map((g) => groupNode(g, input.direction, childrenOf(g.id), loops)),
   ];
   return {
     id: ROOT,
@@ -42,20 +56,29 @@ function toElkGraph(input: LayoutInput): ElkNode {
       "elk.spacing.nodeNode": "48",
       "elk.layered.spacing.nodeNodeBetweenLayers": "48",
       "elk.spacing.edgeNode": "24",
-      "elk.edgeLabels.placement": "CENTER",
-      "elk.edgeLabels.inline": "true",
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      ...loops,
     },
     children: childrenOf(undefined),
     edges: input.edges.map(elkEdge),
   };
 }
 
+// ELK places a self loop's label beside the loop even when the label asks to be inline, so the loop itself has
+// to stand far enough off the node for the padded box to fit centred on it. The option is read from the
+// containing parent, never from the node, and the layered algorithm measures it in a frame transposed for DOWN.
+function selfLoopSpacing(input: LayoutInput): LayoutOptions {
+  const room = input.edges
+    .filter((edge) => edge.from === edge.to && edge.label)
+    .map((edge) => (input.direction === "tb" ? edge.label!.width : edge.label!.height) / 2 + LABEL_MARGIN);
+  return room.length === 0 ? {} : { "elk.spacing.nodeSelfLoop": String(Math.max(...room)) };
+}
+
 function leaf(node: LayoutNode): ElkNode {
   return { id: node.id, width: node.width, height: node.height };
 }
 
-function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]): ElkNode {
+function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[], loops: LayoutOptions): ElkNode {
   const top = group.label.height + PADDING;
   const width = group.label.width + PADDING * 2;
   const height = top + PADDING;
@@ -69,6 +92,7 @@ function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]
       "elk.padding": `[top=${top},left=${PADDING},bottom=${PADDING},right=${PADDING}]`,
       "elk.nodeSize.constraints": "MINIMUM_SIZE",
       "elk.nodeSize.minimum": minimum,
+      ...loops,
     },
   };
 }
@@ -80,7 +104,16 @@ function elkEdge(edge: LayoutEdge): ElkExtendedEdge {
     sources: [edge.from],
     targets: [edge.to],
     ...(edge.label
-      ? { labels: [{ text: edge.id, width: edge.label.width + LABEL_MARGIN * 2, height: edge.label.height + LABEL_MARGIN * 2 }] }
+      ? {
+          labels: [
+            {
+              text: edge.id,
+              width: edge.label.width + LABEL_MARGIN * 2,
+              height: edge.label.height + LABEL_MARGIN * 2,
+              layoutOptions: LABEL_OPTIONS,
+            },
+          ],
+        }
       : {}),
   };
 }
@@ -97,12 +130,38 @@ function routeEdge(edge: ElkExtendedEdge, boxes: Map<string, Box>): RoutedEdge {
   const container = edge.container && edge.container !== ROOT ? boxes.get(edge.container) : undefined;
   const offset = container ?? { x: 0, y: 0 };
   const shift = (p: Point): Point => ({ x: offset.x + p.x, y: offset.y + p.y });
-  const points = dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift));
+  const routed = dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift));
+  const points = routed.length >= 2 ? routed : [center(boxes.get(edge.sources[0]!)!), center(boxes.get(edge.targets[0]!)!)];
   const label = edge.labels?.[0];
-  return {
-    points: points.length >= 2 ? points : [center(boxes.get(edge.sources[0]!)!), center(boxes.get(edge.targets[0]!)!)],
-    ...(label ? { label: shift({ x: (label.x ?? 0) + LABEL_MARGIN, y: (label.y ?? 0) + LABEL_MARGIN }) } : {}),
-  };
+  return { points, ...(label ? { label: labelOnPath(points, shift({ x: label.x ?? 0, y: label.y ?? 0 }), label) } : {}) };
+}
+
+// Excalidraw re-anchors a bound label to labelPosition on the path every time the file is opened, so the text has
+// to sit where the path crosses the box ELK reserved rather than where ELK drew the box.
+function labelOnPath(points: Point[], reserved: Point, label: ElkLabel): RoutedLabel {
+  const half = { x: (label.width ?? 0) / 2, y: (label.height ?? 0) / 2 };
+  const { t, point } = nearestOnPolyline(points, { x: reserved.x + half.x, y: reserved.y + half.y });
+  return { x: point.x - half.x + LABEL_MARGIN, y: point.y - half.y + LABEL_MARGIN, position: t };
+}
+
+/** Closest point on the polyline to target, with its arc-length parameter in 0..1. */
+function nearestOnPolyline(points: Point[], target: Point): { t: number; point: Point } {
+  let total = 0;
+  let best = { distance: Infinity, length: 0, point: points[0] ?? target };
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (!a || !b) continue;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    const s = length === 0 ? 0 : Math.max(0, Math.min(1, ((target.x - a.x) * dx + (target.y - a.y) * dy) / (length * length)));
+    const point = { x: a.x + dx * s, y: a.y + dy * s };
+    const distance = Math.hypot(target.x - point.x, target.y - point.y);
+    if (distance < best.distance) best = { distance, length: total + length * s, point };
+    total += length;
+  }
+  return { t: total === 0 ? 0 : best.length / total, point: best.point };
 }
 
 function sectionPoints(section: ElkEdgeSection): Point[] {
@@ -149,7 +208,7 @@ function normalise(result: LayoutResult): LayoutResult {
     groups: mapValues(result.groups, moveBox),
     edges: mapValues(result.edges, (edge) => ({
       points: edge.points.map(movePoint),
-      ...(edge.label ? { label: movePoint(edge.label) } : {}),
+      ...(edge.label ? { label: { ...edge.label, ...movePoint(edge.label) } } : {}),
     })),
     bounds: { ...result.bounds, x: 0, y: 0 },
   };
