@@ -135,4 +135,4 @@ pnpm typecheck   tsc --noEmit
 
 ## License
 
-MIT
+MIT. excalix is an independent project and is not affiliated with Excalidraw; it builds on [`@excalidraw/utils`](https://www.npmjs.com/package/@excalidraw/utils), which is MIT licensed too.
