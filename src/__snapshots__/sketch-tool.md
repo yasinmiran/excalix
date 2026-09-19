@@ -75,7 +75,7 @@ Look at the returned image and call again with an adjusted spec if labels overla
           "label"
         ],
         "additionalProperties": false,
-        "description": "a dashed boundary drawn around nodes, such as a VPC, cluster, or account"
+        "description": "a boundary drawn around nodes, such as a VPC, cluster, or account"
       }
     },
     "nodes": {

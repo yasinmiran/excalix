@@ -297,7 +297,7 @@ describe("layout edge cases", () => {
       edges: [edge(0, "a", "b")],
     });
     const { a, b } = result.nodes;
-    expect(b!.y).toBeGreaterThanOrEqual(a!.y + a!.height + 48);
+    expect(b!.y).toBeGreaterThanOrEqual(a!.y + a!.height + ARROWHEAD_ROOM);
     const { points } = result.edges["edge:0"]!;
     expect(near(points[0]!.y, a!.y + a!.height)).toBe(true);
     expect(near(points.at(-1)!.y, b!.y)).toBe(true);

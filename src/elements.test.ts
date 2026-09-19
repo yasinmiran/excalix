@@ -221,7 +221,7 @@ describe("buildElements", () => {
     expect(shapeOf("Web app")).toMatchObject({ type: "ellipse", backgroundColor: "#e9ecef", roundness: null });
     expect(shapeOf("Order API")).toMatchObject({ type: "rectangle", backgroundColor: "#a5d8ff", roundness: { type: 3 } });
     expect(shapeOf("Postgres")).toMatchObject({ type: "rectangle", backgroundColor: "#b2f2bb", roundness: null, fillStyle: "solid" });
-    expect(elements[0]).toMatchObject({ type: "rectangle", strokeStyle: "dashed", strokeWidth: 1, backgroundColor: "#f8f9fa" });
+    expect(elements[0]).toMatchObject({ type: "rectangle", strokeStyle: "solid", strokeWidth: 1, backgroundColor: "#f8f9fa" });
     expect(textOf("AWS")).toMatchObject({ x: 231 + 16, y: 16, strokeColor: "#495057", fontSize: FONT.group, containerId: null });
   });
 

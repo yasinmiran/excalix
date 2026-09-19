@@ -15,7 +15,7 @@ Not for flowcharts, sequence diagrams, ER diagrams or state machines.
 ## The spec
 
 JSON with `nodes` and `edges`, optional `title`, `direction` (`lr` default, or
-`tb`), and `groups` for dashed boundaries that nest through `parent`.
+`tb`), and `groups` for boundaries that nest through `parent`.
 
 ```json
 {
@@ -62,9 +62,9 @@ between the same pair; each one draws as its own arrow.
 
 Twenty nodes is roughly the ceiling for one picture, and a dozen boxes in a
 single run reaches it sooner, since a chain stretches one way and stays thin the
-other. Past the ceiling the image is scaled down before you read it, until a
-dashed arrow running beside a group border is no longer distinguishable from the
-border itself, and you end up reporting things the coordinates do not say.
+other. Past the ceiling the image is scaled down before you read it, thin lines and
+small labels start to go missing, and you end up reporting things the
+coordinates do not say.
 
 A long chain still reads better as `lr` and a deep hierarchy as `tb`, so try
 `direction` first. When direction is not what is wrong, two diagrams is the

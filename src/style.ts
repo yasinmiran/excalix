@@ -43,7 +43,7 @@ export function arrowheads(arrows: Arrows): { start: "arrow" | null; end: "arrow
 export const GROUP_STYLE = {
   fill: "#f8f9fa",
   stroke: "#868e96",
-  strokeStyle: "dashed" as StrokeStyle,
+  strokeStyle: "solid" as StrokeStyle,
   strokeWidth: 1,
   labelColor: "#495057",
   padding: 16,

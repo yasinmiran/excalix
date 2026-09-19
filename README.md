@@ -95,7 +95,7 @@ Siblings keep the order the spec lists them in, as far as edge crossings allow, 
 
 An edge label rides on its arrow and reserves that much width in the layout, which is why a short one is worth the effort: put a sentence on an edge and the whole diagram stretches to fit it. A `\n` in any label starts a new line. An edge may loop from a node back to itself, and two edges between the same pair stay two arrows.
 
-One diagram holds about twenty nodes before it stops being readable at a glance, and fewer when they run in a single chain, which stretches one way and stays thin the other. Beyond that the PNG gets big enough that anyone looking at it scaled down, an agent especially, starts mistaking a dashed arrow for the dashed border it runs beside. Split the system into an overview and a detail diagram instead; `render` and the `sketch` tool both add a line saying so once the longest side of the PNG passes 6000 pixels.
+One diagram holds about twenty nodes before it stops being readable at a glance, and fewer when they run in a single chain, which stretches one way and stays thin the other. Beyond that the PNG gets big enough that anyone looking at it scaled down, an agent especially, starts losing thin lines and small labels. Split the system into an overview and a detail diagram instead; `render` and the `sketch` tool both add a line saying so once the longest side of the PNG passes 6000 pixels.
 
 Unknown keys are rejected, and `excalix validate` reports every problem at once, so a typo costs one round trip instead of several. Each line names the path, shows what it found and says what would have been valid, and an id that is nearly right comes back with the id it is nearly:
 

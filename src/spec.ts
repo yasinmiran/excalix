@@ -118,7 +118,7 @@ const group = strict(
     label: text("text drawn inside the top-left corner of the box"),
     parent: id("id of the group this one nests inside").optional(),
   },
-  "a dashed boundary drawn around nodes, such as a VPC, cluster, or account",
+  "a boundary drawn around nodes, such as a VPC, cluster, or account",
 );
 
 const node = strict(

@@ -30,9 +30,10 @@ type Side = "left" | "right" | "top" | "bottom";
 
 /**
  * Straight run an arrow needs at each end that carries a head. Excalidraw draws the head
- * `min(25, segment / 2)` long, so anything shorter than this is a stub of a head.
+ * `min(25, segment / 2)` long. 36 draws an 18px head; the 50 a full head needs stretched dense
+ * diagrams further than the extra 7px was worth.
  */
-export const ARROWHEAD_ROOM = 50;
+export const ARROWHEAD_ROOM = 36;
 /** Distance kept between two arrow ends on the same side of a node: an arrowhead is 17px wide. */
 export const END_SPACING = 32;
 

@@ -124,8 +124,9 @@ Fixed per kind. No caller-facing colour, font, or shape options exist.
 | external  | rectangle, rounded       | transparent | solid   | `#1e1e1e` | strokeStyle `dashed`           |
 
 - group: rectangle, sharp, fill `#f8f9fa`, stroke `#868e96` (grey so boundaries
-  recede behind the flow), strokeStyle `dashed`, strokeWidth 1, label text in the
-  top padding strip, fontSize 16, colour `#495057`
+  recede behind the flow), strokeStyle `solid` so that a dashed line is always an
+  async arrow and never a border, even in a scaled-down PNG, strokeWidth 1, label
+  text in the top padding strip, fontSize 16, colour `#495057`
 - edges: `sync` solid, `async` dashed; strokeColor `#1e1e1e`, strokeWidth 2;
   endArrowhead `"arrow"`; `arrows: "both"` also sets startArrowhead; `"none"`
   sets neither
@@ -150,8 +151,8 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
   order the spec lists them in, as far as crossings allow
 - group padding leaves room for the label: top = label.height + 16, others 16
 - spacing: `elk.spacing.nodeNode: 48`, `elk.spacing.edgeNode: 24`,
-  `elk.layered.spacing.nodeNodeBetweenLayers: 50`,
-  `elk.layered.spacing.edgeNodeBetweenLayers: 50`. ELK reads a spacing from the
+  `elk.layered.spacing.nodeNodeBetweenLayers: 36`,
+  `elk.layered.spacing.edgeNodeBetweenLayers: 36`. ELK reads a spacing from the
   node that contains what is being spaced, so all four go on the root and on
   every group node. A group that omits them lays its children out on ELK's own
   defaults, which put a bend 10px from the node it points at
@@ -175,14 +176,14 @@ ELK (`elkjs/lib/elk.bundled.js`, no worker) with:
 Excalidraw sizes an arrowhead from the segment it ends on: `min(25, length *
 0.5)` for the `arrow` head, in `getArrowheadPoints` in the vendored bundle. A
 bend 10px short of its target therefore draws a 5px hook, not a head.
-`ARROWHEAD_ROOM` is 50, the length that earns the full 25, and it is the value
-of both `nodeNodeBetweenLayers` and `edgeNodeBetweenLayers`, because the
-straight run between two layers and the gap ELK leaves between a routing slot
-and a node are the two things that become an arrow's last segment. The same
-number bounds the self loop stand-off. It costs two pixels a gap on a chain of
-straight arrows, which already ran on the 48 of `nodeNode`, and about half
-again the long axis on the densest stress specs, where nearly every gap holds a
-bend. That is the price of a head that reads at a glance in a downscaled PNG.
+`ARROWHEAD_ROOM` is 36, which draws an 18px head. The full 25 needs 50, and 50 was
+tried: it stretched the densest stress specs by a further tenth along their long
+axis, and a bigger picture is scaled down harder before anyone reads it, which
+costs more legibility than the last 7px of arrowhead buys. It is the value of
+both `nodeNodeBetweenLayers` and `edgeNodeBetweenLayers`, because the straight
+run between two layers and the gap ELK leaves between a routing slot and a node
+are the two things that become an arrow's last segment. The same number bounds
+the self loop stand-off.
 
 `END_SPACING` is 32, the distance held between two arrow ends on the same side
 of a node. An arrowhead is `2 * 25 * sin(20 degrees)` wide, about 17px, so 32
@@ -402,11 +403,10 @@ same whether the tool ran or not.
 suggestion to split the diagram or shorten its labels. The threshold is where an
 agent stops being able to read the picture it asked for. The export is 2x and a
 viewer scales the longest side to around 1568 pixels, so past 6000 the reduction
-is over 4x and a 20pt node label lands under 10 pixels in the copy being read;
-that is the size at which a dashed arrow beside a dashed group border stops
-being distinguishable from it. Over `examples/` and `stress/` it speaks up for
-two specs, the twenty-node region pair at 7929 wide and the fourteen-box chain
-at 6601, and stays quiet for the rest, the tall twenty-node variant included.
+is over 4x and a 20pt node label lands under 10 pixels in the copy being read,
+which is where thin lines and small labels start to go missing. Over `examples/` and `stress/` it speaks up for
+two specs, the twenty-node region pair at 9133 wide and the fourteen-box chain
+at 6145, and stays quiet for the rest, the tall twenty-node variant included.
 Nothing else about the output changes, so a diagram that still reads prints
 exactly what it printed before.
 
