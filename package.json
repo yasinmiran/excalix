@@ -4,6 +4,7 @@
   "description": "Architecture diagrams from a topology spec, rendered in Excalidraw's hand-drawn style. CLI and MCP.",
   "type": "module",
   "license": "MIT",
+  "repository": "github:yasinmiran/excalix",
   "engines": {
     "node": ">=22"
   },

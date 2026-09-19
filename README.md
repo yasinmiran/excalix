@@ -1,10 +1,20 @@
 # excalix
 
-You describe a topology, what exists and what talks to what, and excalix draws it. Everything geometric belongs to the tool: layout, the shape and colour for each kind of node, text measurement, arrow binding, element ids and seeds. Nothing visual is configurable, which is the point of the thing. The same spec always produces byte-identical output, and what lands on disk is a real `.excalidraw` file you can drop onto excalidraw.com and edit by hand, next to an SVG and a PNG.
+Architecture diagrams from a topology spec, drawn in Excalidraw's hand-drawn style. You say what exists and what talks to what, and excalix decides where everything goes.
 
 ![order pipeline](examples/order-pipeline.png)
 
-## Install and run
+## Why
+
+An `.excalidraw` file is all geometry. Every box carries an x, a y, a width and a height, every label has to be measured in Excalifont before it can be centred, and an arrow only stays attached to its boxes if it is bound to them by element id and a fixed point on the border. Ask an agent to "sketch the architecture in Excalidraw" and it has to invent every one of those numbers. What comes back tends to have boxes sitting on top of each other and text that re-wraps the moment the file is opened, and the arrows are plain lines, so they stay behind when you drag a node.
+
+People have a milder version of the same problem. The diagram in the design doc was laid out by hand a long time ago, nobody wants to move twelve boxes to fit one new queue, and so it slowly stops matching the system.
+
+excalix splits the job. The caller owns topology: nodes with a `kind`, the edges between them, and any groups such as a VPC or a cluster that they sit in. Everything geometric belongs to the tool, which covers layout, the shape and colour for each kind, text measurement, arrow binding, and element ids and seeds. Nothing visual is configurable. Two diagrams made a year apart by different agents still look like one set, and because the same spec always produces byte-identical output, a diagram change shows up as a reviewable diff in a pull request.
+
+What lands on disk is a real `.excalidraw` file next to an SVG and a PNG. Drop it on excalidraw.com and the labels and arrow bindings are all intact, so you can keep editing by hand from wherever the generator stopped.
+
+## Quick start
 
 ```
 pnpm install
@@ -13,24 +23,20 @@ pnpm build
 node dist/cli.js render examples/order-pipeline.json -o out/order-pipeline
 ```
 
-The Chromium download is not optional. Rendering happens inside a browser, for reasons covered under [How it works](#how-it-works).
+The Chromium download is required. Excalidraw's export code and the font measurement both run inside a headless browser.
 
 ```
-excalix - architecture diagrams from a topology spec
-
-usage:
-  excalix render <spec.json> [-o <basename>]   write <basename>.excalidraw, .svg and .png
-  excalix validate <spec.json>                 check the spec, print every problem
-  excalix schema                               print the JSON Schema of the spec
-  excalix mcp                                  serve the sketch tool over stdio
-  excalix --help                               show this message
-
-render defaults the basename to the spec path without its extension.
+excalix render <spec.json> [-o <basename>]   write <basename>.excalidraw, .svg and .png
+excalix validate <spec.json>                 check the spec, print every problem
+excalix schema                               print the JSON Schema of the spec
+excalix mcp                                  serve the sketch tool over stdio
 ```
+
+`render` defaults the basename to the spec path without its extension. A trailing slash on `-o` means a directory.
 
 ## The spec
 
-`examples/order-pipeline.json`, which drew the diagram above:
+`examples/order-pipeline.json` drew the diagram above:
 
 ```json
 {
@@ -81,48 +87,35 @@ render defaults the basename to the spec path without its extension.
 | `both` | an arrowhead at each end, for a bidirectional link |
 | `none` | no arrowhead, a plain association |
 
-`direction` is `lr`, left to right, by default, or `tb` for top to bottom; `examples/auth-flow.json` is a top-to-bottom one without groups. `groups` draw a dashed boundary such as a VPC, cluster or account, and nest through `parent`. Run `excalix schema` for the full JSON Schema.
+`direction` is `lr` by default, or `tb` for top to bottom; `examples/auth-flow.json` is a top-to-bottom one without groups. Groups nest through `parent`. Siblings keep the order the spec lists them in, as far as edge crossings allow.
 
-Validation reports every problem at once rather than stopping at the first:
+Unknown keys are rejected, and `excalix validate` reports every problem at once, so a typo costs one round trip instead of several. `excalix schema` prints the full JSON Schema.
 
-- ids match `^[A-Za-z0-9_-]+$` and are unique across nodes and groups together
-- labels are non-empty after trim, and there is at least one node; `edges` may be empty or omitted
-- `node.group`, `group.parent`, `edge.from` and `edge.to` reference existing ids; edges reference nodes only, never groups
-- group parents form a forest, no cycles
-- self-edges and duplicate edges are both allowed, since they are distinct arrows
-- unknown keys are rejected, so a typo fails loudly instead of being quietly ignored
+## For agents
 
-## MCP
+`excalix mcp` is an MCP server with one tool, `sketch`. Its input is the spec plus an optional `out` basename (default `diagrams/<title slug>` under the server's working directory). It returns the three written paths and then the PNG inline, so the calling agent sees the diagram in the same turn it asked for it and can send back an adjusted spec.
 
-Register the server with Claude Code for every project:
+Register it with Claude Code for every project:
 
 ```
 claude mcp add excalix --scope user -- node /absolute/path/to/excalix/dist/cli.js mcp
 ```
 
-The repo also ships a `.mcp.json` for project scope. That one invokes `node dist/cli.js mcp` by a relative path, so it resolves only when the client's working directory is this repo; from anywhere else, use the absolute path above.
-
-There is one tool, `sketch`. Its input is the spec plus an optional `out`, a basename for the files to write (default `diagrams/<title slug>` under the server's working directory, which is the project directory when Claude Code launches it). It returns the three written paths as text and then the PNG inline as an image, so a calling agent sees the diagram in the same turn it asked for it and can send back an adjusted spec without a round trip through the filesystem.
+The repo's `.mcp.json` does the same at project scope through a relative path, which only resolves when the client starts inside this repo. Agents that prefer the CLI can read `skills/excalix/SKILL.md`.
 
 ## How it works
 
-```
-parseSpec(json)            src/spec.ts        zod schema, semantic checks, defaults
-  -> measure labels        src/render/*.ts    canvas measureText in headless Chromium (Excalifont)
-  -> nodeSize per kind     src/style.ts       label + padding, min sizes, ellipse factor
-  -> layout(LayoutInput)   src/layout.ts      ELK layered, compound groups, orthogonal edges
-  -> buildElements(...)    src/elements.ts    Excalidraw elements, deterministic ids/seeds
-  -> svg / png             src/render/*.ts    @excalidraw/utils exportToSvg / exportToBlob in-page
-sketch()                   src/pipeline.ts    wires the above, returns SketchResult
-CLI                        src/cli.ts         excalix render|validate|schema|mcp
-MCP                        src/mcp.ts         stdio server, one tool: sketch
-```
+The spec is validated with zod. Labels are measured with canvas `measureText` against the real Excalifont in headless Chromium, because a label sized with the wrong metrics re-wraps when the file is opened in the editor. ELK lays out the graph in layers, with groups as compound nodes and orthogonal edges. The element builder derives every id and seed from a hash of the spec, and `@excalidraw/utils` exports the SVG and PNG inside the same browser page.
 
-Two steps of that pipeline need a browser, which is why Playwright is a dependency. Excalidraw's own export code reaches for `document`, a canvas and `devicePixelRatio`, none of which exist in Node, and label sizing depends on canvas `measureText` against the real Excalifont so that text bound inside a box does not re-wrap the moment someone opens the file in the editor.
+[DESIGN.md](DESIGN.md) is the full contract, module by module. `stress/` holds adversarial specs (dense nested groups in both directions, self loops and repeated pairs, long labels, four-deep nesting); render them and look at the PNGs before trusting a layout change.
 
 ## Development
 
 ```
-pnpm test        vitest; the specs tagged [browser] launch Chromium
+pnpm test        vitest; src/render/browser.test.ts launches Chromium
 pnpm typecheck   tsc --noEmit
 ```
+
+## License
+
+MIT
