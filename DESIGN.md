@@ -128,9 +128,12 @@ Fixed per kind. No caller-facing colour, font, or shape options exist.
 | external  | rectangle, rounded       | transparent | solid   | `#1e1e1e` | strokeStyle `dashed`           |
 
 - group: rectangle, sharp, fill `#f8f9fa`, stroke `#868e96` (grey so boundaries
-  recede behind the flow), strokeStyle `solid` so that a dashed line is always an
-  async arrow and never a border, even in a scaled-down PNG, strokeWidth 1, label
-  text in the top padding strip, fontSize 16, colour `#495057`
+  recede behind the flow), strokeStyle `solid`, strokeWidth 1, label text in the
+  top padding strip, fontSize 16, colour `#495057`. Solid because dashed is
+  already spent twice, on async arrows and on the `external` box: Excalidraw
+  dashes a 1px border `[8, 9]` and a 2px arrow `[8, 10]`, so in a scaled-down
+  PNG a dashed border beside an async arrow reads as one more nested frame. The
+  fill and the corner label carry the grouping without it
 - edges: `sync` solid, `async` dashed; strokeColor `#1e1e1e`, strokeWidth 2;
   endArrowhead `"arrow"`; `arrows: "both"` also sets startArrowhead; `"none"`
   sets neither
