@@ -370,6 +370,11 @@ here because every container is emitted immediately before its text.
   `Renderer` in types). One Chromium, one page, reused across calls; `close()`
   tears it down. `openBundlePage(browser)` is that page without the renderer
   around it, for the restore check below.
+- The browser is a separate download from the package. When the executable is
+  missing the launch fails with `Chromium is not installed. Run: npx -y
+  playwright@<version> install chromium`, the version read from the installed
+  `playwright`, because a browser build only matches the release that asks
+  for it.
 - The page is served from a fake origin (`http://excalix.local/`) through
   `page.route`, mapping `/vendor/*` to
   `node_modules/@excalidraw/utils/dist/prod/*` on disk. The bundle is a

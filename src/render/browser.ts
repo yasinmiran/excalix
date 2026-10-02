@@ -49,7 +49,9 @@ interface ExcalixWindow {
   excalix: { utils: Utils; error?: string };
 }
 
-const vendorDir = dirname(createRequire(import.meta.url).resolve("@excalidraw/utils"));
+const require = createRequire(import.meta.url);
+const vendorDir = dirname(require.resolve("@excalidraw/utils"));
+const playwrightVersion = (require("playwright/package.json") as { version: string }).version;
 
 function exportData(elements: unknown[]): ExportData {
   return { elements, appState: { exportBackground: true, viewBackgroundColor: "#ffffff" }, files: {} };
@@ -85,13 +87,25 @@ export async function openBundlePage(browser: Browser): Promise<Page> {
   return page;
 }
 
-/** Starts headless Chromium with @excalidraw/utils loaded. Call close() when done. */
 // Linux Chromium hints glyphs and snaps their advances to whole pixels unless told otherwise, which makes every label
 // a pixel or two off what macOS and the Excalidraw editor measure. Both flags are no-ops where that is already the case.
 const TEXT_METRIC_FLAGS = ["--font-render-hinting=none", "--enable-font-subpixel-positioning"];
 
+async function launch(): Promise<Browser> {
+  try {
+    return await chromium.launch({ args: TEXT_METRIC_FLAGS });
+  } catch (error) {
+    // A browser build only matches the playwright release that asks for it, so the command names this one.
+    if (error instanceof Error && error.message.includes("Executable doesn't exist")) {
+      throw new Error(`Chromium is not installed. Run: npx -y playwright@${playwrightVersion} install chromium`);
+    }
+    throw error;
+  }
+}
+
+/** Starts headless Chromium with @excalidraw/utils loaded. Call close() when done. */
 export async function createBrowserRenderer(): Promise<Renderer> {
-  const browser = await chromium.launch({ args: TEXT_METRIC_FLAGS });
+  const browser = await launch();
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => (closing ??= browser.close());
   try {

@@ -51,7 +51,9 @@ describe("[browser] sketch over stdio", () => {
   });
 
   it("draws a spec, writes the three files and returns the picture", async () => {
-    const result = await client.callTool({ name: "sketch", arguments: { ...(readSpec("examples/order-pipeline.json") as object), out } });
+    const result = await client.callTool({
+      name: "sketch",
+      arguments: { ...(readSpec("examples/order-pipeline.json") as object), out } });
 
     const [text, image] = result.content as Block[];
     expect(result.isError, text?.text).toBeFalsy();
@@ -85,5 +87,40 @@ describe("[browser] sketch over stdio", () => {
     await client.close();
     await exited;
     expect(stderr).toBe("");
+  });
+});
+
+// What a first run looks like after `npx excalix mcp`: the package is there, the browser download is not.
+describe("[browser] sketch over stdio without Chromium", () => {
+  let client: Client;
+  let empty: string;
+
+  beforeAll(async () => {
+    empty = await mkdtemp(join(tmpdir(), "excalix-no-browser-"));
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: ["--import", "tsx", join(root, "src/cli.ts"), "mcp"],
+      cwd: root,
+      env: { ...(process.env as Record<string, string>), PLAYWRIGHT_BROWSERS_PATH: empty },
+    });
+    client = new Client({ name: "stdio-test", version: "0" });
+    await client.connect(transport);
+  });
+
+  afterAll(async () => {
+    await client?.close();
+  });
+
+  it("names the command that installs it and keeps serving", async () => {
+    const result = await client.callTool({
+      name: "sketch",
+      arguments: { ...(readSpec("examples/order-pipeline.json") as object), out: join(empty, "order-pipeline") },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as Block[])[0]?.text).toMatch(
+      /^error: Chromium is not installed\. Run: npx -y playwright@\d+\.\d+\.\d+ install chromium$/,
+    );
+    expect((await client.listTools()).tools).toHaveLength(1);
   });
 });
