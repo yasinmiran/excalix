@@ -22,6 +22,10 @@ MCP                        src/mcp.ts         stdio server, one tool: sketch
 Shared types live in `src/types.ts`. Every module imports from there; nobody
 redefines them.
 
+The package has one entry, the `excalix` bin. There is no importable API:
+the CLI and the MCP tool are the whole surface, so the build emits no type
+declarations.
+
 ## Spec (the agent-facing schema)
 
 ```jsonc
