@@ -91,4 +91,4 @@ nodes[2].kind: got "db", expected one of "client", "service", "datastore", "queu
 
 An `.excalidraw` file is nothing but coordinates, and an agent asked to draw one has to invent all of them. excalix takes the geometry away, so two diagrams made a year apart look like one set, and a change to the spec shows up as a reviewable diff.
 
-[DESIGN.md](DESIGN.md) is the full contract. `pnpm test` and `pnpm typecheck` run the checks. MIT, and not affiliated with Excalidraw.
+`pnpm test` and `pnpm typecheck` run the checks. MIT, and not affiliated with Excalidraw.
