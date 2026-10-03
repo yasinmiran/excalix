@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yasinmiran.github.io/excalix/sitemap.xml

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Excalidraw MCP server: the sketch tool | excalix</title>
+<meta name="description" content="The excalix MCP server's one tool, sketch: its input schema, a result with file paths, an inline PNG and structuredContent, and errors listing every problem.">
+<link rel="canonical" href="https://yasinmiran.github.io/excalix/mcp.html">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="assets/site.css">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="excalix">
+<meta property="og:title" content="The excalix MCP server and its sketch tool">
+<meta property="og:description" content="One MCP tool that takes an architecture topology, writes .excalidraw, SVG and PNG, and returns the PNG inline so the agent can see what it drew.">
+<meta property="og:url" content="https://yasinmiran.github.io/excalix/mcp.html">
+<meta property="og:image" content="https://yasinmiran.github.io/excalix/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The excalix MCP server and its sketch tool">
+<meta name="twitter:description" content="One MCP tool that takes an architecture topology, writes .excalidraw, SVG and PNG, and returns the PNG inline so the agent can see what it drew.">
+<meta name="twitter:image" content="https://yasinmiran.github.io/excalix/og.png">
+<meta name="twitter:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "excalix", "item": "https://yasinmiran.github.io/excalix/" },
+        { "@type": "ListItem", "position": 2, "name": "MCP server", "item": "https://yasinmiran.github.io/excalix/mcp.html" }
+      ]
+    },
+    {
+      "@type": "TechArticle",
+      "headline": "The excalix MCP server and its sketch tool",
+      "description": "The excalix MCP server's one tool, sketch: its input schema, a result with file paths, an inline PNG and structuredContent, and errors listing every problem.",
+      "url": "https://yasinmiran.github.io/excalix/mcp.html",
+      "inLanguage": "en",
+      "proficiencyLevel": "Expert",
+      "author": { "@type": "Person", "name": "Yasin Miran", "url": "https://github.com/yasinmiran" },
+      "about": { "@id": "https://yasinmiran.github.io/excalix/#software" },
+      "isPartOf": { "@id": "https://yasinmiran.github.io/excalix/#website" }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="favicon.svg" alt="" width="24" height="24">excalix</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="spec.html">Spec</a></li>
+        <li><a href="mcp.html" aria-current="page">MCP server</a></li>
+        <li><a href="examples.html">Examples</a></li>
+        <li><a href="https://github.com/yasinmiran/excalix">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <div class="page-head">
+    <h1>The sketch tool</h1>
+    <p class="lede"><code>excalix mcp</code> is an MCP server over stdio with exactly one tool. An agent passes an architecture topology to <code>sketch</code>, and gets back the paths it wrote and the picture itself.</p>
+  </div>
+
+  <div class="doc">
+    <nav class="toc" aria-labelledby="toc-title">
+      <h2 id="toc-title">On this page</h2>
+      <ul>
+        <li><a href="#register">Register the server</a></li>
+        <li><a href="#description">What the agent reads</a></li>
+        <li><a href="#input">Input</a></li>
+        <li><a href="#result">A successful result</a></li>
+        <li><a href="#errors">Errors</a></li>
+        <li><a href="#size">Large diagrams</a></li>
+      </ul>
+    </nav>
+
+    <div class="doc-body">
+      <h2 id="register">Register the server</h2>
+      <p>In Claude Code:</p>
+      <figure class="frame">
+        <figcaption>Terminal</figcaption>
+<pre tabindex="0"><code>claude mcp add excalix --scope user -- npx -y excalix mcp</code></pre>
+      </figure>
+      <p>Any other client that launches stdio servers takes this entry:</p>
+      <figure class="frame">
+        <figcaption>MCP client configuration</figcaption>
+<pre tabindex="0"><code>{"mcpServers":{"excalix":{"command":"npx","args":["-y","excalix","mcp"]}}}</code></pre>
+      </figure>
+      <p>The server needs Chromium, like the CLI; see <a href="getting-started.html#chromium">getting started</a>. It opens one browser on the first call and reuses it until the client disconnects. A sketch finishes inside the call, so the tool declares <code>execution.taskSupport</code> as <code>"forbidden"</code>.</p>
+
+      <h2 id="description">What the agent reads</h2>
+      <p>The tool description is the whole guide the agent gets unless the <a href="getting-started.html#skill">skill</a> is installed too. It is served verbatim from <code>tools/list</code>:</p>
+      <blockquote>
+        <p>Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.</p>
+        <p>A node sits in exactly one group: name the group it runs in, and let an edge across the boundary carry any other relationship.</p>
+        <p>List nodes in reading order, sources first. That is all order does: place siblings beside each other. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.</p>
+        <p>Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.</p>
+      </blockquote>
+      <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles and gives the sizing advice from the <a href="spec.html#writing">spec reference</a>. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, which the test suite keeps in step with the server.</p>
+
+      <h2 id="input">Input</h2>
+      <p>The input schema is the <a href="spec.html">spec</a>, unchanged, plus one optional field:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">field</th><th scope="col">meaning</th></tr></thead>
+          <tbody>
+            <tr><td>the spec</td><td><code>title</code>, <code>direction</code>, <code>groups</code>, <code>nodes</code> and <code>edges</code>, as in the <a href="spec.html#shape">spec reference</a>. Only <code>nodes</code> is required.</td></tr>
+            <tr><td><code>out</code></td><td>Output basename without extension; writes <code>&lt;out&gt;.excalidraw</code>, <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code>. Relative paths resolve against the server's working directory, which is the project directory when Claude Code launches the server. Defaults to <code>diagrams/&lt;title slug&gt;</code>, or <code>diagrams/diagram</code> with no title.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Every object in the schema sets <code>additionalProperties: false</code>, and each field carries a description written for the model reading it.</p>
+
+      <h2 id="result">A successful result</h2>
+      <p>A call with the order pipeline spec and no <code>out</code> comes back in three parts. The paths are absolute; here the project lives in <code>/path/to/project</code>.</p>
+      <h3 id="result-text">A text block</h3>
+      <p>The three paths, one per line, in this order:</p>
+      <figure class="frame">
+        <figcaption>content[0], type text</figcaption>
+<pre tabindex="0"><code>/path/to/project/diagrams/order-pipeline.excalidraw
+/path/to/project/diagrams/order-pipeline.svg
+/path/to/project/diagrams/order-pipeline.png</code></pre>
+      </figure>
+      <h3 id="result-image">An image block</h3>
+      <p>The PNG itself, base64 encoded with <code>mimeType</code> <code>image/png</code>. It is the same file as the <code>.png</code> on disk, so the agent can look at the diagram without a separate read and call again if a label collides or the flow reads backwards.</p>
+      <h3 id="result-structured">Structured content</h3>
+      <p>The same paths as fields, plus the PNG's size, matching the tool's output schema:</p>
+      <figure class="frame">
+        <figcaption>structuredContent</figcaption>
+<pre tabindex="0"><code>{
+  "excalidraw": "/path/to/project/diagrams/order-pipeline.excalidraw",
+  "svg": "/path/to/project/diagrams/order-pipeline.svg",
+  "png": "/path/to/project/diagrams/order-pipeline.png",
+  "pixels": { "width": 2498, "height": 1059 }
+}</code></pre>
+      </figure>
+      <p>A very wide <code>pixels.width</code> usually means a long label stretched the layout.</p>
+
+      <h2 id="errors">Errors</h2>
+      <p>A spec that fails validation does not throw a protocol error. The result has <code>isError: true</code> and one text block with every problem on its own line, the same lines <code>excalix validate</code> prints:</p>
+      <figure class="frame">
+        <figcaption>content[0], with isError true</figcaption>
+<pre class="output"><code>nodes[0].kind: got "gateway", expected one of "client", "service", "datastore", "queue", "cache", "external"
+edges[0].to: unknown node "apy", did you mean "api"?</code></pre>
+      </figure>
+      <p>Anything else that goes wrong while drawing comes back the same way, as a single line starting <code>error:</code>. The one most people meet first:</p>
+      <figure class="frame">
+        <figcaption>content[0], with isError true</figcaption>
+<pre class="output"><code>error: Chromium is not installed. Run: npx -y playwright@1.63.0 install chromium</code></pre>
+      </figure>
+      <p>After an error of that kind the server closes its browser and opens a fresh one on the next call. A call to any tool name other than <code>sketch</code> gets a protocol error instead.</p>
+
+      <h2 id="size">Large diagrams</h2>
+      <p>When the longest side of the PNG passes 6000 pixels, the text block gains a fourth line after the paths:</p>
+      <figure class="frame">
+        <figcaption>content[0], fourth line</figcaption>
+<pre class="output"><code>note: 9578x2101 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.</code></pre>
+      </figure>
+      <p>Past that size the copy of the image a model sees is scaled down far enough that thin lines and small labels go missing. The usual answer is two diagrams: an overview that collapses each region to one node, and a detail diagram of the part under discussion.</p>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>excalix is MIT licensed and not affiliated with Excalidraw.</p>
+    <ul>
+      <li><a href="https://github.com/yasinmiran/excalix">GitHub</a></li>
+      <li><a href="https://www.npmjs.com/package/excalix">npm</a></li>
+      <li><a href="https://github.com/yasinmiran/excalix/issues">Issues</a></li>
+      <li><a href="https://github.com/yasinmiran/excalix/blob/main/LICENSE">MIT license</a></li>
+    </ul>
+  </div>
+</footer>
+<script src="assets/site.js" defer></script>
+</body>
+</html>
