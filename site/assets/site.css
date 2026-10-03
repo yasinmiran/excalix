@@ -386,6 +386,12 @@ main {
   display: none;
 }
 
+/* A wide diagram scaled to the column drops its labels below reading size on any screen, so it always scrolls. */
+.render.wide img {
+  width: 100rem;
+  max-width: none;
+}
+
 @media (max-width: 40rem) {
   .narrow-only {
     display: inline;

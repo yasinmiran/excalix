@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Example architecture diagrams from JSON | excalix</title>
-<meta name="description" content="Three architecture diagrams drawn by excalix from JSON specs, each with its spec and the .excalidraw, SVG and PNG files to download and edit.">
+<meta name="description" content="Four architecture diagrams drawn by excalix from JSON specs, each with its spec and the .excalidraw, SVG and PNG files to download and edit.">
 <link rel="canonical" href="https://yasinmiran.github.io/excalix/examples.html">
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -13,7 +13,7 @@
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="excalix">
 <meta property="og:title" content="Example architecture diagrams from JSON">
-<meta property="og:description" content="An order pipeline, a login flow and a legend of every kind, each with its spec and the .excalidraw, SVG and PNG it produced.">
+<meta property="og:description" content="An order pipeline, a login flow, a ride-hailing backend and a legend of every kind, each with its spec and the files it produced.">
 <meta property="og:url" content="https://yasinmiran.github.io/excalix/examples.html">
 <meta property="og:image" content="https://yasinmiran.github.io/excalix/og.png">
 <meta property="og:image:width" content="1200">
@@ -21,7 +21,7 @@
 <meta property="og:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Example architecture diagrams from JSON">
-<meta name="twitter:description" content="An order pipeline, a login flow and a legend of every kind, each with its spec and the .excalidraw, SVG and PNG it produced.">
+<meta name="twitter:description" content="An order pipeline, a login flow, a ride-hailing backend and a legend of every kind, each with its spec and the files it produced.">
 <meta name="twitter:image" content="https://yasinmiran.github.io/excalix/og.png">
 <meta name="twitter:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
 <script type="application/ld+json">
@@ -44,6 +44,7 @@
       "hasPart": [
         { "@type": "ImageObject", "name": "order pipeline", "contentUrl": "https://yasinmiran.github.io/excalix/examples/order-pipeline.png", "encodingFormat": "image/png", "width": 2498, "height": 1059 },
         { "@type": "ImageObject", "name": "login flow", "contentUrl": "https://yasinmiran.github.io/excalix/examples/auth-flow.png", "encodingFormat": "image/png", "width": 1678, "height": 1370 },
+        { "@type": "ImageObject", "name": "ride-hailing backend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/ride-hailing.png", "encodingFormat": "image/png", "width": 5332, "height": 1202 },
         { "@type": "ImageObject", "name": "legend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/legend.png", "encodingFormat": "image/png", "width": 2002, "height": 868 }
       ]
     }
@@ -71,7 +72,7 @@
 <main id="main" class="wrap">
   <div class="page-head">
     <h1>Examples</h1>
-    <p class="lede">Three diagrams, each beside the spec that drew it. To keep editing one by hand, download its <code>.excalidraw</code> file and open it on excalidraw.com; the labels and arrow bindings come through intact.</p>
+    <p class="lede">Four diagrams, each beside the spec that drew it. To keep editing one by hand, download its <code>.excalidraw</code> file and open it on excalidraw.com; the labels and arrow bindings come through intact.</p>
   </div>
 
   <section class="example" aria-labelledby="order-pipeline">
@@ -168,6 +169,76 @@
           <li><a href="examples/auth-flow.json" download>auth-flow.json</a> <span>the spec</span></li>
         </ul>
         <p>The spec is all it takes to regenerate the other three: <code>npx -y excalix render auth-flow.json</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="example" aria-labelledby="ride-hailing">
+    <h2 id="ride-hailing">Ride-hailing backend</h2>
+    <p class="prose">Sixteen nodes, close to the twenty that fit in one picture. A VPC nests inside an AWS account, location updates and finished trips travel as async events, and two externals sit past the right edge. It is wide enough that it scrolls on every screen.</p>
+    <figure class="render scrolls wide">
+      <div class="sheet" tabindex="0" role="group" aria-label="Ride-hailing backend diagram">
+        <img src="examples/ride-hailing.svg" width="2666" height="601" loading="lazy" alt="Hand-drawn diagram titled ride-hailing backend, flowing left to right. A Rider app and a Driver app call CloudFront, which sits with an ALB inside an AWS account group. The ALB calls an API gateway inside a nested VPC group. The gateway calls a Trip service and a Pricing service and sends location updates to a Kinesis stream. A Matching service consumes the stream along a dashed arrow and writes driver locations to Redis, which also receives surge data from the Pricing service. The Trip service writes to Aurora Postgres and publishes trip completed to an SNS topic along a dashed arrow. A Notification service and a Billing worker consume the topic; they push to Firebase and charge Stripe, both drawn as dashed external boxes outside the AWS account.">
+      </div>
+      <figcaption>16 nodes, 16 edges, 2 groups. <a href="examples/ride-hailing.svg">Open it at full size</a>.</figcaption>
+    </figure>
+    <div class="example-body">
+      <figure class="frame">
+        <figcaption>ride-hailing.json</figcaption>
+<pre tabindex="0"><code>{
+  "title": "ride-hailing backend",
+  "direction": "lr",
+  "groups": [
+    { "id": "aws", "label": "AWS account" },
+    { "id": "vpc", "label": "VPC", "parent": "aws" }
+  ],
+  "nodes": [
+    { "id": "rider_app", "label": "Rider app", "kind": "client" },
+    { "id": "driver_app", "label": "Driver app", "kind": "client" },
+    { "id": "cloudfront", "label": "CloudFront", "kind": "service", "group": "aws" },
+    { "id": "alb", "label": "ALB", "kind": "service", "group": "aws" },
+    { "id": "api_gateway", "label": "API gateway", "kind": "service", "group": "vpc" },
+    { "id": "trip_service", "label": "Trip service", "kind": "service", "group": "vpc" },
+    { "id": "matching_service", "label": "Matching service", "kind": "service", "group": "vpc" },
+    { "id": "pricing_service", "label": "Pricing service", "kind": "service", "group": "vpc" },
+    { "id": "notification_service", "label": "Notification service", "kind": "service", "group": "vpc" },
+    { "id": "billing_worker", "label": "Billing worker", "kind": "service", "group": "vpc" },
+    { "id": "aurora", "label": "Aurora Postgres", "kind": "datastore", "group": "vpc" },
+    { "id": "redis", "label": "Redis", "kind": "cache", "group": "vpc" },
+    { "id": "kinesis", "label": "Kinesis stream", "kind": "queue", "group": "vpc" },
+    { "id": "sns", "label": "SNS topic", "kind": "queue", "group": "vpc" },
+    { "id": "firebase", "label": "Firebase", "kind": "external" },
+    { "id": "stripe", "label": "Stripe", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "rider_app", "to": "cloudfront" },
+    { "from": "driver_app", "to": "cloudfront" },
+    { "from": "cloudfront", "to": "alb" },
+    { "from": "alb", "to": "api_gateway" },
+    { "from": "api_gateway", "to": "trip_service" },
+    { "from": "api_gateway", "to": "pricing_service" },
+    { "from": "api_gateway", "to": "kinesis", "label": "location updates" },
+    { "from": "kinesis", "to": "matching_service", "label": "consume", "style": "async" },
+    { "from": "matching_service", "to": "redis", "label": "driver locations" },
+    { "from": "pricing_service", "to": "redis", "label": "surge data" },
+    { "from": "trip_service", "to": "aurora" },
+    { "from": "trip_service", "to": "sns", "label": "trip completed", "style": "async" },
+    { "from": "sns", "to": "notification_service", "label": "consume", "style": "async" },
+    { "from": "sns", "to": "billing_worker", "label": "consume", "style": "async" },
+    { "from": "notification_service", "to": "firebase", "label": "push" },
+    { "from": "billing_worker", "to": "stripe", "label": "charge" }
+  ]
+}</code></pre>
+      </figure>
+      <div>
+        <h3 id="ride-hailing-files">Files</h3>
+        <ul class="downloads">
+          <li><a href="examples/ride-hailing.excalidraw" download>ride-hailing.excalidraw</a> <span>download, then open on excalidraw.com</span></li>
+          <li><a href="examples/ride-hailing.svg" download>ride-hailing.svg</a> <span>for docs and the web</span></li>
+          <li><a href="examples/ride-hailing.png" download>ride-hailing.png</a> <span>at twice the SVG's size</span></li>
+          <li><a href="examples/ride-hailing.json" download>ride-hailing.json</a> <span>the spec</span></li>
+        </ul>
+        <p>The spec is all it takes to regenerate the other three: <code>npx -y excalix render ride-hailing.json</code>.</p>
       </div>
     </div>
   </section>
