@@ -1,5 +1,5 @@
 import type { ExcalidrawElement } from "excalidraw-types/element/src/types";
-import { type Browser, type Page, chromium } from "playwright";
+import { type Browser, type Page, chromium } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sketch } from "../pipeline.js";
 import { measuringOnly, readSpec, specFiles } from "../test-support.js";

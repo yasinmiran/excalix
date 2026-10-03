@@ -36,7 +36,7 @@
     "@excalidraw/utils": "0.1.5",
     "@modelcontextprotocol/sdk": "1.30.0",
     "elkjs": "0.12.0",
-    "playwright": "1.63.0",
+    "playwright-core": "1.63.0",
     "zod": "4.6.2"
   },
   "devDependencies": {

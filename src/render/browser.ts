@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, resolve, sep } from "node:path";
-import { chromium, type Browser, type Page, type Route } from "playwright";
+import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { FONT } from "../style.js";
 import type { Renderer, TextSize } from "../types.js";
 
@@ -51,7 +51,7 @@ interface ExcalixWindow {
 
 const require = createRequire(import.meta.url);
 const vendorDir = dirname(require.resolve("@excalidraw/utils"));
-const playwrightVersion = (require("playwright/package.json") as { version: string }).version;
+const playwrightVersion = (require("playwright-core/package.json") as { version: string }).version;
 
 function exportData(elements: unknown[]): ExportData {
   return { elements, appState: { exportBackground: true, viewBackgroundColor: "#ffffff" }, files: {} };
