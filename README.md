@@ -1,6 +1,6 @@
 # excalix
 
-[![ci](https://github.com/yasinmiran/excalix/actions/workflows/ci.yml/badge.svg)](https://github.com/yasinmiran/excalix/actions/workflows/ci.yml)
+[![ci](https://github.com/yasinmiran/excalix/actions/workflows/ci.yml/badge.svg)](https://github.com/yasinmiran/excalix/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/excalix)](https://www.npmjs.com/package/excalix) [![docs](https://img.shields.io/badge/docs-yasinmiran.github.io%2Fexcalix-1971c2)](https://yasinmiran.github.io/excalix/)
 
 Architecture diagrams from a topology spec, in Excalidraw's hand-drawn style. You write what exists and what talks to what; excalix does the layout, the shapes and colours, the text measurement and the arrow bindings, and the same spec always produces the same bytes.
 
@@ -91,4 +91,4 @@ nodes[2].kind: got "db", expected one of "client", "service", "datastore", "queu
 
 An `.excalidraw` file is nothing but coordinates, and an agent asked to draw one has to invent all of them. excalix takes the geometry away, so two diagrams made a year apart look like one set, and a change to the spec shows up as a reviewable diff.
 
-`pnpm test` and `pnpm typecheck` run the checks. MIT, and not affiliated with Excalidraw.
+The [docs](https://yasinmiran.github.io/excalix/) have the full spec reference, the `sketch` tool's contract and more [examples](https://yasinmiran.github.io/excalix/examples.html). `pnpm test` and `pnpm typecheck` run the checks. MIT, and not affiliated with Excalidraw.
