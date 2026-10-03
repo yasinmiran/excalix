@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -242,4 +242,13 @@ describe("usage", () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+// The install line in the README fetches one browser build, and only the playwright release excalix runs can use it.
+it("pins the README's Chromium install to the playwright excalix runs", async () => {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const { version } = JSON.parse(await readFile(new URL("../node_modules/playwright-core/package.json", import.meta.url), "utf8")) as {
+    version: string;
+  };
+  expect(readme).toContain(`npx -y playwright@${version} install chromium`);
 });

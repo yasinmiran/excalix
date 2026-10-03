@@ -38,29 +38,31 @@ Out come an `.excalidraw`, an SVG and a PNG. The `.excalidraw` opens on excalidr
 
 ## Install
 
-Not on npm yet ([#8](https://github.com/yasinmiran/excalix/issues/8)).
+Node 22 or newer. Export and text measurement run in headless Chromium, which is a separate download:
 
 ```
-git clone https://github.com/yasinmiran/excalix
-cd excalix
-pnpm install
-pnpm exec playwright install chromium    export and text measurement run in headless Chromium
-pnpm build
+npx -y playwright@1.63.0 install chromium
 ```
 
 ## Use
 
 ```
-node dist/cli.js render spec.json -o out/spec    writes out/spec.excalidraw, .svg and .png
-node dist/cli.js validate spec.json              every problem at once, or ok: 7 nodes, 6 edges, 2 groups
-node dist/cli.js schema                          JSON Schema of the spec
+npx -y excalix render spec.json -o out/spec    writes out/spec.excalidraw, .svg and .png
+npx -y excalix validate spec.json              every problem at once, or ok: 7 nodes, 6 edges, 2 groups
+npx -y excalix schema                          JSON Schema of the spec
 ```
 
 With an agent, register the MCP server once. Its `sketch` tool takes the spec, writes the three files and returns the PNG in the same turn:
 
 ```
-claude mcp add excalix --scope user -- node /absolute/path/to/excalix/dist/cli.js mcp
-ln -s /absolute/path/to/excalix/skills/excalix ~/.claude/skills/excalix    the skill, so it knows when and how
+claude mcp add excalix --scope user -- npx -y excalix mcp
+```
+
+The skill tells the agent when to reach for it and how to write a spec that lays out well:
+
+```
+mkdir -p ~/.claude/skills/excalix
+curl -fsSL https://raw.githubusercontent.com/yasinmiran/excalix/main/skills/excalix/SKILL.md -o ~/.claude/skills/excalix/SKILL.md
 ```
 
 ## The spec

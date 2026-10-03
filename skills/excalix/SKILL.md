@@ -77,11 +77,9 @@ once the longest side of the image passes 6000 pixels.
 ## Running it
 
 ```
-pnpm exec excalix render docs/arch.json -o docs/arch
-node /absolute/path/to/excalix/dist/cli.js render docs/arch.json -o docs/arch
+npx -y excalix render docs/arch.json -o docs/arch
 ```
 
-First form inside a repo that has excalix installed, second form anywhere else.
 Writes `<basename>.excalidraw`, `.svg` and `.png`. End `-o` with a slash and it
 is a directory: `-o docs/diagrams/` writes `arch.excalidraw` and its siblings in
 there.
