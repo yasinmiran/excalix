@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec reference: nodes, edges, groups and kinds | excalix</title>
+<meta name="description" content="The excalix topology spec: groups, the six node kinds, sync and async edges, validation messages, and how to write a diagram that lays out well.">
+<link rel="canonical" href="https://yasinmiran.github.io/excalix/spec.html">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="assets/site.css">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="excalix">
+<meta property="og:title" content="The excalix spec reference">
+<meta property="og:description" content="Groups, the six node kinds, sync and async edges, validation messages, and how to write an architecture diagram as code that lays out well.">
+<meta property="og:url" content="https://yasinmiran.github.io/excalix/spec.html">
+<meta property="og:image" content="https://yasinmiran.github.io/excalix/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The excalix spec reference">
+<meta name="twitter:description" content="Groups, the six node kinds, sync and async edges, validation messages, and how to write an architecture diagram as code that lays out well.">
+<meta name="twitter:image" content="https://yasinmiran.github.io/excalix/og.png">
+<meta name="twitter:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "excalix", "item": "https://yasinmiran.github.io/excalix/" },
+        { "@type": "ListItem", "position": 2, "name": "Spec reference", "item": "https://yasinmiran.github.io/excalix/spec.html" }
+      ]
+    },
+    {
+      "@type": "TechArticle",
+      "headline": "The excalix spec reference",
+      "description": "The excalix topology spec: groups, the six node kinds, sync and async edges, validation messages, and how to write a diagram that lays out well.",
+      "url": "https://yasinmiran.github.io/excalix/spec.html",
+      "image": "https://yasinmiran.github.io/excalix/examples/legend.png",
+      "inLanguage": "en",
+      "proficiencyLevel": "Beginner",
+      "author": { "@type": "Person", "name": "Yasin Miran", "url": "https://github.com/yasinmiran" },
+      "about": { "@id": "https://yasinmiran.github.io/excalix/#software" },
+      "isPartOf": { "@id": "https://yasinmiran.github.io/excalix/#website" }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="favicon.svg" alt="" width="24" height="24">excalix</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="spec.html" aria-current="page">Spec</a></li>
+        <li><a href="mcp.html">MCP server</a></li>
+        <li><a href="examples.html">Examples</a></li>
+        <li><a href="https://github.com/yasinmiran/excalix">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <div class="page-head">
+    <h1>The spec reference</h1>
+    <p class="lede">A spec says what exists and what talks to what. It has no coordinates, colours or sizes in it, because excalix picks every one of those from the kind of each node.</p>
+  </div>
+
+  <div class="doc">
+    <nav class="toc" aria-labelledby="toc-title">
+      <h2 id="toc-title">On this page</h2>
+      <ul>
+        <li><a href="#shape">The shape of a spec</a></li>
+        <li><a href="#groups">Groups</a></li>
+        <li><a href="#nodes">Nodes and kinds</a></li>
+        <li><a href="#edges">Edges</a></li>
+        <li><a href="#validation">Validation</a></li>
+        <li><a href="#writing">Writing a spec that lays out well</a></li>
+        <li><a href="#schema">The JSON Schema</a></li>
+      </ul>
+    </nav>
+
+    <div class="doc-body">
+      <h2 id="shape">The shape of a spec</h2>
+      <p>One JSON object. Only <code>nodes</code> is required, and it needs at least one entry.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">field</th><th scope="col">what it holds</th></tr></thead>
+          <tbody>
+            <tr><td><code>title</code></td><td>Heading drawn above the diagram.</td></tr>
+            <tr><td><code>direction</code></td><td>Which way the diagram flows: <code>lr</code>, left to right (the default), or <code>tb</code>, top to bottom.</td></tr>
+            <tr><td><code>groups</code></td><td>Boundaries drawn around nodes, such as a VPC, a cluster or an account. They nest through <code>parent</code>.</td></tr>
+            <tr><td><code>nodes</code></td><td>Every box in the diagram, in reading order.</td></tr>
+            <tr><td><code>edges</code></td><td>Every arrow in the diagram.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Ids are letters, digits, <code>_</code> and <code>-</code>. Nodes and groups share one namespace, so no node may reuse a group's id. Any key the schema does not list is rejected rather than ignored.</p>
+
+      <h2 id="groups">Groups</h2>
+      <p>A group has an <code>id</code>, a <code>label</code> drawn inside its top-left corner, and an optional <code>parent</code>: the id of the group it nests inside. The order pipeline on the <a href="./">home page</a> puts an EKS cluster inside an AWS region this way:</p>
+      <figure class="frame">
+        <figcaption>Nested groups</figcaption>
+<pre tabindex="0"><code>"groups": [
+  { "id": "aws", "label": "AWS eu-north-1" },
+  { "id": "k8s", "label": "EKS", "parent": "aws" }
+]</code></pre>
+      </figure>
+      <p>A node sits in at most one group, and <code>node.group</code> takes a single id. A component that really does sit on two networks goes in the group it runs in, and an edge crossing the boundary carries the other relationship. Pass an array and validation says so:</p>
+      <figure class="frame">
+        <figcaption>excalix validate</figcaption>
+<pre class="output"><code>nodes[0].group: got an array, expected one group id: a node sits in exactly one group, so name the one it runs in and let an edge across the boundary carry the other relationship</code></pre>
+      </figure>
+
+      <h2 id="nodes">Nodes and kinds</h2>
+      <p>A node has an <code>id</code>, a <code>label</code> drawn inside the box, a <code>kind</code>, and optionally a <code>group</code>. The kind fixes the shape and colour, and there are six of them. Here is every kind in one diagram, with a group and both edge styles:</p>
+      <figure class="render scrolls">
+        <div class="sheet" tabindex="0" role="group" aria-label="Legend diagram">
+          <img src="examples/legend.svg" width="1001" height="434" loading="lazy" alt="Legend diagram of the six node kinds. A client, drawn as a grey ellipse, sends a solid arrow labelled sync to a service, drawn as a blue rounded box. The service sits inside a grey group box labelled a group: what you run, together with a green datastore, a yellow hatched queue and an orange cache. A dashed arrow labelled async runs from the service to the queue, the arrow between service and cache has a head at both ends, and a solid arrow leaves the group for an external system drawn as a dashed outline with no fill.">
+        </div>
+        <figcaption>The legend example.<span class="narrow-only"> It scrolls sideways.</span> <a href="examples/legend.svg">Open it at full size</a>, or get every file from <a href="examples.html#legend">the examples</a>.</figcaption>
+      </figure>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">kind</th><th scope="col">use it for</th></tr></thead>
+          <tbody>
+            <tr><td><span class="swatch client" aria-hidden="true"></span><code>client</code></td><td>Whoever initiates requests: people, browsers, mobile apps.</td></tr>
+            <tr><td><span class="swatch service" aria-hidden="true"></span><code>service</code></td><td>Anything you run or configure yourself, an app or a load balancer alike.</td></tr>
+            <tr><td><span class="swatch datastore" aria-hidden="true"></span><code>datastore</code></td><td>A database or durable storage.</td></tr>
+            <tr><td><span class="swatch queue" aria-hidden="true"></span><code>queue</code></td><td>A queue, topic or stream.</td></tr>
+            <tr><td><span class="swatch cache" aria-hidden="true"></span><code>cache</code></td><td>A cache or in-memory store.</td></tr>
+            <tr><td><span class="swatch external" aria-hidden="true"></span><code>external</code></td><td>A system another company operates and you only call.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The line between <code>service</code> and <code>external</code> is who operates the thing, not who wrote it. Load balancers, CDNs, API gateways and DNS inside your own boundary are services, because you configure them. A payment API, a hosted identity provider or an email sender is external: another company runs it and you only call it.</p>
+
+      <h2 id="edges">Edges</h2>
+      <p>An edge needs <code>from</code> and <code>to</code>, both node ids. Three fields are optional:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">field</th><th scope="col">values</th></tr></thead>
+          <tbody>
+            <tr><td><code>style</code></td><td><code>sync</code> (default) for request and response, drawn solid. <code>async</code> for a message or event, drawn dashed.</td></tr>
+            <tr><td><code>arrows</code></td><td><code>forward</code> (default) puts one head at the target, <code>both</code> one at each end, <code>none</code> draws a plain association.</td></tr>
+            <tr><td><code>label</code></td><td>Text drawn on the arrow, a few words at most.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="frame">
+        <figcaption>Edges from the order pipeline</figcaption>
+<pre tabindex="0"><code>{ "from": "web", "to": "api", "label": "POST /orders" },
+{ "from": "api", "to": "redis", "arrows": "both" },
+{ "from": "api", "to": "q", "style": "async" }</code></pre>
+      </figure>
+      <p>A <code>\n</code> in any label, node, group or edge, starts a new line. An edge from a node back to itself is allowed, and so are two edges between the same pair; each draws as its own arrow. A label on a self edge costs more than it looks, though: the node grows until the loop is long enough to carry the text, so give that one a single word or leave it bare.</p>
+
+      <h2 id="validation">Validation</h2>
+      <p>excalix checks the whole spec before it draws anything and reports every problem in one pass. Each line names the path, what arrived, and what would have been valid. This spec has two mistakes:</p>
+      <figure class="frame">
+        <figcaption>spec.json</figcaption>
+<pre tabindex="0"><code>{
+  "nodes": [
+    { "id": "cdn", "label": "CloudFront", "kind": "gateway" },
+    { "id": "api", "label": "Order API", "kind": "service" }
+  ],
+  "edges": [{ "from": "cdn", "to": "apy" }]
+}</code></pre>
+      </figure>
+      <figure class="frame">
+        <figcaption>excalix validate spec.json</figcaption>
+<pre class="output"><code>nodes[0].kind: got "gateway", expected one of "client", "service", "datastore", "queue", "cache", "external"
+edges[0].to: unknown node "apy", did you mean "api"?</code></pre>
+      </figure>
+      <p>There is no <code>gateway</code> kind. CloudFront is infrastructure you configure inside your own boundary, so it is a <code>service</code>. The edge points at an id nothing defines, and the suggestion says which one was meant. With both fixed the command prints <code>ok: 2 nodes, 1 edge, 0 groups</code> and exits 0.</p>
+      <p>The other checks read the same way:</p>
+      <figure class="frame">
+        <figcaption>More validation messages</figcaption>
+<pre class="output"><code>nodes[1].id: duplicate id "api", expected an id no other node or group uses
+nodes[1].label: got "", expected text
+edges[0]: unknown key "colour", expected one of "from", "to", "label", "style", "arrows"
+edges[0].to: "vpc" is a group, expected a node
+groups[0].parent: "b" closes the cycle a -> b -> a</code></pre>
+      </figure>
+      <p>The MCP tool returns the same lines, so an agent gets the full list in one round trip. Run <code>excalix validate</code> to check a spec without rendering it.</p>
+
+      <h2 id="writing">Writing a spec that lays out well</h2>
+      <p>Nothing visual is configurable, so when a diagram reads wrong the fix is in the spec. These are the levers that move it.</p>
+
+      <h3 id="reading-order">List nodes in reading order</h3>
+      <p>Sources first. Order places siblings relative to one another and does nothing more than that; it will not move an arrow onto a different route. When a route is what you want changed, the levers are the direction of the edge itself, which nodes share a group, and <code>direction</code>.</p>
+
+      <h3 id="labels">Keep edge labels short</h3>
+      <p>A label sits on its arrow and reserves that much width, so a sentence on one edge pushes the whole diagram wide. A few words is plenty. When a node name is genuinely long, a <code>\n</code> breaks it.</p>
+
+      <h3 id="size">Stay near twenty nodes</h3>
+      <p>Twenty nodes is roughly the ceiling for one picture, and a dozen boxes in a single run reaches it sooner, since a chain stretches one way and stays thin the other. A long chain reads better as <code>lr</code> and a deep hierarchy as <code>tb</code>, so try <code>direction</code> first.</p>
+      <p>When direction is not the problem, make two diagrams: an overview that collapses each region to one node, then a detail diagram of the part under discussion. Once the longest side of the image passes 6000 pixels, rendering says so:</p>
+      <figure class="frame">
+        <figcaption>Size note</figcaption>
+<pre class="output"><code>note: 9578x2101 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.</code></pre>
+      </figure>
+
+      <h3 id="look">Then look at it</h3>
+      <p>Open the PNG and check for labels that collide with a box or another label, arrows that cross more than the topology forces them to, and a flow that reads backwards, with sources on the right and sinks on the left. Flip <code>direction</code>, group nodes that belong together, shorten a label or drop an edge that carries no information, then render again.</p>
+
+      <h2 id="schema">The JSON Schema</h2>
+      <p><code>npx -y excalix schema</code> prints the full JSON Schema of the spec, with a description on every field. Point an editor at it for completion, or hand it to a model along with this page. The MCP tool's input schema is the same shape plus one field, <code>out</code>, described on the <a href="mcp.html#input">MCP server page</a>.</p>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>excalix is MIT licensed and not affiliated with Excalidraw.</p>
+    <ul>
+      <li><a href="https://github.com/yasinmiran/excalix">GitHub</a></li>
+      <li><a href="https://www.npmjs.com/package/excalix">npm</a></li>
+      <li><a href="https://github.com/yasinmiran/excalix/issues">Issues</a></li>
+      <li><a href="https://github.com/yasinmiran/excalix/blob/main/LICENSE">MIT license</a></li>
+    </ul>
+  </div>
+</footer>
+<script src="assets/site.js" defer></script>
+</body>
+</html>

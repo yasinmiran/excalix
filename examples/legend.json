@@ -1,0 +1,20 @@
+{
+  "title": "legend",
+  "direction": "lr",
+  "groups": [{ "id": "yours", "label": "a group: what you run" }],
+  "nodes": [
+    { "id": "client", "label": "client", "kind": "client" },
+    { "id": "service", "label": "service", "kind": "service", "group": "yours" },
+    { "id": "datastore", "label": "datastore", "kind": "datastore", "group": "yours" },
+    { "id": "queue", "label": "queue", "kind": "queue", "group": "yours" },
+    { "id": "cache", "label": "cache", "kind": "cache", "group": "yours" },
+    { "id": "external", "label": "external", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "client", "to": "service", "label": "sync" },
+    { "from": "service", "to": "datastore" },
+    { "from": "service", "to": "cache", "arrows": "both" },
+    { "from": "service", "to": "queue", "label": "async", "style": "async" },
+    { "from": "service", "to": "external" }
+  ]
+}
