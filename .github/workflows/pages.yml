@@ -1,0 +1,47 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "examples/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@v7
+      - name: check out gh-pages
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git clone --quiet --depth 1 --branch gh-pages "$REMOTE" _pages
+          else
+            git init --quiet -b gh-pages _pages
+            git -C _pages remote add origin "$REMOTE"
+          fi
+      - name: assemble the site
+        run: |
+          find _pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R site/. _pages/
+          mkdir _pages/examples
+          cp examples/*.json examples/*.svg examples/*.png examples/*.excalidraw _pages/examples/
+      - name: publish
+        working-directory: _pages
+        run: |
+          git add --all
+          if git diff --cached --quiet; then
+            echo "site unchanged"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "docs: publish the site from ${GITHUB_SHA::7}"
+          git push --quiet origin gh-pages
