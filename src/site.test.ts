@@ -51,3 +51,8 @@ describe.each(indexed)("site/%s for search", (page) => {
     for (const [, json] of blocks) expect(() => JSON.parse(json!)).not.toThrow();
   });
 });
+
+it("names the version the package is at", () => {
+  const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+  expect(read("index.html")).toContain(`"softwareVersion": "${version}"`);
+});

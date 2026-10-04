@@ -1,6 +1,6 @@
 {
   "name": "excalix",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Architecture diagrams from a topology spec, rendered in Excalidraw's hand-drawn style. CLI and MCP.",
   "keywords": [
     "mcp",
@@ -13,12 +13,17 @@
   "license": "MIT",
   "author": "Yasin Miran",
   "packageManager": "pnpm@9.12.0",
-  "repository": "github:yasinmiran/excalix",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yasinmiran/excalix.git"
+  },
+  "homepage": "https://yasinmiran.github.io/excalix/",
+  "bugs": "https://github.com/yasinmiran/excalix/issues",
   "engines": {
     "node": ">=22"
   },
   "bin": {
-    "excalix": "./dist/cli.js"
+    "excalix": "dist/cli.js"
   },
   "files": [
     "dist",

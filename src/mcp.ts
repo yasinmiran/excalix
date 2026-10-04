@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -58,6 +59,8 @@ const TOOL: Tool = {
   execution: { taskSupport: "forbidden" },
 };
 
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
+
 export interface SketchDeps {
   writeSketch: (input: unknown, basename: string, renderer: Renderer) => Promise<Written>;
   createRenderer: () => Promise<Renderer>;
@@ -65,7 +68,7 @@ export interface SketchDeps {
 
 /** Builds the server with its dependencies injected. One renderer per server, opened on first call and released on close. */
 export function createServer(deps: SketchDeps, onClose?: () => void): Server {
-  const server = new Server({ name: "excalix", version: "0.1.0" }, { capabilities: { tools: {} } });
+  const server = new Server({ name: "excalix", version }, { capabilities: { tools: {} } });
   let renderer: Promise<Renderer> | undefined;
 
   const renderReady = (): Promise<Renderer> => {

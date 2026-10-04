@@ -252,3 +252,10 @@ it("pins the README's Chromium install to the playwright excalix runs", async ()
   };
   expect(readme).toContain(`npx -y playwright@${version} install chromium`);
 });
+
+// npm renders the README from the tarball, where a relative link points at a file that was never packed.
+it("links the README only by full URL", async () => {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const links = [...readme.matchAll(/\]\(([^)]+)\)/g)].map((match) => match[1]!);
+  expect(links.filter((link) => !link.startsWith("https://"))).toEqual([]);
+});

@@ -80,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/yasinmiran/excalix/main/skills/exca
 
 `edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows` is `forward` (default), `both` or `none`. A `\n` in any label starts a new line.
 
-List nodes in reading order, keep edge labels to a few words, and split anything past about twenty nodes into an overview and a detail diagram. [skills/excalix/SKILL.md](skills/excalix/SKILL.md) has the rest. Validation names every problem in one go:
+List nodes in reading order, keep edge labels to a few words, and split anything past about twenty nodes into an overview and a detail diagram. [skills/excalix/SKILL.md](https://github.com/yasinmiran/excalix/blob/main/skills/excalix/SKILL.md) has the rest. Validation names every problem in one go:
 
 ```
 edges[0].to: unknown node "apy", did you mean "api"?
