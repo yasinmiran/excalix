@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const site = new URL("../site/", import.meta.url);
 const BASE = "https://yasinmiran.github.io/excalix/";
-const pages = readdirSync(site).filter((file) => file.endsWith(".html"));
+// Search Console's ownership file is plain text that has to stay at the root, so it is not a page.
+const pages = readdirSync(site).filter((file) => file.endsWith(".html") && !/^google[0-9a-f]+\.html$/.test(file));
 const indexed = pages.filter((page) => page !== "404.html");
 const read = (page: string) => readFileSync(new URL(page, site), "utf8");
 
