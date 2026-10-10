@@ -625,19 +625,19 @@
       ],
       "startBinding": {
         "elementId": "uDNqrQCq5RQ5nOPCKCXz",
+        "mode": "orbit",
         "fixedPoint": [
           1,
           0.5001
-        ],
-        "mode": "inside"
+        ]
       },
       "endBinding": {
         "elementId": "Bk4H5LFA2uCWcjzY5cmu",
+        "mode": "orbit",
         "fixedPoint": [
           0,
           0.5001
-        ],
-        "mode": "inside"
+        ]
       },
       "startArrowhead": null,
       "endArrowhead": "arrow",
@@ -723,19 +723,19 @@
       ],
       "startBinding": {
         "elementId": "Bk4H5LFA2uCWcjzY5cmu",
+        "mode": "orbit",
         "fixedPoint": [
           1,
           0.4
-        ],
-        "mode": "inside"
+        ]
       },
       "endBinding": {
         "elementId": "GC1OUgj4ZNJjMWO3cntd",
+        "mode": "orbit",
         "fixedPoint": [
           0,
           0.5001
-        ],
-        "mode": "inside"
+        ]
       },
       "startArrowhead": null,
       "endArrowhead": "arrow",
@@ -789,19 +789,19 @@
       ],
       "startBinding": {
         "elementId": "Bk4H5LFA2uCWcjzY5cmu",
+        "mode": "orbit",
         "fixedPoint": [
           1,
           0.8
-        ],
-        "mode": "inside"
+        ]
       },
       "endBinding": {
         "elementId": "VGSr1pSGFnhd1PVk82r4",
+        "mode": "orbit",
         "fixedPoint": [
           0,
           0.5001
-        ],
-        "mode": "inside"
+        ]
       },
       "startArrowhead": "arrow",
       "endArrowhead": "arrow",
@@ -860,19 +860,19 @@
       ],
       "startBinding": {
         "elementId": "Bk4H5LFA2uCWcjzY5cmu",
+        "mode": "orbit",
         "fixedPoint": [
           1,
           0.2
-        ],
-        "mode": "inside"
+        ]
       },
       "endBinding": {
         "elementId": "aY00eUmCaKGv3jastdMt",
+        "mode": "orbit",
         "fixedPoint": [
           0,
           0.5001
-        ],
-        "mode": "inside"
+        ]
       },
       "startArrowhead": null,
       "endArrowhead": "arrow",
@@ -966,19 +966,19 @@
       ],
       "startBinding": {
         "elementId": "Bk4H5LFA2uCWcjzY5cmu",
+        "mode": "orbit",
         "fixedPoint": [
           1,
           0.6
-        ],
-        "mode": "inside"
+        ]
       },
       "endBinding": {
         "elementId": "MBOc4noSU5oHlaMJwQ90",
+        "mode": "orbit",
         "fixedPoint": [
           0,
           0.5001
-        ],
-        "mode": "inside"
+        ]
       },
       "startArrowhead": null,
       "endArrowhead": "arrow",
