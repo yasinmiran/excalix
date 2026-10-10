@@ -4,7 +4,7 @@ import { buildElements, toDocument } from "./elements.js";
 import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
-import { FONT, nodeSize } from "./style.js";
+import { FONT, nodeSize, outlineOf } from "./style.js";
 import type { LayoutInput, Measured, Renderer, SketchResult, Spec, TextMeasurer, TextSize } from "./types.js";
 
 /** Validates, measures, lays out, builds and renders. The one entry point. */
@@ -91,7 +91,12 @@ function toLayoutInput(spec: Spec, measured: Measured): LayoutInput {
   return {
     direction: spec.direction,
     groups: spec.groups.map((g) => ({ id: g.id, parent: g.parent, label: measured.groupLabels[g.id]! })),
-    nodes: spec.nodes.map((n) => ({ id: n.id, group: n.group, ...nodeSize(n.kind, measured.nodeLabels[n.id]!) })),
+    nodes: spec.nodes.map((n) => ({
+      id: n.id,
+      group: n.group,
+      outline: outlineOf(n.kind),
+      ...nodeSize(n.kind, measured.nodeLabels[n.id]!),
+    })),
     edges: spec.edges.map((e, i) => ({
       id: edgeKey(i),
       from: e.from,

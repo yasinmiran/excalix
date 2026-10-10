@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ARROWHEAD_ROOM, END_SPACING, LABEL_MARGIN, LOOP_LABEL_RUN, layout, placeGroupLabel } from "./layout.js";
-import { FONT, nodeSize } from "./style.js";
+import { FONT, nodeSize, outlineOf } from "./style.js";
 import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedEdge, RoutedLabel, TextSize } from "./types.js";
 
 function estimate(text: string, fontSize: number): TextSize {
@@ -8,7 +8,7 @@ function estimate(text: string, fontSize: number): TextSize {
 }
 
 function node(id: string, label: string, kind: Kind, group?: string) {
-  return { id, ...nodeSize(kind, estimate(label, FONT.node)), ...(group ? { group } : {}) };
+  return { id, outline: outlineOf(kind), ...nodeSize(kind, estimate(label, FONT.node)), ...(group ? { group } : {}) };
 }
 
 function group(id: string, label: string, parent?: string) {
@@ -105,6 +105,13 @@ function pointAt(points: Point[], position: number): Point {
     remaining -= length;
   }
   return points[0]!;
+}
+
+// Where the line along an arrow's last segment crosses the ellipse inscribed in box, on the side it comes from.
+function ellipseCrossing(box: Box, end: Point, before: Point): number {
+  const [cx, cy, rx, ry] = [box.x + box.width / 2, box.y + box.height / 2, box.width / 2, box.height / 2];
+  if (end.y === before.y) return cx + Math.sign(before.x - end.x) * rx * Math.sqrt(1 - ((end.y - cy) / ry) ** 2);
+  return cy + Math.sign(before.y - end.y) * ry * Math.sqrt(1 - ((end.x - cx) / rx) ** 2);
 }
 
 function allPoints(result: LayoutResult): Point[] {
@@ -274,6 +281,28 @@ describe("layout edge cases", () => {
       const ends = ["edge:0", "edge:1", "edge:2"].map((id) => along(result.edges[id]!.points.at(-1)!)).sort((a, b) => a - b);
       expect(ends[1]! - ends[0]!, direction).toBeGreaterThanOrEqual(END_SPACING);
       expect(ends[2]! - ends[1]!, direction).toBeGreaterThanOrEqual(END_SPACING);
+    }
+  });
+
+  it("ends the arrows on a crowded side of an ellipse on its curve, in both directions", async () => {
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [],
+        nodes: [node("a", "A", "service"), node("b", "B", "service"), node("c", "C", "service"), node("web", "Browser", "client")],
+        edges: [edge(0, "a", "web"), edge(1, "b", "web"), edge(2, "c", "web")],
+      });
+      const web = result.nodes.web!;
+      const insets = ["edge:0", "edge:1", "edge:2"].map((id) => {
+        const { points } = result.edges[id]!;
+        const [before, end] = [points.at(-2)!, points.at(-1)!];
+        const across = direction === "lr" ? end.x : end.y;
+        expect(direction === "lr" ? before.y : before.x, `${id} ${direction}`).toBe(direction === "lr" ? end.y : end.x);
+        expect(Math.hypot(end.x - before.x, end.y - before.y), `${id} ${direction}`).toBeGreaterThanOrEqual(ARROWHEAD_ROOM);
+        expect(Math.abs(across - ellipseCrossing(web, end, before)), `${id} ${direction}`).toBeLessThanOrEqual(0.5);
+        return direction === "lr" ? end.x - web.x : end.y - web.y;
+      });
+      expect(Math.max(...insets), direction).toBeGreaterThan(1);
     }
   });
 

@@ -6,7 +6,7 @@ import { createIdSource, edgeKey, hashSpec } from "./ids.js";
 import { ARROWHEAD_ROOM, END_SPACING, LOOP_LABEL_RUN } from "./layout.js";
 import { sketch } from "./pipeline.js";
 import { parseSpec } from "./spec.js";
-import { arrowheads } from "./style.js";
+import { NODE, arrowheads, cornerRadius } from "./style.js";
 import type { Box, Point, Renderer, TextMeasurer } from "./types.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -33,6 +33,7 @@ export type Invariant =
   | "arrowsClearNodes"
   | "headRoom"
   | "endsApart"
+  | "endsOnOutline"
   | "loopLabelRun"
   | "insideBounds";
 
@@ -48,13 +49,19 @@ const TITLES: Record<Invariant, string> = {
   arrowsClearNodes: "no arrow passes through a node it does not join",
   headRoom: `every arrowhead sits on a segment of at least ${ARROWHEAD_ROOM}px`,
   endsApart: `arrow ends on one side of a node stay ${END_SPACING}px apart`,
+  endsOnOutline: "every arrow end touches the outline Excalidraw draws for its node",
   loopLabelRun: `a self loop's outer segment runs ${LOOP_LABEL_RUN}px past its label at both ends`,
   insideBounds: "every box but the title starts inside the layout bounds",
 };
 
-// ELK rounds its coordinates, so a distance counts as met when it misses by less than half a pixel, and an
-// endpoint counts as on the side it lands within half a pixel of.
+// ELK rounds its coordinates, so a distance counts as met when it misses by less than half a pixel.
 const SLACK = 0.5;
+// A node's line is NODE.strokeWidth wide, so an end within half of that of the curve touches it. The layout moves
+// an end in whole pixels, which leaves it up to half a pixel either side of the curve.
+const OUTLINE_SLACK = NODE.strokeWidth / 2;
+// Enough samples that the polyline strays from the curve by under a hundredth of a pixel.
+const ELLIPSE_STEPS = 720;
+const CORNER_STEPS = 64;
 
 interface Named {
   name: string;
@@ -63,6 +70,8 @@ interface Named {
 
 interface NamedNode extends Named {
   id: string;
+  /** The line Excalidraw strokes for the node, as a closed polyline. */
+  outline: Point[];
 }
 
 interface Arrow {
@@ -86,6 +95,8 @@ interface Scene {
 
 interface SceneElement extends Box {
   id: string;
+  type: string;
+  roundness: { type: number } | null;
   points?: [number, number][];
 }
 
@@ -121,6 +132,7 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       );
       check("headRoom", (scene) => scene.arrows.flatMap(shortHeadSegments));
       check("endsApart", crowdedSides);
+      check("endsOnOutline", (scene) => scene.arrows.flatMap((arrow) => offOutline(scene, arrow)));
       check("loopLabelRun", (scene) => scene.arrows.flatMap(buriedLoopSegment));
       check("insideBounds", (scene) =>
         scene.bounded.filter(({ box }) => box.x < 0 || box.y < 0).map((item) => `${boxAt(item)} starts left of x=0 or above y=0`),
@@ -148,7 +160,10 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
   const named = (name: string, key: string): Named => ({ name, box: element(key) });
   const group = (id: string): Named => named(`group ${id}`, `group:${id}`);
 
-  const nodes = spec.nodes.map((node) => ({ id: node.id, ...named(`node ${node.id}`, `node:${node.id}`) }));
+  const nodes = spec.nodes.map((node) => {
+    const shape = element(`node:${node.id}`);
+    return { id: node.id, name: `node ${node.id}`, box: shape, outline: drawnOutline(shape) };
+  });
   const nodeLabels = spec.nodes.map((node) => named(`node ${node.id} label`, `node:${node.id}:label`));
   const groups = spec.groups.map(({ id }) => group(id));
   const groupLabels = spec.groups.map(({ id }) => named(`group ${id} label`, `group:${id}:label`));
@@ -199,17 +214,17 @@ function shortHeadSegments(arrow: Arrow): string[] {
 // keep its distance from its neighbour along that side.
 function crowdedSides(scene: Scene): string[] {
   const sides = new Map<string, { at: number; name: string }[]>();
-  const place = (id: string, point: Point, name: string): void => {
+  const place = (id: string, end: Point, next: Point | undefined, name: string): void => {
     const node = scene.nodes.find((candidate) => candidate.id === id);
-    const side = node && borderSide(node.box, point);
+    const side = next && arrivalSide(end, next);
     if (!node || !side) return;
     const key = `${node.name} ${side}`;
-    const along = side === "left" || side === "right" ? point.y : point.x;
+    const along = side === "left" || side === "right" ? end.y : end.x;
     sides.set(key, [...(sides.get(key) ?? []), { at: along, name }]);
   };
   for (const arrow of scene.arrows) {
-    place(arrow.from, arrow.points[0]!, arrow.name);
-    place(arrow.to, arrow.points.at(-1)!, arrow.name);
+    place(arrow.from, arrow.points[0]!, arrow.points[1], arrow.name);
+    place(arrow.to, arrow.points.at(-1)!, arrow.points.at(-2), arrow.name);
   }
   return [...sides].flatMap(([key, ends]) => {
     const sorted = [...ends].sort((a, b) => a.at - b.at);
@@ -221,12 +236,55 @@ function crowdedSides(scene: Scene): string[] {
   });
 }
 
-function borderSide(box: Box, point: Point): "left" | "right" | "top" | "bottom" | undefined {
-  if (Math.abs(point.x - box.x) <= SLACK) return "left";
-  if (Math.abs(point.x - (box.x + box.width)) <= SLACK) return "right";
-  if (Math.abs(point.y - box.y) <= SLACK) return "top";
-  if (Math.abs(point.y - (box.y + box.height)) <= SLACK) return "bottom";
-  return undefined;
+// The side an end comes in through, read off the segment it closes: an end on a curved outline sits inside
+// the box, off every side of it.
+function arrivalSide(end: Point, next: Point): "left" | "right" | "top" | "bottom" | undefined {
+  const dx = end.x - next.x;
+  const dy = end.y - next.y;
+  if (dx === 0 && dy === 0) return undefined;
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "left" : "right";
+  return dy > 0 ? "top" : "bottom";
+}
+
+// ELK ends an arrow on its node's box, which is the line Excalidraw draws only for a sharp rectangle.
+function offOutline(scene: Scene, arrow: Arrow): string[] {
+  const ends: [string, Point][] = [
+    [arrow.from, arrow.points[0]!],
+    [arrow.to, arrow.points.at(-1)!],
+  ];
+  return ends.flatMap(([id, end]) => {
+    const node = scene.nodes.find((candidate) => candidate.id === id);
+    if (!node) return [];
+    const gap = distanceToPolyline(node.outline, end);
+    return gap <= OUTLINE_SLACK ? [] : [`${arrow.name} ends ${round(gap)}px off the outline of ${node.name} at ${pointAt(end)}`];
+  });
+}
+
+// What Excalidraw strokes for a node: the ellipse inscribed in its box, or a rectangle whose rounded corners are
+// quadratic curves from cornerRadius along one side to cornerRadius along the next, pulled towards the box corner.
+function drawnOutline(shape: SceneElement): Point[] {
+  const { x, y, width: w, height: h } = shape;
+  if (shape.type === "ellipse") {
+    return Array.from({ length: ELLIPSE_STEPS + 1 }, (_, i) => {
+      const angle = (2 * Math.PI * i) / ELLIPSE_STEPS;
+      return { x: x + (w / 2) * (1 + Math.cos(angle)), y: y + (h / 2) * (1 + Math.sin(angle)) };
+    });
+  }
+  const r = shape.roundness ? cornerRadius(w, h) : 0;
+  const corners: [Point, Point, Point][] = [
+    [{ x: w - r, y: 0 }, { x: w, y: 0 }, { x: w, y: r }],
+    [{ x: w, y: h - r }, { x: w, y: h }, { x: w - r, y: h }],
+    [{ x: r, y: h }, { x: 0, y: h }, { x: 0, y: h - r }],
+    [{ x: 0, y: r }, { x: 0, y: 0 }, { x: r, y: 0 }],
+  ];
+  const curves = corners.flatMap(([from, corner, to]) =>
+    Array.from({ length: CORNER_STEPS + 1 }, (_, i) => {
+      const t = i / CORNER_STEPS;
+      const [a, b, c] = [(1 - t) * (1 - t), 2 * (1 - t) * t, t * t];
+      return { x: x + a * from.x + b * corner.x + c * to.x, y: y + a * from.y + b * corner.y + c * to.y };
+    }),
+  );
+  return [...curves, curves[0]!];
 }
 
 // Excalidraw blanks the line behind a bound label, so a self loop whose outer segment is no longer than the
@@ -252,6 +310,10 @@ function nearestSegment(points: Point[], target: Point): [Point, Point] {
     if (distance < best.distance) best = { distance, segment };
   }
   return best.segment;
+}
+
+function distanceToPolyline(points: Point[], target: Point): number {
+  return Math.min(...points.slice(1).map((point, i) => distanceToSegment(target, points[i]!, point)));
 }
 
 function distanceToSegment(target: Point, a: Point, b: Point): number {

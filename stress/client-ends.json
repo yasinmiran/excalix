@@ -1,0 +1,44 @@
+{
+  "title": "arrow ends on an ellipse",
+  "nodes": [
+    {
+      "id": "web",
+      "label": "Browser",
+      "kind": "client"
+    },
+    {
+      "id": "orders",
+      "label": "Orders",
+      "kind": "service"
+    },
+    {
+      "id": "payments",
+      "label": "Payments",
+      "kind": "service"
+    },
+    {
+      "id": "search",
+      "label": "Search",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "from": "web",
+      "to": "web",
+      "label": "retries"
+    },
+    {
+      "from": "web",
+      "to": "orders"
+    },
+    {
+      "from": "web",
+      "to": "payments"
+    },
+    {
+      "from": "web",
+      "to": "search"
+    }
+  ]
+}

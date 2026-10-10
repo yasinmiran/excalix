@@ -1,6 +1,6 @@
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkEdgeSection, ElkExtendedEdge, ElkLabel, ElkNode, ElkPort, LayoutOptions } from "elkjs/lib/elk.bundled.js";
-import { GROUP_STYLE } from "./style.js";
+import { GROUP_STYLE, cornerRadius } from "./style.js";
 import type {
   Box,
   Direction,
@@ -9,6 +9,7 @@ import type {
   LayoutInput,
   LayoutNode,
   LayoutResult,
+  Outline,
   Point,
   RoutedEdge,
   RoutedLabel,
@@ -42,6 +43,9 @@ const CORNER_ROOM = 28;
  * at 12, 16 and 20: at 12 an async loop's outer segment is a tick mark, and 20 reads no better than 16.
  */
 export const LOOP_LABEL_RUN = 16;
+// How far off its node's side an end may sit and still count as on it: the box and the route reach absolute
+// coordinates through different sums of group offsets.
+const ON_SIDE = 0.5;
 
 // ELK reads a spacing from the node that contains what is being spaced, so a group has to repeat
 // every value or its children fall back to the defaults.
@@ -75,8 +79,9 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
   for (const [id, box] of boxes) (groupIds.has(id) ? groups : nodes)[id] = box;
 
   const laidEdges = new Map((laid.edges ?? []).map((edge) => [edge.id, edge]));
+  const shaped = new Map(input.nodes.map((node) => [node.id, { box: boxes.get(node.id)!, outline: node.outline }]));
   const edges: Record<string, RoutedEdge> = {};
-  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, boxes);
+  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, boxes, shaped);
 
   const routed = Object.values(edges);
   const groupLabels = Object.fromEntries(input.groups.map((g) => [g.id, placeGroupLabel(groups[g.id]!, g.label, routed)]));
@@ -212,14 +217,72 @@ function collectBoxes(node: ElkNode, offset: Point, out: Map<string, Box>): void
   }
 }
 
-function routeEdge(edge: ElkExtendedEdge, ends: LayoutEdge, boxes: Map<string, Box>): RoutedEdge {
+interface Shaped {
+  box: Box;
+  outline: Outline;
+}
+
+function routeEdge(edge: ElkExtendedEdge, ends: LayoutEdge, boxes: Map<string, Box>, shaped: Map<string, Shaped>): RoutedEdge {
   const container = edge.container && edge.container !== ROOT ? boxes.get(edge.container) : undefined;
   const offset = container ?? { x: 0, y: 0 };
   const shift = (p: Point): Point => ({ x: offset.x + p.x, y: offset.y + p.y });
   const routed = dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift));
-  const points = routed.length >= 2 ? routed : [center(boxes.get(ends.from)!), center(boxes.get(ends.to)!)];
+  const points =
+    routed.length >= 2
+      ? onOutlines(routed, shaped.get(ends.from)!, shaped.get(ends.to)!)
+      : [center(boxes.get(ends.from)!), center(boxes.get(ends.to)!)];
   const label = edge.labels?.[0];
   return { points, ...(label ? { label: labelOnPath(points, shift({ x: label.x ?? 0, y: label.y ?? 0 }), label) } : {}) };
+}
+
+// ELK ends an arrow on its node's box, and Excalidraw draws the box only for a sharp rectangle: an ellipse leaves
+// it everywhere but mid-side, and a rounded rectangle within cornerRadius of a corner. Running the end segment on
+// along its own direction to the line keeps the route orthogonal and only lengthens the run under an arrowhead.
+function onOutlines(points: Point[], from: Shaped, to: Shaped): Point[] {
+  const last = points.length - 1;
+  return points.map((point, i) => {
+    if (i === 0) return onOutline(point, points[1]!, from);
+    if (i === last) return onOutline(point, points[last - 1]!, to);
+    return point;
+  });
+}
+
+// In whole pixels, so an end the curve leaves by less than half a pixel stays where ELK put it, and a moved end
+// lands at most half a pixel off the curve, inside the 2px line.
+function onOutline(end: Point, next: Point, node: Shaped): Point {
+  if (node.outline === "sharp") return end;
+  const { box } = node;
+  if (end.y === next.y) {
+    const inward = Math.sign(end.x - next.x);
+    const side = inward > 0 ? box.x : box.x + box.width;
+    if (Math.abs(end.x - side) > ON_SIDE) return end;
+    return { x: end.x + inward * Math.round(inset(node, box.width, box.height, end.y - box.y)), y: end.y };
+  }
+  if (end.x === next.x) {
+    const inward = Math.sign(end.y - next.y);
+    const side = inward > 0 ? box.y : box.y + box.height;
+    if (Math.abs(end.y - side) > ON_SIDE) return end;
+    return { x: end.x, y: end.y + inward * Math.round(inset(node, box.height, box.width, end.x - box.x)) };
+  }
+  return end;
+}
+
+/**
+ * How far inside its box the outline runs at `at` along one side, where `across` is the box's extent at right
+ * angles to that side and `along` its extent along it. Excalidraw draws a rounded corner as a quadratic curve from
+ * cornerRadius along one side to cornerRadius along the next with its control point on the box corner, which
+ * leaves the side by radius * (1 - sqrt(d / radius))^2 at d from the corner.
+ */
+function inset({ box, outline }: Shaped, across: number, along: number, at: number): number {
+  if (outline === "ellipse") {
+    const off = (at - along / 2) / (along / 2);
+    return off * off >= 1 ? 0 : (across / 2) * (1 - Math.sqrt(1 - off * off));
+  }
+  const radius = cornerRadius(box.width, box.height);
+  const fromCorner = Math.max(0, Math.min(at, along - at));
+  if (fromCorner >= radius) return 0;
+  const short = 1 - Math.sqrt(fromCorner / radius);
+  return radius * short * short;
 }
 
 // Excalidraw re-anchors a bound label to labelPosition on the path every time the file is opened, so the text has

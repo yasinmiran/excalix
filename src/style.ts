@@ -1,4 +1,4 @@
-import type { Arrows, EdgeStyle, Kind, TextSize } from "./types.js";
+import type { Arrows, EdgeStyle, Kind, Outline, TextSize } from "./types.js";
 
 export type Shape = "rectangle" | "ellipse";
 export type FillStyle = "hachure" | "cross-hatch" | "solid" | "zigzag";
@@ -73,6 +73,21 @@ export const EDGE = {
 };
 
 export const TITLE_GAP = 32;
+
+/**
+ * Corner radius Excalidraw draws on a rounded node: a quarter of the shorter side, capped at 32. That is
+ * getCornerRadius for the adaptive roundness elements.ts sets, whose cap is DEFAULT_ADAPTIVE_RADIUS.
+ */
+export function cornerRadius(width: number, height: number): number {
+  return Math.min(Math.min(width, height) * 0.25, 32);
+}
+
+/** The outline a node of the given kind is drawn with. */
+export function outlineOf(kind: Kind): Outline {
+  const { shape, rounded } = NODE_STYLES[kind];
+  if (shape === "ellipse") return "ellipse";
+  return rounded ? "rounded" : "sharp";
+}
 
 /** Box size for a node of the given kind around its measured label. */
 export function nodeSize(kind: Kind, label: TextSize): { width: number; height: number } {

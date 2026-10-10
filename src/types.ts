@@ -55,10 +55,14 @@ export interface Box extends Point {
   height: number;
 }
 
+/** The line Excalidraw draws for a node. Only a sharp rectangle's runs along its box. */
+export type Outline = "sharp" | "rounded" | "ellipse";
+
 export interface LayoutNode {
   id: string;
   width: number;
   height: number;
+  outline: Outline;
   group?: string;
 }
 
@@ -91,7 +95,7 @@ export interface RoutedLabel extends Point {
 }
 
 export interface RoutedEdge {
-  /** Absolute polyline from the source border to the target border, at least two points. */
+  /** Absolute polyline from the source outline to the target outline, at least two points. */
   points: Point[];
   /** Placement of the label text. Present iff the input edge had a label. */
   label?: RoutedLabel;
