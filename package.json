@@ -1,6 +1,6 @@
 {
   "name": "excalix",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Architecture diagrams from a topology spec, rendered in Excalidraw's hand-drawn style. CLI and MCP.",
   "keywords": [
     "mcp",
