@@ -117,7 +117,7 @@
           <thead><tr><th scope="col">field</th><th scope="col">meaning</th></tr></thead>
           <tbody>
             <tr><td>the spec</td><td><code>title</code>, <code>direction</code>, <code>groups</code>, <code>nodes</code> and <code>edges</code>, as in the <a href="spec.html#shape">spec reference</a>. Only <code>nodes</code> is required.</td></tr>
-            <tr><td><code>out</code></td><td>Output basename without extension; writes <code>&lt;out&gt;.excalidraw</code>, <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code>. Relative paths resolve against the server's working directory, which is the project directory when Claude Code launches the server. Defaults to <code>diagrams/&lt;title slug&gt;</code>, or <code>diagrams/diagram</code> with no title.</td></tr>
+            <tr><td><code>out</code></td><td>Output basename without extension; writes <code>&lt;out&gt;.excalidraw</code>, <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code>. Relative paths resolve against the first root the client declares through MCP roots, usually the project directory. When the client declares no roots, or the request fails or takes over two seconds, the server's working directory stands in, which is the project directory when Claude Code launches the server. Absolute paths are used as given. Defaults to <code>diagrams/&lt;title slug&gt;</code>, or <code>diagrams/diagram</code> with no title.</td></tr>
           </tbody>
         </table>
       </div>

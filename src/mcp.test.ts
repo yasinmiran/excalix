@@ -1,8 +1,11 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { ListRootsResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { main } from "./cli.js";
 import { createServer } from "./mcp.js";
@@ -50,7 +53,10 @@ function fakeRenderer(): Renderer {
   };
 }
 
-async function harness(overrides: Partial<SketchDeps> = {}) {
+type Roots = () => ListRootsResult | Promise<ListRootsResult>;
+
+// A client passed roots declares the capability and answers roots/list with it; without, it declares none.
+async function harness(overrides: Partial<SketchDeps> = {}, roots?: Roots) {
   const dir = await mkdtemp(join(tmpdir(), "excalix-mcp-"));
   const close = vi.fn(async () => {});
   const createRenderer = vi.fn(async () => ({ ...fakeRenderer(), close }));
@@ -60,7 +66,8 @@ async function harness(overrides: Partial<SketchDeps> = {}) {
   }));
 
   const server = createServer({ writeSketch, createRenderer, ...overrides });
-  const client = new Client({ name: "test", version: "0" });
+  const client = new Client({ name: "test", version: "0" }, { capabilities: roots === undefined ? {} : { roots: {} } });
+  if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, roots);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   disposers.push(async () => {
@@ -177,6 +184,57 @@ describe("sketch tool", () => {
 
     expect(writeSketch.mock.calls[0]?.[1]).toBe(resolve("diagrams/order-pipeline-v2"));
   });
+
+  it("resolves a relative out against the first root the client declares", async () => {
+    const project = await mkdtemp(join(tmpdir(), "excalix-root-"));
+    const roots = [{ uri: pathToFileURL(project).href, name: "project" }, { uri: pathToFileURL(tmpdir()).href }];
+    const { client, writeSketch } = await harness({}, () => ({ roots }));
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "docs/pipeline" } });
+    await client.callTool({ name: "sketch", arguments: SPEC });
+
+    expect(writeSketch.mock.calls.map((call) => call[1])).toEqual([
+      join(project, "docs/pipeline"),
+      join(project, "diagrams/order-pipeline"),
+    ]);
+  });
+
+  it("resolves a relative out against the server's directory when the client declares no roots", async () => {
+    const { client, writeSketch } = await harness();
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "docs/pipeline" } });
+
+    expect(writeSketch.mock.calls[0]?.[1]).toBe(resolve("docs/pipeline"));
+  });
+
+  it("keeps an absolute out without asking for roots", async () => {
+    const roots = vi.fn(() => ({ roots: [{ uri: pathToFileURL(tmpdir()).href }] }));
+    const { client, out, writeSketch } = await harness({}, roots);
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    expect(writeSketch.mock.calls[0]?.[1]).toBe(out);
+    expect(roots).not.toHaveBeenCalled();
+  });
+
+  // The SDK waits a minute for an answer by default; the test timeout is what proves a silent client costs less.
+  it.each<[string, Roots]>([
+    ["fails", () => Promise.reject(new Error("no workspace open"))],
+    ["never answers", () => new Promise(() => {})],
+    ["returns no roots", () => ({ roots: [] })],
+    ["returns a root that is not a file URL", () => ({ roots: [{ uri: "https://example.com/repo" }] })],
+  ])(
+    "falls back to the server's directory when roots/list %s",
+    async (_case, roots) => {
+      const { client, writeSketch } = await harness({}, roots);
+
+      const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "docs/pipeline" } });
+
+      expect(result.isError).toBeFalsy();
+      expect(writeSketch.mock.calls[0]?.[1]).toBe(resolve("docs/pipeline"));
+    },
+    5000,
+  );
 
   it("reuses one renderer and closes it when the transport closes", async () => {
     const { client, close, createRenderer, out } = await harness();

@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } from "@modelcontextprotocol/sdk/types.js";
@@ -37,7 +38,7 @@ const inputSchema = specSchemaWith({
   out: stringField
     .optional()
     .describe(
-      "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the server's working directory, which is the project directory when Claude Code launches the server. Defaults to diagrams/<title slug>.",
+      "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the first root the client declares, usually the project directory, or else the server's working directory. Defaults to diagrams/<title slug>.",
     ),
 });
 
@@ -58,6 +59,9 @@ const TOOL: Tool = {
   outputSchema: jsonSchema(outputSchema, "output"),
   execution: { taskSupport: "forbidden" },
 };
+
+// roots/list is answered by the client itself, so anything slower than this is a client that will not answer.
+const ROOTS_TIMEOUT_MS = 2000;
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
@@ -95,7 +99,9 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
     if (params.name !== TOOL.name) throw new McpError(ErrorCode.InvalidParams, `unknown tool "${params.name}"`);
     try {
       const { out, ...spec } = parseSpecWith(inputSchema, params.arguments);
-      const { files, result } = await deps.writeSketch(spec, resolve(out ?? defaultOut(spec.title)), await renderReady());
+      const target = out ?? defaultOut(spec.title);
+      const basename = isAbsolute(target) ? target : resolve(await baseDirectory(server), target);
+      const { files, result } = await deps.writeSketch(spec, basename, await renderReady());
       const lines = [files.excalidraw, files.svg, files.png, sizeNote(result.png)];
       return {
         content: [
@@ -127,6 +133,17 @@ export async function serveMcp(): Promise<void> {
 // A tool pins its schemas to an object at the root; zod types what it serializes wider. Both of these are objects.
 function jsonSchema(schema: z.ZodType, io: "input" | "output"): Tool["inputSchema"] {
   return z.toJSONSchema(schema, { target: "draft-7", io }) as Tool["inputSchema"];
+}
+
+// Asked per call rather than cached, so a root the client changes needs no list_changed bookkeeping.
+async function baseDirectory(server: Server): Promise<string> {
+  if (server.getClientCapabilities()?.roots === undefined) return process.cwd();
+  try {
+    const [first] = (await server.listRoots(undefined, { timeout: ROOTS_TIMEOUT_MS })).roots;
+    return first === undefined ? process.cwd() : fileURLToPath(first.uri);
+  } catch {
+    return process.cwd();
+  }
 }
 
 function defaultOut(title: string | undefined): string {

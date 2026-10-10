@@ -125,5 +125,6 @@ diagram instead of redrawing it.
 
 When the excalix MCP server is registered, the `sketch` tool does all of this in
 one call and hands back the PNG inline, which saves the read. Its `out` is the
-same basename, resolved against the directory the server was started in rather
-than yours.
+same basename. A relative one resolves against the first root your client
+declares, usually the project, or else against the directory the server was
+started in.

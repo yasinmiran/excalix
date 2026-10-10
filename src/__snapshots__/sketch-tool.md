@@ -212,7 +212,7 @@ Look at the returned image and call again with an adjusted spec if labels overla
       }
     },
     "out": {
-      "description": "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the server's working directory, which is the project directory when Claude Code launches the server. Defaults to diagrams/<title slug>.",
+      "description": "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the first root the client declares, usually the project directory, or else the server's working directory. Defaults to diagrams/<title slug>.",
       "type": "string"
     }
   },
