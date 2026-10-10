@@ -82,7 +82,7 @@
       </div>
       <figure class="render">
         <div class="sheet">
-          <img src="examples/order-pipeline.svg" width="1249" height="530" fetchpriority="high" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
+          <img src="examples/order-pipeline.svg" width="1249" height="520" fetchpriority="high" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
         </div>
         <figcaption>Every shape, colour and route above came from the spec below, which says nothing about where anything goes. <a href="examples/order-pipeline.svg">Open the SVG at full size</a>.</figcaption>
       </figure>
