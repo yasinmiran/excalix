@@ -72,8 +72,9 @@ export async function layout(input: LayoutInput): Promise<LayoutResult> {
 // One ELK pass. Each gutter entry widens that group's left padding by its value.
 async function layoutWith(input: LayoutInput, gutters: Record<string, number>): Promise<LayoutResult> {
   const laid = await elk.layout(toElkGraph(input, gutters));
-  const boxes = new Map<string, Box>();
-  collectBoxes(laid, { x: 0, y: 0 }, boxes);
+  const exact = new Map<string, Box>();
+  collectBoxes(laid, { x: 0, y: 0 }, exact);
+  const boxes = new Map([...exact].map(([id, box]) => [id, wholeBox(box)]));
 
   const groupIds = new Set(input.groups.map((g) => g.id));
   const nodes: Record<string, Box> = {};
@@ -83,7 +84,7 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
   const laidEdges = new Map((laid.edges ?? []).map((edge) => [edge.id, edge]));
   const shaped = new Map(input.nodes.map((node) => [node.id, { box: boxes.get(node.id)!, outline: node.outline }]));
   const edges: Record<string, RoutedEdge> = {};
-  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, boxes, shaped);
+  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, exact, shaped);
 
   const routed = Object.values(edges);
   const groupLabels = Object.fromEntries(input.groups.map((g) => [g.id, placeGroupLabel(groups[g.id]!, g.label, routed)]));
@@ -108,6 +109,10 @@ function toElkGraph(input: LayoutInput, gutters: Record<string, number>): ElkNod
       "elk.edgeRouting": "ORTHOGONAL",
       ...SPACING,
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      // Brandes-Koepf aligns a node with one neighbour, so once its ends are spread over a grown side a hub
+      // fanning out sits level with its first target and every other edge steps down past it. Network simplex
+      // places a node to shorten its edges as a whole, which puts the hub mid-fan again.
+      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       ...loops,
     },
     children: childrenOf(undefined),
@@ -123,7 +128,7 @@ function selfLoopSpacing(input: LayoutInput): LayoutOptions {
   const loops = input.edges.filter((edge) => edge.from === edge.to);
   if (loops.length === 0) return {};
   const room = loops.map((edge) =>
-    edge.label === undefined ? 0 : (input.direction === "tb" ? edge.label.width : edge.label.height) / 2 + LABEL_MARGIN,
+    edge.label === undefined ? 0 : Math.ceil((input.direction === "tb" ? edge.label.width : edge.label.height) / 2) + LABEL_MARGIN,
   );
   return { "elk.spacing.nodeSelfLoop": String(Math.max(ARROWHEAD_ROOM, ...room)) };
 }
@@ -169,9 +174,10 @@ function isLabelledLoop(edge: LayoutEdge): edge is LayoutEdge & { label: TextSiz
 }
 
 function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[], loops: LayoutOptions, gutter: number): ElkNode {
-  const top = group.label.height + PADDING;
-  const left = PADDING + gutter;
-  const width = group.label.width + PADDING + left;
+  // Whole pixels, so rounding the laid-out boxes cannot take back any of the room the label needs.
+  const top = Math.ceil(group.label.height) + PADDING;
+  const left = PADDING + Math.ceil(gutter);
+  const width = Math.ceil(group.label.width) + PADDING + left;
   const height = top + PADDING;
   if (children.length === 0) return { id: group.id, width, height };
   // ELK 0.12 applies a compound node's minimum size in the layered algorithm's internal frame, which is transposed for DOWN.
@@ -224,15 +230,17 @@ interface Shaped {
   outline: Outline;
 }
 
-function routeEdge(edge: ElkExtendedEdge, ends: LayoutEdge, boxes: Map<string, Box>, shaped: Map<string, Shaped>): RoutedEdge {
-  const container = edge.container && edge.container !== ROOT ? boxes.get(edge.container) : undefined;
+// `exact` holds ELK's own boxes: a route is offset by its container's exact position and only then rounded, the
+// same way the boxes were, so an end ELK put on a side stays on it.
+function routeEdge(edge: ElkExtendedEdge, ends: LayoutEdge, exact: Map<string, Box>, shaped: Map<string, Shaped>): RoutedEdge {
+  const container = edge.container && edge.container !== ROOT ? exact.get(edge.container) : undefined;
   const offset = container ?? { x: 0, y: 0 };
-  const shift = (p: Point): Point => ({ x: offset.x + p.x, y: offset.y + p.y });
-  const routed = dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift));
+  const shift = (p: Point): Point => wholePoint({ x: offset.x + p.x, y: offset.y + p.y });
+  const routed = straight(dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift)));
   const points =
     routed.length >= 2
       ? onOutlines(routed, shaped.get(ends.from)!, shaped.get(ends.to)!)
-      : [center(boxes.get(ends.from)!), center(boxes.get(ends.to)!)];
+      : [center(shaped.get(ends.from)!.box), center(shaped.get(ends.to)!.box)];
   const label = edge.labels?.[0];
   return { points, ...(label ? { label: labelOnPath(points, shift({ x: label.x ?? 0, y: label.y ?? 0 }), label) } : {}) };
 }
@@ -321,6 +329,30 @@ function sectionPoints(section: ElkEdgeSection): Point[] {
 
 function dedupe(points: Point[]): Point[] {
   return points.filter((p, i) => i === 0 || p.x !== points[i - 1]!.x || p.y !== points[i - 1]!.y);
+}
+
+// Rounding folds ELK's sub-pixel jogs into a run, which leaves a bend with nothing to turn; without it the run
+// under an arrowhead would measure only its last stretch.
+function straight(points: Point[]): Point[] {
+  return points.filter((p, i) => {
+    if (i === 0 || i === points.length - 1) return true;
+    const a = points[i - 1]!;
+    const b = points[i + 1]!;
+    return !((a.x === p.x && p.x === b.x) || (a.y === p.y && p.y === b.y));
+  });
+}
+
+// Whole pixels, for the reason measured widths are: ELK's node placement leaves centres on half pixels, and a
+// lone end it puts on a whole one turns a straight edge into a half-pixel diagonal. Rounding a box by its edges
+// keeps every child inside its group.
+function wholeBox(box: Box): Box {
+  const x = Math.round(box.x);
+  const y = Math.round(box.y);
+  return { x, y, width: Math.round(box.x + box.width) - x, height: Math.round(box.y + box.height) - y };
+}
+
+function wholePoint(p: Point): Point {
+  return { x: Math.round(p.x), y: Math.round(p.y) };
 }
 
 function center(box: Box): Point {

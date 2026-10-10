@@ -1,0 +1,84 @@
+{
+  "title": "gateway fan-out",
+  "nodes": [
+    {
+      "id": "gw",
+      "label": "API gateway",
+      "kind": "service"
+    },
+    {
+      "id": "users",
+      "label": "Users",
+      "kind": "service"
+    },
+    {
+      "id": "orders",
+      "label": "Orders",
+      "kind": "service"
+    },
+    {
+      "id": "catalog",
+      "label": "Catalog",
+      "kind": "service"
+    },
+    {
+      "id": "search",
+      "label": "Search",
+      "kind": "service"
+    },
+    {
+      "id": "cart",
+      "label": "Cart",
+      "kind": "cache"
+    },
+    {
+      "id": "pay",
+      "label": "Payments",
+      "kind": "external"
+    },
+    {
+      "id": "files",
+      "label": "Files",
+      "kind": "datastore"
+    },
+    {
+      "id": "events",
+      "label": "Events",
+      "kind": "queue"
+    }
+  ],
+  "edges": [
+    {
+      "from": "gw",
+      "to": "users"
+    },
+    {
+      "from": "gw",
+      "to": "orders"
+    },
+    {
+      "from": "gw",
+      "to": "catalog"
+    },
+    {
+      "from": "gw",
+      "to": "search"
+    },
+    {
+      "from": "gw",
+      "to": "cart"
+    },
+    {
+      "from": "gw",
+      "to": "pay"
+    },
+    {
+      "from": "gw",
+      "to": "files"
+    },
+    {
+      "from": "gw",
+      "to": "events"
+    }
+  ]
+}

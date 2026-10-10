@@ -1,0 +1,67 @@
+{
+  "title": "client fan-out",
+  "direction": "tb",
+  "nodes": [
+    {
+      "id": "web",
+      "label": "Browser",
+      "kind": "client"
+    },
+    {
+      "id": "auth",
+      "label": "Auth",
+      "kind": "service"
+    },
+    {
+      "id": "feed",
+      "label": "Feed",
+      "kind": "service"
+    },
+    {
+      "id": "chat",
+      "label": "Chat",
+      "kind": "service"
+    },
+    {
+      "id": "media",
+      "label": "Media",
+      "kind": "service"
+    },
+    {
+      "id": "ads",
+      "label": "Ads",
+      "kind": "external"
+    },
+    {
+      "id": "metrics",
+      "label": "Metrics",
+      "kind": "external"
+    }
+  ],
+  "edges": [
+    {
+      "from": "web",
+      "to": "auth"
+    },
+    {
+      "from": "web",
+      "to": "feed"
+    },
+    {
+      "from": "web",
+      "to": "chat"
+    },
+    {
+      "from": "web",
+      "to": "media"
+    },
+    {
+      "from": "web",
+      "to": "ads"
+    },
+    {
+      "from": "web",
+      "to": "metrics"
+    }
+  ]
+}
