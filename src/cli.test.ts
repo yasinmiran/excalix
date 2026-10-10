@@ -230,6 +230,16 @@ describe("usage", () => {
     }
   });
 
+  it("prints the package version for --version and -v", async () => {
+    const { version } = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
+    for (const argv of [["--version"], ["-v"]]) {
+      const { io, out, err } = collect();
+      expect(await main(argv, io)).toBe(0);
+      expect(out).toEqual([version]);
+      expect(err).toEqual([]);
+    }
+  });
+
   it("goes to stderr for an unknown command", async () => {
     const { io, out, err } = collect();
 

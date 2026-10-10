@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -11,6 +10,7 @@ import type { Written } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { parseSpecWith, SpecError, specSchemaWith, stringField } from "./spec.js";
 import type { Renderer } from "./types.js";
+import { version } from "./version.js";
 
 const DESCRIPTION = `Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.
 
@@ -63,7 +63,6 @@ const TOOL: Tool = {
 // roots/list is answered by the client itself, so anything slower than this is a client that will not answer.
 const ROOTS_TIMEOUT_MS = 2000;
 
-const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 export interface SketchDeps {
   writeSketch: (input: unknown, basename: string, renderer: Renderer) => Promise<Written>;

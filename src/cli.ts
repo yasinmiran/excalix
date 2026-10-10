@@ -9,6 +9,7 @@ import { serveMcp } from "./mcp.js";
 import { sizeNote, writeSketch } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { parseSpec, SpecError, specSchema } from "./spec.js";
+import { version } from "./version.js";
 
 export interface Io {
   stdout: (s: string) => void;
@@ -22,6 +23,7 @@ usage:
   excalix validate <spec.json>                 check the spec, print its counts or every problem
   excalix schema                               print the JSON Schema of the spec
   excalix mcp                                  serve the sketch tool over stdio
+  excalix --version                            print the version
   excalix --help                               show this message
 
 render defaults the basename to the spec path without its extension.`;
@@ -31,6 +33,10 @@ export async function main(argv: string[], io: Io): Promise<number> {
   const [command, ...rest] = argv;
   if (command === undefined || command === "--help" || command === "-h") {
     io.stdout(USAGE);
+    return 0;
+  }
+  if (command === "--version" || command === "-v") {
+    io.stdout(version);
     return 0;
   }
   try {
