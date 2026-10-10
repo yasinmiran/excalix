@@ -38,7 +38,11 @@ interface SourceMap {
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
-const LOAD_PATH_SOURCE = /^(?!.*node_modules).*\bdata\/(restore|blob)\.ts$/;
+const DATA_SOURCE = /^(?!.*node_modules).*\bdata\/(restore|blob)\.ts$/;
+// The element code restore calls into: binding repair, fractional indices, bound text, version bumps.
+const ELEMENT_FILES = "binding|fractionalIndex|mutateElement|textElement";
+const BUNDLED_ELEMENT_SOURCE = new RegExp(`^(?!.*node_modules).*\\belement/src/(${ELEMENT_FILES})\\.ts$`);
+const ELEMENT_SOURCE = new RegExp(`^(?:\\.\\./)+src/(${ELEMENT_FILES})\\.ts$`);
 
 /** The editor's own loadFromBlob, bundled with its dependencies so the page needs nothing but this origin. */
 async function bundleEditor(): Promise<Uint8Array> {
@@ -80,16 +84,16 @@ async function loadInPage({ json, type }: { json: string; type: string }): Promi
   return (await editor.loadFromBlob(new Blob([json], { type }), null, null)).elements;
 }
 
-/** The source of data/restore.ts and data/blob.ts as a package's development sourcemaps carry it. */
-async function loadPathSources(pkg: string): Promise<Record<string, string>> {
-  const dir = join(dirname(require.resolve(pkg)), "../dev");
+/** The sources matching pattern in the development sourcemaps of the package at entry, keyed prefix/name. */
+async function sourcesOf(entry: string, pattern: RegExp, prefix: string): Promise<Record<string, string>> {
+  const dir = join(dirname(entry), "../dev");
   const sources: Record<string, string> = {};
   for (const name of (await readdir(dir)).filter((file) => file.endsWith(".js.map"))) {
     const map = JSON.parse(await readFile(join(dir, name), "utf8")) as SourceMap;
     map.sources.forEach((source, i) => {
-      const file = LOAD_PATH_SOURCE.exec(source)?.[1];
+      const file = pattern.exec(source)?.[1];
       const content = map.sourcesContent?.[i];
-      if (file && content) sources[file] = content;
+      if (file && content) sources[`${prefix}/${file}`] = content;
     });
   }
   return sources;
@@ -99,12 +103,27 @@ async function loadPathSources(pkg: string): Promise<Record<string, string>> {
 // bundle was cut from. Against any other build the round trip below proves nothing about the files excalix writes.
 describe("Excalidraw editor build", () => {
   it("loads files with the code the @excalidraw/utils bundle carries", async () => {
-    const [bundle, editor] = await Promise.all([
-      loadPathSources("@excalidraw/utils"),
-      loadPathSources("@excalidraw/excalidraw"),
+    const utils = require.resolve("@excalidraw/utils");
+    const editorEntry = require.resolve("@excalidraw/excalidraw");
+    // The element package the editor itself resolves, not whichever copy sits at the top of node_modules.
+    const element = require.resolve("@excalidraw/element", { paths: [dirname(editorEntry)] });
+    const [bundleData, bundleElement, editorData, editorElement] = await Promise.all([
+      sourcesOf(utils, DATA_SOURCE, "data"),
+      sourcesOf(utils, BUNDLED_ELEMENT_SOURCE, "element"),
+      sourcesOf(editorEntry, DATA_SOURCE, "data"),
+      sourcesOf(element, ELEMENT_SOURCE, "element"),
     ]);
+    const bundle = { ...bundleData, ...bundleElement };
+    const editor = { ...editorData, ...editorElement };
 
-    expect(Object.keys(bundle).sort()).toEqual(["blob", "restore"]);
+    expect(Object.keys(bundle).sort()).toEqual([
+      "data/blob",
+      "data/restore",
+      "element/binding",
+      "element/fractionalIndex",
+      "element/mutateElement",
+      "element/textElement",
+    ]);
     expect(editor, "pin @excalidraw/excalidraw to the build @excalidraw/utils was cut from").toEqual(bundle);
   });
 });
@@ -133,6 +152,8 @@ describe("[browser] Excalidraw file load", () => {
       const loaded = (await page.evaluate(loadInPage, { json: excalidraw, type: EXCALIDRAW_MIME })) as ExcalidrawElement[];
 
       expect(loaded).toEqual(written);
+      // Key order too: the editor saves what it loaded, so an open-then-save should leave the file byte-identical.
+      expect(JSON.stringify(loaded)).toBe(JSON.stringify(written));
     });
   }
 });
