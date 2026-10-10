@@ -125,7 +125,9 @@ function allPoints(result: LayoutResult): Point[] {
 describe("layout on the order pipeline", () => {
   const run = layout(orderPipeline);
 
-  it("routes every edge from the source border to the target border", async () => {
+  // Box, not outline: no end in the order pipeline sits where an outline leaves its box, so none is moved.
+  // endsOnOutline in test-support.ts checks the drawn outline for every spec.
+  it("routes every order pipeline edge from its source box to its target box", async () => {
     const result = await run;
     for (const spec of orderPipeline.edges) {
       const { points } = result.edges[spec.id]!;

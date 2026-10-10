@@ -46,6 +46,8 @@ export const LOOP_LABEL_RUN = 16;
 // How far off its node's side an end may sit and still count as on it: the box and the route reach absolute
 // coordinates through different sums of group offsets.
 const ON_SIDE = 0.5;
+// The same sums leave a segment that is meant to be straight off by a few ulps when it crosses nested groups.
+const STRAIGHT = 1e-6;
 
 // ELK reads a spacing from the node that contains what is being spaced, so a group has to repeat
 // every value or its children fall back to the defaults.
@@ -252,13 +254,13 @@ function onOutlines(points: Point[], from: Shaped, to: Shaped): Point[] {
 function onOutline(end: Point, next: Point, node: Shaped): Point {
   if (node.outline === "sharp") return end;
   const { box } = node;
-  if (end.y === next.y) {
+  if (Math.abs(end.y - next.y) < STRAIGHT) {
     const inward = Math.sign(end.x - next.x);
     const side = inward > 0 ? box.x : box.x + box.width;
     if (Math.abs(end.x - side) > ON_SIDE) return end;
     return { x: end.x + inward * Math.round(inset(node, box.width, box.height, end.y - box.y)), y: end.y };
   }
-  if (end.x === next.x) {
+  if (Math.abs(end.x - next.x) < STRAIGHT) {
     const inward = Math.sign(end.y - next.y);
     const side = inward > 0 ? box.y : box.y + box.height;
     if (Math.abs(end.y - side) > ON_SIDE) return end;
