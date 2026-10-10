@@ -489,9 +489,11 @@ function bounds(nodes: Record<string, Box>, groups: Record<string, Box>, edges: 
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
+// By whole pixels, so boxes and routes stay whole when a label centred on a run sets the bounds from a half
+// pixel; the bounds then start at the origin and run a fraction further.
 function normalise(result: LayoutResult): LayoutResult {
-  const dx = -result.bounds.x;
-  const dy = -result.bounds.y;
+  const dx = -Math.floor(result.bounds.x);
+  const dy = -Math.floor(result.bounds.y);
   const moveBox = (box: Box): Box => ({ ...box, x: box.x + dx, y: box.y + dy });
   const movePoint = (p: Point): Point => ({ x: p.x + dx, y: p.y + dy });
   const mapValues = <T>(record: Record<string, T>, f: (value: T) => T): Record<string, T> =>
@@ -504,6 +506,6 @@ function normalise(result: LayoutResult): LayoutResult {
       points: edge.points.map(movePoint),
       ...(edge.label ? { label: { ...edge.label, ...movePoint(edge.label) } } : {}),
     })),
-    bounds: { ...result.bounds, x: 0, y: 0 },
+    bounds: { x: 0, y: 0, width: result.bounds.x + dx + result.bounds.width, height: result.bounds.y + dy + result.bounds.height },
   };
 }

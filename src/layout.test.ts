@@ -229,6 +229,21 @@ describe("layout on the order pipeline", () => {
   });
 });
 
+describe("layout in whole pixels", () => {
+  it("moves to the origin by whole pixels when a label on a half pixel sets the bounds", async () => {
+    // In tb a self loop runs down the node's left side, and its label is centred on that run, so the label's
+    // odd width puts the leftmost thing in the layout on a half pixel.
+    const result = await layout({ direction: "tb", groups: [], nodes: [node("w", "Worker", "service")], edges: [edge(0, "w", "w", "abc")] });
+    const label = labelBox(result.edges["edge:0"]!.label!, estimate("abc", FONT.edge));
+    for (const point of allPoints(result)) {
+      expect(Number.isInteger(point.x) && Number.isInteger(point.y), `${point.x},${point.y}`).toBe(true);
+    }
+    expect(result.bounds).toMatchObject({ x: 0, y: 0 });
+    expect(label.x).toBeGreaterThanOrEqual(0);
+    expect(label.x + label.width).toBeLessThanOrEqual(result.bounds.width);
+  });
+});
+
 describe("layout edge cases", () => {
   it("survives a self edge", async () => {
     const result = await layout({
