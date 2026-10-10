@@ -1,0 +1,15 @@
+{
+  "title": "two labelled loops on one node, top to bottom",
+  "direction": "tb",
+  "nodes": [
+    { "id": "client", "label": "Client", "kind": "client" },
+    { "id": "worker", "label": "Worker", "kind": "service" },
+    { "id": "db", "label": "Jobs DB", "kind": "datastore" }
+  ],
+  "edges": [
+    { "from": "client", "to": "worker", "label": "submit" },
+    { "from": "worker", "to": "worker", "label": "retry with backoff" },
+    { "from": "worker", "to": "worker", "label": "heartbeat", "style": "async" },
+    { "from": "worker", "to": "db" }
+  ]
+}
