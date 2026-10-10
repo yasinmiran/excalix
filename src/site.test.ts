@@ -56,3 +56,29 @@ it("names the version the package is at", () => {
   const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
   expect(read("index.html")).toContain(`"softwareVersion": "${version}"`);
 });
+
+// A layout change resizes the renders; a page that still reserves the old size jumps as the image loads, and
+// its structured data describes a picture that is no longer there.
+describe("sizes the site states for the example renders", () => {
+  const examples = new URL("../examples/", import.meta.url);
+  const svgSize = (name: string) => {
+    const root = /<svg[^>]*>/.exec(readFileSync(new URL(name, examples), "utf8"))![0];
+    return { width: /\swidth="([^"]+)"/.exec(root)![1], height: /\sheight="([^"]+)"/.exec(root)![1] };
+  };
+  const pngSize = (name: string) => {
+    const header = readFileSync(new URL(name, examples));
+    return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+  };
+
+  it.each(pages)("site/%s reserves each SVG at its own size", (page) => {
+    for (const [, name, width, height] of read(page).matchAll(/<img src="examples\/([\w-]+\.svg)" width="([^"]+)" height="([^"]+)"/g)) {
+      expect({ width, height }, `${page}: ${name}`).toEqual(svgSize(name!));
+    }
+  });
+
+  it.each(pages)("site/%s gives each PNG its own size in structured data", (page) => {
+    for (const [, name, width, height] of read(page).matchAll(/examples\/([\w-]+\.png)", "encodingFormat": "image\/png", "width": (\d+), "height": (\d+)/g)) {
+      expect({ width: Number(width), height: Number(height) }, `${page}: ${name}`).toEqual(pngSize(name!));
+    }
+  });
+});

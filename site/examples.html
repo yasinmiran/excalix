@@ -42,10 +42,10 @@
       "isPartOf": { "@id": "https://yasinmiran.github.io/excalix/#website" },
       "about": { "@id": "https://yasinmiran.github.io/excalix/#software" },
       "hasPart": [
-        { "@type": "ImageObject", "name": "order pipeline", "contentUrl": "https://yasinmiran.github.io/excalix/examples/order-pipeline.png", "encodingFormat": "image/png", "width": 2498, "height": 1059 },
-        { "@type": "ImageObject", "name": "login flow", "contentUrl": "https://yasinmiran.github.io/excalix/examples/auth-flow.png", "encodingFormat": "image/png", "width": 1678, "height": 1370 },
-        { "@type": "ImageObject", "name": "ride-hailing backend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/ride-hailing.png", "encodingFormat": "image/png", "width": 5332, "height": 1202 },
-        { "@type": "ImageObject", "name": "legend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/legend.png", "encodingFormat": "image/png", "width": 2002, "height": 868 }
+        { "@type": "ImageObject", "name": "order pipeline", "contentUrl": "https://yasinmiran.github.io/excalix/examples/order-pipeline.png", "encodingFormat": "image/png", "width": 2498, "height": 1040 },
+        { "@type": "ImageObject", "name": "login flow", "contentUrl": "https://yasinmiran.github.io/excalix/examples/auth-flow.png", "encodingFormat": "image/png", "width": 1678, "height": 1350 },
+        { "@type": "ImageObject", "name": "ride-hailing backend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/ride-hailing.png", "encodingFormat": "image/png", "width": 5332, "height": 1234 },
+        { "@type": "ImageObject", "name": "legend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/legend.png", "encodingFormat": "image/png", "width": 2042, "height": 868 }
       ]
     }
   ]
@@ -80,7 +80,7 @@
     <p class="prose">Left to right, with two nested groups: an EKS cluster inside an AWS region. Two async edges carry an order through a queue to the fulfilment service, and Stripe sits outside every boundary as an external system.</p>
     <figure class="render scrolls">
       <div class="sheet" tabindex="0" role="group" aria-label="Order pipeline diagram">
-        <img src="examples/order-pipeline.svg" width="1249" height="530" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
+        <img src="examples/order-pipeline.svg" width="1249" height="520" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
       </div>
       <figcaption>7 nodes, 6 edges, 2 groups.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/order-pipeline.svg">Open it at full size</a>.</figcaption>
     </figure>
@@ -131,7 +131,7 @@
     <p class="prose">The same vocabulary drawn top to bottom with <code>"direction": "tb"</code>, and no groups at all. The auth service fans out to an identity provider, a database, a session cache and an audit queue.</p>
     <figure class="render scrolls">
       <div class="sheet" tabindex="0" role="group" aria-label="Login flow diagram">
-        <img src="examples/auth-flow.svg" width="839" height="685" loading="lazy" alt="Hand-drawn diagram titled login flow, running top to bottom. A Mobile app sends POST /login to an API gateway, which calls the Auth service. The Auth service calls Google OAuth, drawn as a dashed external box, to verify token; reads Users DB; talks both ways with Session cache; and sends to the audit.events queue along a dashed arrow.">
+        <img src="examples/auth-flow.svg" width="839" height="675" loading="lazy" alt="Hand-drawn diagram titled login flow, running top to bottom. A Mobile app sends POST /login to an API gateway, which calls the Auth service. The Auth service calls Google OAuth, drawn as a dashed external box, to verify token; reads Users DB; talks both ways with Session cache; and sends to the audit.events queue along a dashed arrow.">
       </div>
       <figcaption>7 nodes, 6 edges, 0 groups.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/auth-flow.svg">Open it at full size</a>.</figcaption>
     </figure>
@@ -178,7 +178,7 @@
     <p class="prose">Sixteen nodes, close to the twenty that fit in one picture. A VPC nests inside an AWS account, location updates and finished trips travel as async events, and two externals sit past the right edge. It is wide enough that it scrolls on every screen.</p>
     <figure class="render scrolls wide">
       <div class="sheet" tabindex="0" role="group" aria-label="Ride-hailing backend diagram">
-        <img src="examples/ride-hailing.svg" width="2666" height="601" loading="lazy" alt="Hand-drawn diagram titled ride-hailing backend, flowing left to right. A Rider app and a Driver app call CloudFront, which sits with an ALB inside an AWS account group. The ALB calls an API gateway inside a nested VPC group. The gateway calls a Trip service and a Pricing service and sends location updates to a Kinesis stream. A Matching service consumes the stream along a dashed arrow and writes driver locations to Redis, which also receives surge data from the Pricing service. The Trip service writes to Aurora Postgres and publishes trip completed to an SNS topic along a dashed arrow. A Notification service and a Billing worker consume the topic; they push to Firebase and charge Stripe, both drawn as dashed external boxes outside the AWS account.">
+        <img src="examples/ride-hailing.svg" width="2666" height="617" loading="lazy" alt="Hand-drawn diagram titled ride-hailing backend, flowing left to right. A Rider app and a Driver app call CloudFront, which sits with an ALB inside an AWS account group. The ALB calls an API gateway inside a nested VPC group. The gateway calls a Trip service and a Pricing service and sends location updates to a Kinesis stream. A Matching service consumes the stream along a dashed arrow and writes driver locations to Redis, which also receives surge data from the Pricing service. The Trip service writes to Aurora Postgres and publishes trip completed to an SNS topic along a dashed arrow. A Notification service and a Billing worker consume the topic; they push to Firebase and charge Stripe, both drawn as dashed external boxes outside the AWS account.">
       </div>
       <figcaption>16 nodes, 16 edges, 2 groups. <a href="examples/ride-hailing.svg">Open it at full size</a>.</figcaption>
     </figure>
@@ -248,7 +248,7 @@
     <p class="prose">One node of every kind, one group and both edge styles, labelled with their own names. Keep it open while you write a spec.</p>
     <figure class="render scrolls">
       <div class="sheet" tabindex="0" role="group" aria-label="Legend diagram">
-        <img src="examples/legend.svg" width="1001" height="434" loading="lazy" alt="Legend diagram of the six node kinds. A client, drawn as a grey ellipse, sends a solid arrow labelled sync to a service, drawn as a blue rounded box. The service sits inside a grey group box labelled a group: what you run, together with a green datastore, a yellow hatched queue and an orange cache. A dashed arrow labelled async runs from the service to the queue, the arrow between service and cache has a head at both ends, and a solid arrow leaves the group for an external system drawn as a dashed outline with no fill.">
+        <img src="examples/legend.svg" width="1021" height="434" loading="lazy" alt="Legend diagram of the six node kinds. A client, drawn as a grey ellipse, sends a solid arrow labelled sync to a service, drawn as a blue rounded box. The service sits inside a grey group box labelled a group: what you run, together with a green datastore, a yellow hatched queue and an orange cache. A dashed arrow labelled async runs from the service to the queue, the arrow between service and cache has a head at both ends, and a solid arrow leaves the group for an external system drawn as a dashed outline with no fill.">
       </div>
       <figcaption>6 nodes, 5 edges, 1 group.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/legend.svg">Open it at full size</a>.</figcaption>
     </figure>
