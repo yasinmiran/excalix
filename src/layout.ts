@@ -33,8 +33,10 @@ export const ARROWHEAD_ROOM = 36;
 /** Distance kept between two arrow ends on the same side of a node: an arrowhead is 17px wide. */
 export const END_SPACING = 32;
 // Distance between a corner and the nearest end on a side holding more than one. A lone end sits mid-side
-// and needs twice this, which every node already has, so only a crowded side grows.
-const CORNER_ROOM = 16;
+// and needs twice this, so 28 is as far as it goes before NODE.minHeight stops covering it and every quiet
+// node grows. A rounded corner's radius stops at 32, and 28 along it the curve is under a seventh of a
+// pixel off the side, so no end lands on a rounded corner.
+const CORNER_ROOM = 28;
 /**
  * Line left showing on each side of a self loop's label, past the label's own clearance. Read off renders
  * at 12, 16 and 20: at 12 an async loop's outer segment is a tick mark, and 20 reads no better than 16.
