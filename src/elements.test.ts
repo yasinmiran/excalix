@@ -6,6 +6,7 @@ import type {
 import { describe, expect, it } from "vitest";
 import { EXCALIX_EPOCH, buildElements, toDocument } from "./elements.js";
 import { fractionalIndex } from "./fractional-index.js";
+import { createIdSource, edgeKey, hashSpec } from "./ids.js";
 import { estimateMeasurer } from "./render/estimate.js";
 import { FONT, nodeSize } from "./style.js";
 import type { LayoutResult, Measured, Point, Spec } from "./types.js";
@@ -25,7 +26,7 @@ const spec: Spec = {
   ],
   edges: [
     { from: "web", to: "api", label: "POST /orders", style: "async", arrows: "forward" },
-    { from: "api", to: "worker", style: "sync", arrows: "both" },
+    { from: "api", to: "worker", label: "reads", style: "sync", arrows: "both" },
     { from: "worker", to: "pg", style: "sync", arrows: "forward" },
     { from: "api", to: "api", style: "sync", arrows: "forward" },
   ],
@@ -77,6 +78,7 @@ const layout: LayoutResult = {
         { x: 451, y: 132.5 },
         { x: 515, y: 132.5 },
       ],
+      label: { x: 483 - measured.edgeLabels["edge:1"]!.width / 2, y: 132.5 - measured.edgeLabels["edge:1"]!.height / 2, position: 0.5 },
     },
     "edge:2": {
       points: [
@@ -118,7 +120,8 @@ const texts = elements.filter(isText);
 const arrows = elements.filter(isArrow);
 const textOf = (text: string) => texts.find((t) => t.text === text)!;
 const shapeOf = (label: string) => byId.get(textOf(label).containerId!)!;
-const arrowAt = (index: number) => arrows[index]!;
+const ids = createIdSource(hashSpec(spec));
+const arrowAt = (index: number) => byId.get(ids.id(edgeKey(index))) as ExcalidrawArrowElement;
 
 describe("buildElements", () => {
   it("carries exactly the documented keys per type", () => {
@@ -172,8 +175,19 @@ describe("buildElements", () => {
     expect(textOf("Order API").groupIds).toEqual([k8sGroup, awsGroup]);
     expect(shapeOf("Postgres").groupIds).toEqual([awsGroup]);
     expect(shapeOf("Web app").groupIds).toEqual([]);
-    for (const arrow of arrows) expect(arrow.groupIds).toEqual([]);
     for (const groupId of [awsGroup, k8sGroup]) expect(byId.has(groupId!)).toBe(false);
+  });
+
+  it("gives an arrow the groups both its ends share, and its label the same", () => {
+    const inK8s = shapeOf("Order API").groupIds;
+    const inAws = shapeOf("Postgres").groupIds;
+    expect(inK8s).toHaveLength(2);
+    expect(arrowAt(1).groupIds).toEqual(inK8s);
+    expect(textOf("reads").groupIds).toEqual(inK8s);
+    expect(arrowAt(2).groupIds).toEqual(inAws);
+    expect(arrowAt(3).groupIds).toEqual(inK8s);
+    expect(arrowAt(0).groupIds).toEqual([]);
+    expect(textOf("POST /orders").groupIds).toEqual([]);
   });
 
   it("binds labels and containers both ways", () => {
@@ -272,7 +286,7 @@ describe("buildElements", () => {
     expect(onPath).toEqual({ x: 263, y: 132.5 });
     expect(label).toMatchObject({ fontSize: FONT.edge, textAlign: "center", verticalAlign: "middle", groupIds: [] });
     expect(label.width).toBe(measured.edgeLabels["edge:0"]!.width);
-    for (const other of [1, 2, 3]) expect(arrowAt(other).boundElements).toEqual([]);
+    for (const other of [2, 3]) expect(arrowAt(other).boundElements).toEqual([]);
   });
 
   it("puts the title above the bounds with the gap", () => {
@@ -281,12 +295,14 @@ describe("buildElements", () => {
     expect(elements[elements.length - 1]).toBe(title);
   });
 
-  it("emits each group as one contiguous block, then free nodes, arrows, title", () => {
-    expect(elements.map((e) => (isText(e) ? `text:${e.text}` : e.type))).toEqual([
+  it("emits each group as one contiguous block ending in its arrows, then free nodes, the other arrows, title", () => {
+    const edgeIndex = new Map(spec.edges.map((_, index) => [ids.id(edgeKey(index)), index]));
+    expect(elements.map((e) => (isText(e) ? `text:${e.text}` : isArrow(e) ? `arrow:${edgeIndex.get(e.id)}` : e.type))).toEqual([
       "rectangle", "text:AWS", "rectangle", "text:Postgres",
-      "rectangle", "text:EKS", "rectangle", "text:Order API", "rectangle", "text:Worker",
+      "rectangle", "text:EKS", "rectangle", "text:Order API", "rectangle", "text:Worker", "arrow:1", "text:reads", "arrow:3",
+      "arrow:2",
       "ellipse", "text:Web app",
-      "arrow", "text:POST /orders", "arrow", "arrow", "arrow",
+      "arrow:0", "text:POST /orders",
       "text:order pipeline",
     ]);
   });

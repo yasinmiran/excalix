@@ -78,8 +78,17 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
     }
   });
 
+  // An arrow joining two members of a group belongs to it, so dragging the group in the editor carries the
+  // arrow whole instead of re-projecting its ends and leaving its bends behind.
+  const groupOfNode = new Map(spec.nodes.map((node) => [node.id, node.group]));
+  const edgesIn = groupBy(
+    spec.edges.map((edge, index) => ({ edge, index })),
+    ({ edge }) => sharedGroup(groupOfNode.get(edge.from), groupOfNode.get(edge.to), parents),
+  );
+
   // Excalidraw needs the members of a group contiguous in the array, so each group emits its own block:
-  // rect, label, direct nodes, then nested groups.
+  // rect, label, direct nodes, nested groups, then its arrows. Group rects are filled, so an arrow ahead of
+  // a nested group would be painted over where it meets a node inside it.
   const nodesIn = groupBy(spec.nodes, (node) => node.group);
   const groupsIn = groupBy(spec.groups, (group) => group.parent);
   const elements: ExcalidrawElement[] = [];
@@ -87,20 +96,24 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
     elements.push(
       ...nodeElements(node, ids, box(layout.nodes, node.id), measured.nodeLabels[node.id], chainOf(node.group), arrowsByNode.get(node.id) ?? []),
     );
+  const pushEdges = (group: string | undefined) => {
+    for (const { edge, index } of edgesIn.get(group) ?? []) {
+      const routed = layout.edges[edgeKey(index)];
+      if (!routed) throw new Error(`layout has no route for ${edgeKey(index)}`);
+      elements.push(...edgeElements(edge, index, ids, routed, measured.edgeLabels[edgeKey(index)], chainOf(group), nodeIds, layout.nodes));
+    }
+  };
   const pushGroup = (group: GroupSpec): void => {
     const at = layout.groupLabels[group.id];
     if (!at) throw new Error(`layout has no label position for group ${group.id}`);
     elements.push(...groupElements(group, ids, box(layout.groups, group.id), measured.groupLabels[group.id], chainOf(group.id), at));
     for (const node of nodesIn.get(group.id) ?? []) pushNode(node);
     for (const child of groupsIn.get(group.id) ?? []) pushGroup(child);
+    pushEdges(group.id);
   };
   for (const root of groupsIn.get(undefined) ?? []) pushGroup(root);
   for (const node of nodesIn.get(undefined) ?? []) pushNode(node);
-  spec.edges.forEach((edge, index) => {
-    const routed = layout.edges[edgeKey(index)];
-    if (!routed) throw new Error(`layout has no route for ${edgeKey(index)}`);
-    elements.push(...edgeElements(edge, index, ids, routed, measured.edgeLabels[edgeKey(index)], nodeIds, layout.nodes));
-  });
+  pushEdges(undefined);
   if (spec.title !== undefined && measured.title) {
     elements.push(
       textElement(ids, {
@@ -217,6 +230,7 @@ function edgeElements(
   ids: IdSource,
   routed: LayoutResult["edges"][string],
   label: TextSize | undefined,
+  groupIds: string[],
   nodeIds: Map<string, string>,
   nodeBoxes: LayoutResult["nodes"],
 ): ExcalidrawElement[] {
@@ -234,7 +248,7 @@ function edgeElements(
       ids,
       key,
       { x: first.x, y: first.y, width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) },
-      [],
+      groupIds,
       {
         strokeColor: STROKE,
         backgroundColor: TRANSPARENT,
@@ -267,7 +281,7 @@ function edgeElements(
       color: STROKE,
       position: routed.label,
       size: label,
-      groupIds: [],
+      groupIds,
       containerId: arrow.id,
       labelPosition: routed.label.position,
       align: { textAlign: "center", verticalAlign: "middle" },
@@ -330,6 +344,14 @@ function groupChainsOf(groups: GroupSpec[], parents: Map<string, string | undefi
     chains.set(group.id, chain);
   }
   return chains;
+}
+
+/** The deepest group holding both a and b, or undefined when no group holds both. */
+function sharedGroup(a: string | undefined, b: string | undefined, parents: Map<string, string | undefined>): string | undefined {
+  const ancestors = new Set<string>();
+  for (let current = a; current !== undefined; current = parents.get(current)) ancestors.add(current);
+  for (let current = b; current !== undefined; current = parents.get(current)) if (ancestors.has(current)) return current;
+  return undefined;
 }
 
 function groupBy<T, K>(items: T[], keyOf: (item: T) => K): Map<K, T[]> {
