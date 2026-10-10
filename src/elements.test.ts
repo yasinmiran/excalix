@@ -242,9 +242,9 @@ describe("buildElements", () => {
     expect(arrowAt(0).height).toBe(178.5 - 132.5);
   });
 
-  it("stores inside-mode fixed points normalised to the bound box, nudging exact halves", () => {
-    expect(arrowAt(0).startBinding).toEqual({ elementId: shapeOf("Web app").id, fixedPoint: [1, 0.5001], mode: "inside" });
-    expect(arrowAt(0).endBinding).toEqual({ elementId: shapeOf("Order API").id, fixedPoint: [0, 0.5001], mode: "inside" });
+  it("stores orbit-mode fixed points normalised to the bound box, nudging exact halves", () => {
+    expect(arrowAt(0).startBinding).toEqual({ elementId: shapeOf("Web app").id, fixedPoint: [1, 0.5001], mode: "orbit" });
+    expect(arrowAt(0).endBinding).toEqual({ elementId: shapeOf("Order API").id, fixedPoint: [0, 0.5001], mode: "orbit" });
     expect(arrowAt(2).startBinding!.fixedPoint).toEqual([0.5001, 1]);
     expect(arrowAt(2).endBinding!.fixedPoint).toEqual([0.5001, 0]);
     const [fx, fy] = arrowAt(3).startBinding!.fixedPoint;

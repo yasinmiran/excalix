@@ -248,8 +248,10 @@ function edgeElements(
     type: "arrow",
     boundElements: labelId ? [{ type: "text", id: labelId }] : [],
     points: points.map((p) => localPoint(p.x - first.x, p.y - first.y)),
-    startBinding: { elementId: nodeId(nodeIds, edge.from), fixedPoint: fixedPoint(box(nodeBoxes, edge.from), first), mode: "inside" },
-    endBinding: { elementId: nodeId(nodeIds, edge.to), fixedPoint: fixedPoint(box(nodeBoxes, edge.to), last), mode: "inside" },
+    // Orbit, not inside: restore keeps a stored mode and no export recomputes a bound end, so the picture is the
+    // same, but a node dragged in the editor takes the arrow end round to the side facing its neighbouring point.
+    startBinding: { elementId: nodeId(nodeIds, edge.from), fixedPoint: fixedPoint(box(nodeBoxes, edge.from), first), mode: "orbit" },
+    endBinding: { elementId: nodeId(nodeIds, edge.to), fixedPoint: fixedPoint(box(nodeBoxes, edge.to), last), mode: "orbit" },
     startArrowhead: heads.start,
     endArrowhead: heads.end,
     elbowed: false,
