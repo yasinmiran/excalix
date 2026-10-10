@@ -138,7 +138,7 @@ npx -y excalix schema</code></pre>
           <figcaption>Terminal</figcaption>
 <pre tabindex="0"><code>claude mcp add excalix --scope user -- npx -y excalix mcp</code></pre>
         </figure>
-        <p><code>--scope user</code> makes it available in every project. Files the tool writes land relative to the server's working directory, which is the project directory when Claude Code launches the server.</p>
+        <p><code>--scope user</code> makes it available in every project. A relative <code>out</code> lands under the first root the client declares through MCP roots, usually the project you are working in; a client without roots falls back to the server's working directory.</p>
 
         <h3 id="other-clients">Other MCP clients</h3>
         <p>Cursor, VS Code, Claude Desktop and others accept this shape in their MCP configuration file:</p>
