@@ -33,6 +33,11 @@ const LABEL_CLEARANCE = 12;
 export const ARROWHEAD_ROOM = 36;
 /** Distance kept between two arrow ends on the same side of a node: an arrowhead is 17px wide. */
 export const END_SPACING = 32;
+/**
+ * Distance kept between two arrows running side by side. At ELK's default of 10 a picture scaled down to fit
+ * a screen draws the pair as one thick line, and a label on either looks like it belongs to both.
+ */
+export const LANE_SPACING = 16;
 // Distance between a corner and the nearest end on a side holding more than one. A lone end sits mid-side
 // and needs twice this, so 28 is as far as it goes before NODE.minHeight stops covering it and every quiet
 // node grows. A rounded corner's radius stops at 32, and 28 along it the curve is under a seventh of a
@@ -57,6 +62,8 @@ const SPACING: LayoutOptions = {
   "elk.layered.spacing.nodeNodeBetweenLayers": String(ARROWHEAD_ROOM),
   "elk.layered.spacing.edgeNodeBetweenLayers": String(ARROWHEAD_ROOM),
   "elk.spacing.portPort": String(END_SPACING),
+  "elk.spacing.edgeEdge": String(LANE_SPACING),
+  "elk.layered.spacing.edgeEdgeBetweenLayers": String(LANE_SPACING),
   "elk.spacing.portsSurrounding": `[top=${CORNER_ROOM},left=${CORNER_ROOM},bottom=${CORNER_ROOM},right=${CORNER_ROOM}]`,
 };
 

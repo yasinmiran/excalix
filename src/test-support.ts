@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
-import { ARROWHEAD_ROOM, END_SPACING, LOOP_LABEL_RUN } from "./layout.js";
+import { ARROWHEAD_ROOM, END_SPACING, LANE_SPACING, LOOP_LABEL_RUN } from "./layout.js";
 import { sketch } from "./pipeline.js";
 import { parseSpec } from "./spec.js";
 import { NODE, arrowheads, cornerRadius } from "./style.js";
@@ -33,6 +33,7 @@ export type Invariant =
   | "arrowsClearNodes"
   | "headRoom"
   | "endsApart"
+  | "lanesApart"
   | "endsOnOutline"
   | "loopLabelRun"
   | "insideBounds";
@@ -49,6 +50,7 @@ const TITLES: Record<Invariant, string> = {
   arrowsClearNodes: "no arrow passes through a node it does not join",
   headRoom: `every arrowhead sits on a segment of at least ${ARROWHEAD_ROOM}px`,
   endsApart: `arrow ends on one side of a node stay ${END_SPACING}px apart`,
+  lanesApart: `two arrows running side by side stay ${LANE_SPACING}px apart`,
   endsOnOutline: "every arrow end touches the outline Excalidraw draws for its node",
   loopLabelRun: `a self loop's outer segment runs ${LOOP_LABEL_RUN}px past its label at both ends`,
   insideBounds: "every box but the title starts inside the layout bounds",
@@ -56,6 +58,9 @@ const TITLES: Record<Invariant, string> = {
 
 // ELK rounds its coordinates, so a distance counts as met when it misses by less than half a pixel.
 const SLACK = 0.5;
+// The layout rounds each route to whole pixels on its own, moving a run up to half a pixel, so two runs ELK
+// spaced exactly can come out up to a pixel closer.
+const LANE_SLACK = 1;
 // A node's line is NODE.strokeWidth wide, so an end within half of that of the curve touches it. The layout moves
 // an end in whole pixels, which leaves it up to half a pixel either side of the curve.
 const OUTLINE_SLACK = NODE.strokeWidth / 2;
@@ -100,7 +105,7 @@ interface SceneElement extends Box {
   points?: [number, number][];
 }
 
-/** Registers the ten layout invariants for every committed spec, measured however the caller measures. */
+/** Registers the twelve layout invariants for every committed spec, measured however the caller measures. */
 export function describeGeometry(title: string, measurer: () => TextMeasurer, known: KnownDefects = {}): void {
   for (const file of specFiles) {
     describe(`${title} ${file}`, () => {
@@ -132,6 +137,7 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       );
       check("headRoom", (scene) => scene.arrows.flatMap(shortHeadSegments));
       check("endsApart", crowdedSides);
+      check("lanesApart", closeLanes);
       check("endsOnOutline", (scene) => scene.arrows.flatMap((arrow) => offOutline(scene, arrow)));
       check("loopLabelRun", (scene) => scene.arrows.flatMap(buriedLoopSegment));
       check("insideBounds", (scene) =>
@@ -234,6 +240,28 @@ function crowdedSides(scene: Scene): string[] {
       return gap + SLACK >= END_SPACING ? [] : [`${key}: ${previous.name} and ${end.name} are ${round(gap)}px apart`];
     });
   });
+}
+
+// Two arrows closer than LANE_SPACING along a shared stretch read as one thick line once the picture is
+// scaled down. Runs of one arrow are left alone, and so are runs that only meet end to end.
+function closeLanes(scene: Scene): string[] {
+  const runs = scene.arrows.flatMap((arrow) =>
+    arrow.points.slice(1).map((to, index) => {
+      const from = arrow.points[index]!;
+      const vertical = Math.abs(from.x - to.x) < SLACK;
+      const [along, across] = vertical ? (["y", "x"] as const) : (["x", "y"] as const);
+      return { arrow: arrow.name, vertical, at: from[across], lo: Math.min(from[along], to[along]), hi: Math.max(from[along], to[along]) };
+    }),
+  );
+  return runs.flatMap((run, index) =>
+    runs.slice(index + 1).flatMap((other) => {
+      if (other.arrow === run.arrow || other.vertical !== run.vertical) return [];
+      const shared = Math.min(run.hi, other.hi) - Math.max(run.lo, other.lo);
+      const gap = Math.abs(run.at - other.at);
+      if (shared <= 0 || gap + LANE_SLACK >= LANE_SPACING) return [];
+      return [`${run.arrow} and ${other.arrow} run ${round(gap)}px apart for ${round(shared)}px at ${run.vertical ? "x" : "y"}=${round(run.at)}`];
+    }),
+  );
 }
 
 // The side an end comes in through, read off the segment it closes: an end on a curved outline sits inside
