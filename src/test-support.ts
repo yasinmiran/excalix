@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
-import { ARROWHEAD_ROOM, END_SPACING, LOOP_LABEL_RUN, borderSide } from "./layout.js";
+import { ARROWHEAD_ROOM, END_SPACING, LOOP_LABEL_RUN } from "./layout.js";
 import { sketch } from "./pipeline.js";
 import { parseSpec } from "./spec.js";
 import { arrowheads } from "./style.js";
@@ -52,7 +52,8 @@ const TITLES: Record<Invariant, string> = {
   insideBounds: "every box but the title starts inside the layout bounds",
 };
 
-// ELK rounds its coordinates, so a distance counts as met when it misses by less than half a pixel.
+// ELK rounds its coordinates, so a distance counts as met when it misses by less than half a pixel, and an
+// endpoint counts as on the side it lands within half a pixel of.
 const SLACK = 0.5;
 
 interface Named {
@@ -218,6 +219,14 @@ function crowdedSides(scene: Scene): string[] {
       return gap + SLACK >= END_SPACING ? [] : [`${key}: ${previous.name} and ${end.name} are ${round(gap)}px apart`];
     });
   });
+}
+
+function borderSide(box: Box, point: Point): "left" | "right" | "top" | "bottom" | undefined {
+  if (Math.abs(point.x - box.x) <= SLACK) return "left";
+  if (Math.abs(point.x - (box.x + box.width)) <= SLACK) return "right";
+  if (Math.abs(point.y - box.y) <= SLACK) return "top";
+  if (Math.abs(point.y - (box.y + box.height)) <= SLACK) return "bottom";
+  return undefined;
 }
 
 // Excalidraw blanks the line behind a bound label, so a self loop whose outer segment is no longer than the

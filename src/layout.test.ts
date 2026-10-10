@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARROWHEAD_ROOM, END_SPACING, LABEL_MARGIN, layout, placeGroupLabel } from "./layout.js";
+import { ARROWHEAD_ROOM, END_SPACING, LABEL_MARGIN, LOOP_LABEL_RUN, layout, placeGroupLabel } from "./layout.js";
 import { FONT, nodeSize } from "./style.js";
 import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedEdge, RoutedLabel, TextSize } from "./types.js";
 
@@ -262,7 +262,7 @@ describe("layout edge cases", () => {
     expect(overlaps(grow(labelBox(routed.label!, size), LABEL_MARGIN), result.nodes.b!)).toBe(false);
   });
 
-  it("grows a node along the side several arrows land on, in both directions", async () => {
+  it("spreads the arrows that land on one side of a node, in both directions", async () => {
     for (const direction of ["lr", "tb"] as const) {
       const result = await layout({
         direction,
@@ -270,8 +270,25 @@ describe("layout edge cases", () => {
         nodes: [node("hub", "Hub", "service"), node("a", "A", "service"), node("b", "B", "service"), node("c", "C", "service")],
         edges: [edge(0, "a", "hub"), edge(1, "b", "hub"), edge(2, "c", "hub")],
       });
-      const hub = result.nodes.hub!;
-      expect(direction === "lr" ? hub.height : hub.width, direction).toBeGreaterThanOrEqual(4 * END_SPACING);
+      const along = (p: Point) => (direction === "lr" ? p.y : p.x);
+      const ends = ["edge:0", "edge:1", "edge:2"].map((id) => along(result.edges[id]!.points.at(-1)!)).sort((a, b) => a - b);
+      expect(ends[1]! - ends[0]!, direction).toBeGreaterThanOrEqual(END_SPACING);
+      expect(ends[2]! - ends[1]!, direction).toBeGreaterThanOrEqual(END_SPACING);
+    }
+  });
+
+  it("grows a node with a labelled self loop only as far as the loop needs, in both directions", async () => {
+    const text = "retries";
+    const label = estimate(text, FONT.edge);
+    for (const direction of ["lr", "tb"] as const) {
+      const a = node("a", "stream processor", "service");
+      const result = await layout({ direction, groups: [], nodes: [a], edges: [edge(0, "a", "a", text)] });
+      const outer = (direction === "lr" ? label.width : label.height) + (LABEL_MARGIN + LOOP_LABEL_RUN) * 2;
+      const { points } = result.edges["edge:0"]!;
+      const along = (p: Point) => (direction === "lr" ? p.x : p.y);
+      expect(Math.abs(along(points.at(-1)!) - along(points[0]!)), direction).toBeGreaterThanOrEqual(outer);
+      if (direction === "lr") expect(result.nodes.a!.width).toBe(a.width);
+      else expect(result.nodes.a!.height).toBeLessThanOrEqual(outer + 2 * END_SPACING);
     }
   });
 

@@ -1,5 +1,5 @@
 import ELK from "elkjs/lib/elk.bundled.js";
-import type { ElkEdgeSection, ElkExtendedEdge, ElkLabel, ElkNode, LayoutOptions } from "elkjs/lib/elk.bundled.js";
+import type { ElkEdgeSection, ElkExtendedEdge, ElkLabel, ElkNode, ElkPort, LayoutOptions } from "elkjs/lib/elk.bundled.js";
 import { GROUP_STYLE } from "./style.js";
 import type {
   Box,
@@ -23,10 +23,6 @@ export const LABEL_MARGIN = 12;
 const LABEL_OPTIONS: LayoutOptions = { "elk.edgeLabels.placement": "CENTER", "elk.edgeLabels.inline": "true" };
 // Gap kept beside a group label so an arrowhead next to it stays off the text.
 const LABEL_CLEARANCE = 12;
-// ELK rounds a border coordinate, so an endpoint counts as on the side it lands within half a pixel of.
-const ON_BORDER = 0.5;
-
-type Side = "left" | "right" | "top" | "bottom";
 
 /**
  * Straight run an arrow needs at each end that carries a head. Excalidraw draws the head
@@ -36,6 +32,9 @@ type Side = "left" | "right" | "top" | "bottom";
 export const ARROWHEAD_ROOM = 36;
 /** Distance kept between two arrow ends on the same side of a node: an arrowhead is 17px wide. */
 export const END_SPACING = 32;
+// Distance between a corner and the nearest end on a side holding more than one. A lone end sits mid-side
+// and needs twice this, which every node already has, so only a crowded side grows.
+const CORNER_ROOM = 16;
 /**
  * Line left showing on each side of a self loop's label, past the label's own clearance. Read off renders
  * at 12, 16 and 20: at 12 an async loop's outer segment is a tick mark, and 20 reads no better than 16.
@@ -49,17 +48,17 @@ const SPACING: LayoutOptions = {
   "elk.spacing.edgeNode": "24",
   "elk.layered.spacing.nodeNodeBetweenLayers": String(ARROWHEAD_ROOM),
   "elk.layered.spacing.edgeNodeBetweenLayers": String(ARROWHEAD_ROOM),
+  "elk.spacing.portPort": String(END_SPACING),
+  "elk.spacing.portsSurrounding": `[top=${CORNER_ROOM},left=${CORNER_ROOM},bottom=${CORNER_ROOM},right=${CORNER_ROOM}]`,
 };
 
 const elk = new ELK();
 
 /** Lays out nodes, groups and edges with ELK. Absolute coordinates, bounds at (0, 0). */
 export async function layout(input: LayoutInput): Promise<LayoutResult> {
-  const probe = await layoutWith(input, {});
-  const spread = spreadEnds(input, probe);
-  const first = spread === input ? probe : await layoutWith(spread, {});
-  const gutters = labelGutters(spread, first);
-  return normalise(Object.keys(gutters).length === 0 ? first : await layoutWith(spread, gutters));
+  const first = await layoutWith(input, {});
+  const gutters = labelGutters(input, first);
+  return normalise(Object.keys(gutters).length === 0 ? first : await layoutWith(input, gutters));
 }
 
 // One ELK pass. Each gutter entry widens that group's left padding by its value.
@@ -73,8 +72,9 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
   const groups: Record<string, Box> = {};
   for (const [id, box] of boxes) (groupIds.has(id) ? groups : nodes)[id] = box;
 
+  const laidEdges = new Map((laid.edges ?? []).map((edge) => [edge.id, edge]));
   const edges: Record<string, RoutedEdge> = {};
-  for (const edge of laid.edges ?? []) edges[edge.id] = routeEdge(edge, boxes);
+  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, boxes);
 
   const routed = Object.values(edges);
   const groupLabels = Object.fromEntries(input.groups.map((g) => [g.id, placeGroupLabel(groups[g.id]!, g.label, routed)]));
@@ -85,7 +85,7 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
 function toElkGraph(input: LayoutInput, gutters: Record<string, number>): ElkNode {
   const loops = selfLoopSpacing(input);
   const childrenOf = (parent: string | undefined): ElkNode[] => [
-    ...input.nodes.filter((n) => n.group === parent).map(leaf),
+    ...input.nodes.filter((n) => n.group === parent).map((n) => leaf(n, input)),
     ...input.groups
       .filter((g) => g.parent === parent)
       .map((g) => groupNode(g, input.direction, childrenOf(g.id), loops, gutters[g.id] ?? 0)),
@@ -119,8 +119,44 @@ function selfLoopSpacing(input: LayoutInput): LayoutOptions {
   return { "elk.spacing.nodeSelfLoop": String(Math.max(ARROWHEAD_ROOM, ...room)) };
 }
 
-function leaf(node: LayoutNode): ElkNode {
-  return { id: node.id, width: node.width, height: node.height };
+// ELK picks each end's side, then grows the node until its ends sit END_SPACING apart, spread out from
+// CORNER_ROOM inside either corner, with a lone end mid-side. ELK's default alignment holds even a lone end
+// a full spacing off both corners and so grows every node in the graph, and packing the ends mid-side
+// routes more bends over examples/ and stress/ than spreading them.
+function leaf(node: LayoutNode, input: LayoutInput): ElkNode {
+  const ports = input.edges.filter((edge) => edge.from === node.id).flatMap((edge) => loopPorts(edge, input.direction));
+  return {
+    id: node.id,
+    width: node.width,
+    height: node.height,
+    ...(ports.length > 0 ? { ports } : {}),
+    layoutOptions: {
+      "elk.nodeSize.constraints": "PORTS MINIMUM_SIZE",
+      "elk.nodeSize.minimum": `(${node.width},${node.height})`,
+      "elk.portAlignment.default": "JUSTIFIED",
+    },
+  };
+}
+
+// The segment joining a self loop's two feet carries its label, and Excalidraw blanks the line behind a
+// bound label, so END_SPACING between the feet leaves two stubs with a word between them. ELK puts a loop's
+// ports on its north side, top for lr and left for tb, out before in and at least END_SPACING apart; giving
+// each port a length along that side and attaching the edge at its outer end holds the feet as far apart
+// as the label needs, and the node grows only as much as that side has to.
+function loopPorts(edge: LayoutEdge, direction: Direction): ElkPort[] {
+  if (!isLabelledLoop(edge)) return [];
+  const along = direction === "tb" ? edge.label.height : edge.label.width;
+  const length = Math.ceil((along + (LABEL_MARGIN + LOOP_LABEL_RUN) * 2 - END_SPACING) / 2);
+  const port = (end: "out" | "in", offset: number): ElkPort => ({
+    id: `${edge.id}:${end}`,
+    ...(direction === "tb" ? { width: 0, height: length } : { width: length, height: 0 }),
+    layoutOptions: { "elk.port.anchor": direction === "tb" ? `(0,${offset})` : `(${offset},0)` },
+  });
+  return [port("out", 0), port("in", length)];
+}
+
+function isLabelledLoop(edge: LayoutEdge): edge is LayoutEdge & { label: TextSize } {
+  return edge.from === edge.to && edge.label !== undefined;
 }
 
 function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[], loops: LayoutOptions, gutter: number): ElkNode {
@@ -146,10 +182,11 @@ function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]
 
 // ELK skips labels whose text is empty, so the id stands in for the text; only the size matters here.
 function elkEdge(edge: LayoutEdge): ElkExtendedEdge {
+  const loop = isLabelledLoop(edge);
   return {
     id: edge.id,
-    sources: [edge.from],
-    targets: [edge.to],
+    sources: [loop ? `${edge.id}:out` : edge.from],
+    targets: [loop ? `${edge.id}:in` : edge.to],
     ...(edge.label
       ? {
           labels: [
@@ -173,12 +210,12 @@ function collectBoxes(node: ElkNode, offset: Point, out: Map<string, Box>): void
   }
 }
 
-function routeEdge(edge: ElkExtendedEdge, boxes: Map<string, Box>): RoutedEdge {
+function routeEdge(edge: ElkExtendedEdge, ends: LayoutEdge, boxes: Map<string, Box>): RoutedEdge {
   const container = edge.container && edge.container !== ROOT ? boxes.get(edge.container) : undefined;
   const offset = container ?? { x: 0, y: 0 };
   const shift = (p: Point): Point => ({ x: offset.x + p.x, y: offset.y + p.y });
   const routed = dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift));
-  const points = routed.length >= 2 ? routed : [center(boxes.get(edge.sources[0]!)!), center(boxes.get(edge.targets[0]!)!)];
+  const points = routed.length >= 2 ? routed : [center(boxes.get(ends.from)!), center(boxes.get(ends.to)!)];
   const label = edge.labels?.[0];
   return { points, ...(label ? { label: labelOnPath(points, shift({ x: label.x ?? 0, y: label.y ?? 0 }), label) } : {}) };
 }
@@ -233,61 +270,6 @@ export function placeGroupLabel(group: Box, label: TextSize, edges: RoutedEdge[]
     x = Math.max(x, to);
   }
   return x > limit ? corner : { x, y: corner.y };
-}
-
-/** The node border an endpoint sits on, or undefined when it lies off the border. */
-export function borderSide(box: Box, point: Point): Side | undefined {
-  if (Math.abs(point.x - box.x) <= ON_BORDER) return "left";
-  if (Math.abs(point.x - (box.x + box.width)) <= ON_BORDER) return "right";
-  if (Math.abs(point.y - box.y) <= ON_BORDER) return "top";
-  if (Math.abs(point.y - (box.y + box.height)) <= ON_BORDER) return "bottom";
-  return undefined;
-}
-
-// ELK spreads the ends on a node side evenly, at side / (ends + 1) apart, and its own lever for this,
-// port spacing under a PORTS size constraint, holds a lone port off the corner too and so inflates every
-// node in the graph. Lengthening the crowded side is the targeted one; the label stays centred in it.
-function spreadEnds(input: LayoutInput, probe: LayoutResult): LayoutInput {
-  const ends = new Map<string, number>();
-  const spacing = new Map<string, number>();
-  const count = (id: string, point: Point, loopLabel?: TextSize): void => {
-    const box = probe.nodes[id];
-    const side = box && borderSide(box, point);
-    if (!side) return;
-    const key = `${id}:${side}`;
-    ends.set(key, (ends.get(key) ?? 0) + 1);
-    if (loopLabel) spacing.set(key, Math.max(spacing.get(key) ?? 0, outerSegment(side, loopLabel)));
-  };
-  for (const edge of input.edges) {
-    const { points } = probe.edges[edge.id]!;
-    const loopLabel = edge.from === edge.to ? edge.label : undefined;
-    count(edge.from, points[0]!, loopLabel);
-    count(edge.to, points[points.length - 1]!, loopLabel);
-  }
-
-  let grown = false;
-  const nodes = input.nodes.map((node) => {
-    const room = (...sides: Side[]): number =>
-      Math.max(
-        ...sides.map((side) => {
-          const key = `${node.id}:${side}`;
-          const most = ends.get(key) ?? 0;
-          return most < 2 ? 0 : (most + 1) * Math.max(END_SPACING, spacing.get(key) ?? 0);
-        }),
-      );
-    const width = Math.max(node.width, room("top", "bottom"));
-    const height = Math.max(node.height, room("left", "right"));
-    grown ||= width !== node.width || height !== node.height;
-    return { ...node, width, height };
-  });
-  return grown ? { ...input, nodes } : input;
-}
-
-// A self loop's two feet sit on one node side and the segment joining them carries the label, which
-// Excalidraw draws over a blanked stretch of line. Below this the loop is two stubs with a word between them.
-function outerSegment(side: Side, label: TextSize): number {
-  const along = side === "left" || side === "right" ? label.height : label.width;
-  return Math.ceil(along + (LABEL_MARGIN + LOOP_LABEL_RUN) * 2);
 }
 
 /** Extra left padding for the groups whose label the previous pass had to leave under an arrow. */
