@@ -196,7 +196,7 @@ groups[0].parent: "b" closes the cycle a -> b -> a</code></pre>
       <p>Nothing visual is configurable, so when a diagram reads wrong the fix is in the spec. These are the levers that move it.</p>
 
       <h3 id="reading-order">List nodes in reading order</h3>
-      <p>Sources first. Order places siblings relative to one another and does nothing more than that; it will not move an arrow onto a different route. When a route is what you want changed, the levers are the direction of the edge itself, which nodes share a group, and <code>direction</code>.</p>
+      <p>Sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, so the layout reorders some of them when that keeps arrows from crossing, and it will not move an arrow onto a different route. When a route is what you want changed, the levers are the direction of the edge itself, which nodes share a group, and <code>direction</code>.</p>
 
       <h3 id="labels">Keep edge labels short</h3>
       <p>A label sits on its arrow and reserves that much width, so a sentence on one edge pushes the whole diagram wide. A few words is plenty. When a node name is genuinely long, a <code>\n</code> breaks it.</p>

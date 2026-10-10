@@ -71,7 +71,8 @@ export async function layout(input: LayoutInput): Promise<LayoutResult> {
 
 // One ELK pass. Each gutter entry widens that group's left padding by its value.
 async function layoutWith(input: LayoutInput, gutters: Record<string, number>): Promise<LayoutResult> {
-  const laid = await elk.layout(toElkGraph(input, gutters));
+  const reversed = backEdges(input);
+  const laid = await elk.layout(toElkGraph(input, gutters, reversed));
   const exact = new Map<string, Box>();
   collectBoxes(laid, { x: 0, y: 0 }, exact);
   const boxes = new Map([...exact].map(([id, box]) => [id, wholeBox(box)]));
@@ -84,7 +85,7 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
   const laidEdges = new Map((laid.edges ?? []).map((edge) => [edge.id, edge]));
   const shaped = new Map(input.nodes.map((node) => [node.id, { box: boxes.get(node.id)!, outline: node.outline }]));
   const edges: Record<string, RoutedEdge> = {};
-  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, exact, shaped);
+  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, reversed.has(edge.id), exact, shaped);
 
   const routed = Object.values(edges);
   const groupLabels = Object.fromEntries(input.groups.map((g) => [g.id, placeGroupLabel(groups[g.id]!, g.label, routed)]));
@@ -92,7 +93,7 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
   return { nodes, groups, edges, groupLabels, bounds: bounds(nodes, groups, edges, input.edges) };
 }
 
-function toElkGraph(input: LayoutInput, gutters: Record<string, number>): ElkNode {
+function toElkGraph(input: LayoutInput, gutters: Record<string, number>, reversed: Set<string>): ElkNode {
   const loops = selfLoopSpacing(input);
   const childrenOf = (parent: string | undefined): ElkNode[] => [
     ...input.nodes.filter((n) => n.group === parent).map((n) => leaf(n, input)),
@@ -116,8 +117,55 @@ function toElkGraph(input: LayoutInput, gutters: Record<string, number>): ElkNod
       ...loops,
     },
     children: childrenOf(undefined),
-    edges: input.edges.map(elkEdge),
+    edges: input.edges.map((edge) => elkEdge(edge, reversed.has(edge.id))),
   };
+}
+
+/**
+ * The edges ELK is given reversed: each one that closes a cycle against reading order. ELK's own greedy cycle
+ * breaker ignores the order nodes are listed in, and its model-order breakers fail on a nested graph in elkjs
+ * 0.12, which sets the `modelOrder.maximum` they read only on the top graph. ELK lays out each group as one node
+ * of its parent's graph, so an edge counts between the two siblings under the innermost group holding both ends,
+ * and a group reads from where its first node is listed. Reversing the backward edges inside each strongly
+ * connected component leaves every level acyclic, so ELK's breaker never chooses, and an acyclic spec is laid out
+ * as before.
+ */
+function backEdges(input: LayoutInput): Set<string> {
+  const parentOf = new Map<string, string | undefined>([
+    ...input.nodes.map((node) => [node.id, node.group] as const),
+    ...input.groups.map((group) => [group.id, group.parent] as const),
+  ]);
+  const chain = (id: string): string[] => {
+    const ids: string[] = [];
+    for (let at: string | undefined = id; at !== undefined; at = parentOf.get(at)) ids.unshift(at);
+    return ids;
+  };
+  const listed = new Map<string, number>();
+  input.nodes.forEach((node, index) => {
+    for (const id of chain(node.id)) if (!listed.has(id)) listed.set(id, index);
+  });
+
+  const siblings = input.edges
+    .filter((edge) => edge.from !== edge.to)
+    .map((edge) => {
+      const from = chain(edge.from);
+      const to = chain(edge.to);
+      let depth = 0;
+      while (from[depth] === to[depth]) depth++;
+      return { id: edge.id, from: from[depth]!, to: to[depth]! };
+    });
+  const next = new Map<string, string[]>();
+  for (const edge of siblings) next.set(edge.from, [...(next.get(edge.from) ?? []), edge.to]);
+  const reaches = (from: string, to: string): boolean => {
+    const seen = new Set([from]);
+    const queue = [from];
+    for (let at = queue.shift(); at !== undefined; at = queue.shift()) {
+      if (at === to) return true;
+      for (const id of next.get(at) ?? []) if (!seen.has(id)) seen.add(id), queue.push(id);
+    }
+    return false;
+  };
+  return new Set(siblings.filter((edge) => listed.get(edge.from)! > listed.get(edge.to)! && reaches(edge.to, edge.from)).map((edge) => edge.id));
 }
 
 // The stand-off is the loop's closing segment, so it carries the arrowhead. ELK also places a self loop's
@@ -196,12 +244,13 @@ function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]
 }
 
 // ELK skips labels whose text is empty, so the id stands in for the text; only the size matters here.
-function elkEdge(edge: LayoutEdge): ElkExtendedEdge {
+function elkEdge(edge: LayoutEdge, reversed: boolean): ElkExtendedEdge {
   const loop = isLabelledLoop(edge);
+  const [from, to] = reversed ? [edge.to, edge.from] : [edge.from, edge.to];
   return {
     id: edge.id,
-    sources: [loop ? `${edge.id}:out` : edge.from],
-    targets: [loop ? `${edge.id}:in` : edge.to],
+    sources: [loop ? `${edge.id}:out` : from],
+    targets: [loop ? `${edge.id}:in` : to],
     ...(edge.label
       ? {
           labels: [
@@ -232,11 +281,18 @@ interface Shaped {
 
 // `exact` holds ELK's own boxes: a route is offset by its container's exact position and only then rounded, the
 // same way the boxes were, so an end ELK put on a side stays on it.
-function routeEdge(edge: ElkExtendedEdge, ends: LayoutEdge, exact: Map<string, Box>, shaped: Map<string, Shaped>): RoutedEdge {
+function routeEdge(
+  edge: ElkExtendedEdge,
+  ends: LayoutEdge,
+  reversed: boolean,
+  exact: Map<string, Box>,
+  shaped: Map<string, Shaped>,
+): RoutedEdge {
   const container = edge.container && edge.container !== ROOT ? exact.get(edge.container) : undefined;
   const offset = container ?? { x: 0, y: 0 };
   const shift = (p: Point): Point => wholePoint({ x: offset.x + p.x, y: offset.y + p.y });
-  const routed = straight(dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift)));
+  const laid = straight(dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift)));
+  const routed = reversed ? laid.reverse() : laid;
   const points =
     routed.length >= 2
       ? onOutlines(routed, shaped.get(ends.from)!, shaped.get(ends.to)!)

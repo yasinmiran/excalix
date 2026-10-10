@@ -42,7 +42,7 @@
       "isPartOf": { "@id": "https://yasinmiran.github.io/excalix/#website" },
       "about": { "@id": "https://yasinmiran.github.io/excalix/#software" },
       "hasPart": [
-        { "@type": "ImageObject", "name": "order pipeline", "contentUrl": "https://yasinmiran.github.io/excalix/examples/order-pipeline.png", "encodingFormat": "image/png", "width": 2498, "height": 1040 },
+        { "@type": "ImageObject", "name": "order pipeline", "contentUrl": "https://yasinmiran.github.io/excalix/examples/order-pipeline.png", "encodingFormat": "image/png", "width": 2354, "height": 1040 },
         { "@type": "ImageObject", "name": "login flow", "contentUrl": "https://yasinmiran.github.io/excalix/examples/auth-flow.png", "encodingFormat": "image/png", "width": 1678, "height": 1350 },
         { "@type": "ImageObject", "name": "ride-hailing backend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/ride-hailing.png", "encodingFormat": "image/png", "width": 5332, "height": 1234 },
         { "@type": "ImageObject", "name": "legend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/legend.png", "encodingFormat": "image/png", "width": 2042, "height": 868 }
@@ -80,7 +80,7 @@
     <p class="prose">Left to right, with two nested groups: an EKS cluster inside an AWS region. Two async edges carry an order through a queue to the fulfilment service, and Stripe sits outside every boundary as an external system.</p>
     <figure class="render scrolls">
       <div class="sheet" tabindex="0" role="group" aria-label="Order pipeline diagram">
-        <img src="examples/order-pipeline.svg" width="1249" height="520" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
+        <img src="examples/order-pipeline.svg" width="1177" height="520" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
       </div>
       <figcaption>7 nodes, 6 edges, 2 groups.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/order-pipeline.svg">Open it at full size</a>.</figcaption>
     </figure>

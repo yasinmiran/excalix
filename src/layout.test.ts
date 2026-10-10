@@ -286,6 +286,43 @@ describe("layout edge cases", () => {
     }
   });
 
+  it("breaks a loop between groups at the edges listed against reading order, in both directions", async () => {
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [group("platform", "Platform"), group("svc", "Services", "platform"), group("bg", "Background", "platform")],
+        nodes: [
+          node("gw", "Gateway", "service", "platform"),
+          node("tasks", "Tasks", "service", "svc"),
+          node("reports", "Reports", "service", "svc"),
+          node("notif", "Notifications", "service", "svc"),
+          node("audit", "Audit log", "service", "svc"),
+          node("q", "Job queue", "queue", "bg"),
+          node("workers", "Workers", "service", "bg"),
+        ],
+        edges: [
+          edge(0, "gw", "tasks"),
+          edge(1, "gw", "reports"),
+          edge(2, "tasks", "q"),
+          edge(3, "reports", "q"),
+          edge(4, "q", "workers"),
+          edge(5, "workers", "notif"),
+          edge(6, "workers", "audit"),
+        ],
+      });
+      const across = (p: Point) => (direction === "lr" ? p.x : p.y);
+      const extent = (b: Box) => (direction === "lr" ? b.width : b.height);
+      const svc = result.groups.svc!;
+      const bg = result.groups.bg!;
+      expect(across(bg), direction).toBeGreaterThan(across(svc) + extent(svc));
+      for (const id of ["edge:2", "edge:3"]) {
+        const source = result.nodes[id === "edge:2" ? "tasks" : "reports"]!;
+        const leaves = Math.min(...result.edges[id]!.points.map(across));
+        expect(leaves, `${direction} ${id}`).toBeGreaterThanOrEqual(across(source) + extent(source));
+      }
+    }
+  });
+
   it("ends the arrows on a crowded side of an ellipse on its curve, in both directions", async () => {
     for (const direction of ["lr", "tb"] as const) {
       const result = await layout({

@@ -47,10 +47,12 @@ A node carries one `group` at most, and it has to be a single id, so
 does sit on two networks goes in the group it runs in, and an edge crossing the
 boundary carries the other relationship.
 
-List the nodes in reading order, sources first. Order places siblings relative
-to one another and does nothing more than that; it will not move an arrow onto a
-different route. When a route is what you want changed, the levers are the
-direction of the edge itself, which nodes share a group, and `direction`.
+List the nodes in reading order, sources first. Where edges form a loop, order
+decides which arrow runs backwards: the one from a node listed later to one
+listed earlier. Among siblings it is a preference and no more, and the layout
+reorders some of them when that keeps arrows from crossing. It will not move an
+arrow onto a different route. When a route is what you want changed, the levers
+are the direction of the edge itself, which nodes share a group, and `direction`.
 
 Keep edge labels to a few words. A label sits on its arrow and reserves that
 much width, so a sentence on one edge pushes the whole diagram wide. `\n`
