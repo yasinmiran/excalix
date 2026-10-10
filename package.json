@@ -45,7 +45,9 @@
     "zod": "4.6.2"
   },
   "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.0-afa3a65",
     "@types/node": "22.20.2",
+    "esbuild": "0.28.2",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
     "vitest": "5.0.0"
