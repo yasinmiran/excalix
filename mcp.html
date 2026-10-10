@@ -105,7 +105,7 @@
       <blockquote>
         <p>Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.</p>
         <p>A node sits in exactly one group: name the group it runs in, and let an edge across the boundary carry any other relationship.</p>
-        <p>List nodes in reading order, sources first. That is all order does: place siblings beside each other. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.</p>
+        <p>List nodes in reading order, sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, and the layout reorders some of them when that keeps arrows from crossing. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.</p>
         <p>Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.</p>
       </blockquote>
       <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles and gives the sizing advice from the <a href="spec.html#writing">spec reference</a>. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, which the test suite keeps in step with the server.</p>
