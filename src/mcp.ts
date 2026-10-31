@@ -2,7 +2,13 @@ import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  ListToolsRequestSchema,
+  McpError,
+  RootsListChangedNotificationSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { altText, markdownSnippet } from "./markdown.js";
@@ -102,7 +108,6 @@ const TOOL: Tool = {
 // roots/list is answered by the client itself, so anything slower than this is a client that will not answer.
 const ROOTS_TIMEOUT_MS = 2000;
 
-
 export interface SketchDeps {
   writeSketch: (input: unknown, basename: string, renderer: Renderer, options: SketchOptions) => Promise<Written>;
   createRenderer: () => Promise<Renderer>;
@@ -112,6 +117,7 @@ export interface SketchDeps {
 export function createServer(deps: SketchDeps, onClose?: () => void): Server {
   const server = new Server({ name: "excalix", version }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
   let renderer: Promise<Renderer> | undefined;
+  let base: Promise<string> | undefined;
 
   const renderReady = (): Promise<Renderer> => {
     renderer ??= deps.createRenderer().catch((error: unknown) => {
@@ -131,6 +137,13 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
     void release().then(() => onClose?.());
   };
 
+  // The first answer holds until the client says its roots changed, so one that declares roots and never answers
+  // costs the wait once per connection rather than on every call.
+  const baseReady = (): Promise<string> => (base ??= baseDirectory(server));
+  server.setNotificationHandler(RootsListChangedNotificationSchema, () => {
+    base = undefined;
+  });
+
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [TOOL] }));
 
   server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
@@ -139,14 +152,14 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
       const { out, theme, ...spec } = parseSpecWith(inputSchema, params.arguments);
       const target = out ?? defaultOut(spec.title);
       // Asked even for an absolute out, since the markdown path is written relative to the same directory.
-      const base = await baseDirectory(server);
-      const basename = isAbsolute(target) ? target : resolve(base, target);
+      const directory = await baseReady();
+      const basename = isAbsolute(target) ? target : resolve(directory, target);
       const { files, result } = await deps.writeSketch(spec, basename, await renderReady(), { theme, preview: true });
       const shown = result.preview ?? { png: result.png, scale: PNG_SCALE };
       const pixels = pngSize(result.png);
       const preview = pngSize(shown.png);
       const notes = [sizeNote(pixels, { ...preview, scale: shown.scale })].filter((note) => note !== undefined);
-      const markdown = markdownSnippet(altText(spec.title, spec.nodes), files, base);
+      const markdown = markdownSnippet(altText(spec.title, spec.nodes), files, directory);
       const structuredContent = { ...files, pixels, preview, markdown, ...(notes.length > 0 && { notes }) };
       // Claude Code shows the model the image and structuredContent and drops text blocks, so the text block is
       // the same JSON, as the spec asks, and a client that reads only content loses nothing either.
@@ -182,7 +195,6 @@ function jsonSchema(schema: z.ZodType, io: "input" | "output"): Tool["inputSchem
   return z.toJSONSchema(schema, { target: "draft-7", io }) as Tool["inputSchema"];
 }
 
-// Asked per call rather than cached, so a root the client changes needs no list_changed bookkeeping.
 async function baseDirectory(server: Server): Promise<string> {
   if (server.getClientCapabilities()?.roots === undefined) return process.cwd();
   try {

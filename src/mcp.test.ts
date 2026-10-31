@@ -63,7 +63,8 @@ function fakeRenderer(): Renderer {
 
 type Roots = () => ListRootsResult | Promise<ListRootsResult>;
 
-// A client passed roots declares the capability and answers roots/list with it; without, it declares none.
+// A client passed roots declares the capability, with change notices, and answers roots/list with it; without, it
+// declares none.
 async function harness(overrides: Partial<SketchDeps> = {}, roots?: Roots) {
   const dir = await mkdtemp(join(tmpdir(), "excalix-mcp-"));
   const close = vi.fn(async () => {});
@@ -74,7 +75,7 @@ async function harness(overrides: Partial<SketchDeps> = {}, roots?: Roots) {
   }));
 
   const server = createServer({ writeSketch, createRenderer, ...overrides });
-  const client = new Client({ name: "test", version: "0" }, { capabilities: roots === undefined ? {} : { roots: {} } });
+  const client = new Client({ name: "test", version: "0" }, { capabilities: roots === undefined ? {} : { roots: { listChanged: true } } });
   if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, roots);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -269,6 +270,35 @@ describe("sketch tool", () => {
     expect(writeSketch.mock.calls[0]?.[1]).toBe(out);
     expect(result.structuredContent).toMatchObject({ markdown: "![order pipeline: Web app, Order API](docs/arch.svg)" });
   });
+
+  it("asks for roots once per connection, and again after the client says they changed", async () => {
+    const [first, second] = [await mkdtemp(join(tmpdir(), "excalix-root-")), await mkdtemp(join(tmpdir(), "excalix-root-"))];
+    let current = first;
+    const roots = vi.fn(() => ({ roots: [{ uri: pathToFileURL(current).href }] }));
+    const { client, writeSketch } = await harness({}, roots);
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "a" } });
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "b" } });
+    current = second;
+    await client.sendRootsListChanged();
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "c" } });
+
+    expect(roots).toHaveBeenCalledTimes(2);
+    expect(writeSketch.mock.calls.map((call) => call[1])).toEqual([join(first, "a"), join(first, "b"), join(second, "c")]);
+  });
+
+  it("waits for a client that never answers roots/list only once", async () => {
+    const roots = vi.fn(() => new Promise<ListRootsResult>(() => {}));
+    const { client, writeSketch } = await harness({}, roots);
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "a" } });
+    const started = performance.now();
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "b" } });
+
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(roots).toHaveBeenCalledOnce();
+    expect(writeSketch.mock.calls.map((call) => call[1])).toEqual([resolve("a"), resolve("b")]);
+  }, 5000);
 
   it("gives a picture that follows the colour scheme when there is a dark pair", async () => {
     const project = await mkdtemp(join(tmpdir(), "excalix-root-"));
