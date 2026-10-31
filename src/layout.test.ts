@@ -114,6 +114,21 @@ function ellipseCrossing(box: Box, end: Point, before: Point): number {
   return cy + Math.sign(before.y - end.y) * ry * Math.sqrt(1 - ((end.x - cx) / rx) ** 2);
 }
 
+// Points where a run of one edge crosses a run of another, away from the ends of either.
+function crossingsIn(result: LayoutResult): number {
+  const runs = Object.entries(result.edges).flatMap(([id, { points }]) =>
+    segments(points).map(([a, b]) => {
+      const vertical = a.x === b.x;
+      const [along, across] = vertical ? (["y", "x"] as const) : (["x", "y"] as const);
+      return { id, vertical, at: a[across], low: Math.min(a[along], b[along]), high: Math.max(a[along], b[along]) };
+    }),
+  );
+  const crossing = runs.flatMap((h) =>
+    runs.filter((v) => v.id !== h.id && !h.vertical && v.vertical && h.low < v.at && v.at < h.high && v.low < h.at && h.at < v.high),
+  );
+  return crossing.length;
+}
+
 function allPoints(result: LayoutResult): Point[] {
   const boxes = [...Object.values(result.nodes), ...Object.values(result.groups)];
   return [
@@ -479,6 +494,26 @@ describe("layout edge cases", () => {
       expect(a[start] < b[start] + b[extent] && b[start] < a[start] + a[extent], `${direction} side by side`).toBe(true);
       expect(a[extent], direction).toBe(narrow[extent]);
     }
+  });
+
+  it("searches as hard for an order without crossings inside a group as at the top", async () => {
+    const pairs = [
+      ["n5", "n7"],
+      ["n0", "n7"],
+      ["n6", "n0"],
+      ["n9", "n6"],
+      ["n3", "n7"],
+      ["n7", "n6"],
+      ["n5", "n9"],
+      ["n8", "n0"],
+    ];
+    const graph = (inGroup: boolean): LayoutInput => ({
+      direction: "lr",
+      groups: inGroup ? [group("g", "Group")] : [],
+      nodes: Array.from({ length: 10 }, (_, i) => node(`n${i}`, "A", "service", inGroup ? "g" : undefined)),
+      edges: pairs.map(([from, to], i) => edge(i, from!, to!)),
+    });
+    for (const inGroup of [false, true]) expect(crossingsIn(await layout(graph(inGroup))), `in group ${inGroup}`).toBe(0);
   });
 
   it("gives an empty group its label size", async () => {

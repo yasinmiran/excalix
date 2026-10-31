@@ -67,10 +67,10 @@ const ON_SIDE = 0.5;
 // The same sums leave a segment that is meant to be straight off by a few ulps when it crosses nested groups.
 const STRAIGHT = 1e-6;
 
-// ELK reads a spacing from the node that contains what is being spaced, so a group has to repeat
-// every value or its children fall back to the defaults. 36 between the nodes of one layer takes 4.0% off the image
-// area of examples/ and stress/ against 48 for 4 more bends; 32 takes 1.5% more for 8 more again.
-const SPACING: LayoutOptions = {
+// ELK reads each of these from the graph that holds what it applies to, so a group has to repeat every value or its
+// children fall back to the defaults. 36 between the nodes of one layer takes 4.0% off the image area of examples/ and
+// stress/ against 48 for 4 more bends; 32 takes 1.5% more for 8 more again.
+const PER_GRAPH: LayoutOptions = {
   "elk.spacing.nodeNode": "36",
   "elk.spacing.edgeNode": "24",
   "elk.layered.spacing.nodeNodeBetweenLayers": String(ARROWHEAD_ROOM),
@@ -79,6 +79,9 @@ const SPACING: LayoutOptions = {
   "elk.spacing.edgeEdge": String(LANE_SPACING),
   "elk.layered.spacing.edgeEdgeBetweenLayers": String(LANE_SPACING),
   "elk.spacing.portsSurrounding": `[top=${CORNER_ROOM},left=${CORNER_ROOM},bottom=${CORNER_ROOM},right=${CORNER_ROOM}]`,
+  // Crossing minimisation tries this many orderings against ELK's default of 7, and draws them from a fixed seed, so
+  // the output stays deterministic.
+  "elk.layered.thoroughness": "60",
 };
 
 const elk = new ELK();
@@ -201,16 +204,12 @@ function toElkGraph(input: LayoutInput, gutters: Record<string, number>, reverse
       "elk.direction": input.direction === "tb" ? "DOWN" : "RIGHT",
       "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       "elk.edgeRouting": "ORTHOGONAL",
-      ...SPACING,
+      ...PER_GRAPH,
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
       // Brandes-Koepf aligns a node with one neighbour, so once its ends are spread over a grown side a hub
       // fanning out sits level with its first target and every other edge steps down past it. Network simplex
       // places a node to shorten its edges as a whole, which puts the hub mid-fan again.
       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-      // Crossing minimisation tries this many orderings, against ELK's default of 7: at 60 the crossings over
-      // examples/ and stress/ fall from 47 to 26. ELK draws them from a fixed seed, so the output stays
-      // deterministic, and reads the option from the root, so the groups need not repeat it.
-      "elk.layered.thoroughness": "60",
       ...loops,
     },
     children: childrenOf(undefined),
@@ -334,7 +333,7 @@ function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]
       "elk.padding": `[top=${top},left=${left},bottom=${PADDING},right=${PADDING}]`,
       "elk.nodeSize.constraints": "MINIMUM_SIZE",
       "elk.nodeSize.minimum": minimum,
-      ...SPACING,
+      ...PER_GRAPH,
       ...loops,
     },
   };
