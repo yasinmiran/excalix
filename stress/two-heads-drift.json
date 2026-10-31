@@ -1,0 +1,41 @@
+{
+  "title": "two heads drift",
+  "direction": "tb",
+  "groups": [
+    { "id": "g0", "label": "Group 0 k8s" },
+    { "id": "g1", "label": "Group 1 eu-west-1" },
+    { "id": "g2", "label": "Group 2 k8s" },
+    { "id": "g3", "label": "Group 3 cluster" }
+  ],
+  "nodes": [
+    { "id": "n0", "label": "Search", "kind": "service", "group": "g2" },
+    { "id": "n1", "label": "Gateway", "kind": "queue", "group": "g0" },
+    { "id": "n2", "label": "Web", "kind": "queue", "group": "g0" },
+    { "id": "n3", "label": "Gateway", "kind": "external", "group": "g0" },
+    { "id": "n4", "label": "Scheduler", "kind": "external" },
+    { "id": "n5", "label": "Search", "kind": "cache" },
+    { "id": "n6", "label": "API", "kind": "external" },
+    { "id": "n7", "label": "Kafka", "kind": "external", "group": "g0" },
+    { "id": "n8", "label": "Stripe", "kind": "external" },
+    { "id": "n9", "label": "Billing", "kind": "cache" }
+  ],
+  "edges": [
+    { "from": "n4", "to": "n3" },
+    { "from": "n7", "to": "n4", "style": "async" },
+    { "from": "n2", "to": "n2", "label": "fetch config" },
+    { "from": "n7", "to": "n5" },
+    { "from": "n6", "to": "n1", "label": "charge", "style": "async" },
+    { "from": "n8", "to": "n0", "label": "sync", "style": "async", "arrows": "both" },
+    { "from": "n0", "to": "n7", "arrows": "both" },
+    { "from": "n4", "to": "n4" },
+    { "from": "n6", "to": "n8", "label": "stream" },
+    { "from": "n6", "to": "n6", "label": "auth", "style": "async" },
+    { "from": "n4", "to": "n8" },
+    { "from": "n9", "to": "n9", "label": "query" },
+    { "from": "n2", "to": "n7", "arrows": "none" },
+    { "from": "n7", "to": "n5", "arrows": "both" },
+    { "from": "n3", "to": "n7", "style": "async" },
+    { "from": "n4", "to": "n4", "label": "GET" },
+    { "from": "n1", "to": "n5", "label": "events" }
+  ]
+}
