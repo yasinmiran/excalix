@@ -119,7 +119,7 @@ const TEXT_KEYS = [
 const ARROW_KEYS = ["elbowed", "endArrowhead", "endBinding", "points", "startArrowhead", "startBinding"];
 const IMAGE_KEYS = ["crop", "fileId", "scale", "status"];
 
-const { elements } = buildElements(spec, layout, measured);
+const { elements, keys } = buildElements(spec, layout, measured);
 const byId = new Map(elements.map((element) => [element.id, element]));
 const isText = (e: ExcalidrawElement): e is ExcalidrawTextElement => e.type === "text";
 const isArrow = (e: ExcalidrawElement): e is ExcalidrawArrowElement => e.type === "arrow";
@@ -314,15 +314,22 @@ describe("buildElements", () => {
     ]);
   });
 
+  it("names every element by the key its id derives from", () => {
+    expect(keys).toHaveLength(elements.length);
+    elements.forEach((element, index) => expect(ids.id(keys[index]!), keys[index]).toBe(element.id));
+    expect(keys.slice(0, 4)).toEqual(["group:aws", "group:aws:label", "node:pg", "node:pg:label"]);
+    expect(keys.at(-1)).toBe("title");
+  });
+
   it("is deterministic and reseeds everything when the spec changes", () => {
-    expect(buildElements(spec, layout, measured)).toEqual({ elements, files: {} });
-    const retitled = buildElements({ ...spec, title: "other" }, layout, measured).elements;
+    expect(buildElements(spec, layout, measured)).toEqual({ elements, files: {}, keys });
+    const { elements: retitled } = buildElements({ ...spec, title: "other" }, layout, measured);
     const ids = new Set(elements.map((e) => e.id));
     for (const element of retitled) expect(ids.has(element.id)).toBe(false);
   });
 
   it("skips the title when the spec has none", () => {
-    const untitled = buildElements({ ...spec, title: undefined }, layout, { ...measured, title: undefined }).elements;
+    const { elements: untitled } = buildElements({ ...spec, title: undefined }, layout, { ...measured, title: undefined });
     expect(untitled).toHaveLength(elements.length - 1);
     expect(untitled.some((e) => isText(e) && e.text === "order pipeline")).toBe(false);
   });
@@ -330,13 +337,13 @@ describe("buildElements", () => {
 
 describe("toDocument", () => {
   it("wraps elements in the documented envelope", () => {
-    const parsed = JSON.parse(toDocument({ elements, files: {} }));
+    const parsed = JSON.parse(toDocument({ elements, files: {}, keys }));
     expect(parsed).toMatchObject({
       type: "excalidraw", version: 2, source: "excalix",
       appState: { viewBackgroundColor: "#ffffff", gridSize: 20 }, files: {},
     });
     expect(parsed.elements).toEqual(JSON.parse(JSON.stringify(elements)));
-    expect(toDocument({ elements, files: {} })).toBe(toDocument(buildElements(spec, layout, measured)));
+    expect(toDocument({ elements, files: {}, keys })).toBe(toDocument(buildElements(spec, layout, measured)));
   });
 });
 

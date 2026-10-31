@@ -42,6 +42,8 @@ export type Arrows = "forward" | "both" | "none";
 export type Direction = "lr" | "tb";
 /** Which renders to write: light, dark, or both side by side. An output option, never part of the spec. */
 export type Theme = "light" | "dark" | "both";
+/** The order an animated SVG builds the diagram in: the spec's edges one by one, or the layout's layers. An output option. */
+export type AnimationOrder = "story" | "layers";
 
 export interface GroupSpec {
   id: string;
@@ -174,18 +176,68 @@ export interface SceneFile {
 
 export type SceneFiles = Record<string, SceneFile>;
 
-/** What buildElements makes of a spec: the elements, and the files their images draw. */
+/**
+ * What buildElements makes of a spec: the elements, the files their images draw, and beside each element the key its
+ * id derives from, such as `node:api` or `edge:3:label`.
+ */
 export interface Drawing {
   elements: ExcalidrawElement[];
+  files: SceneFiles;
+  keys: string[];
+}
+
+/** How the animated SVG brings in one element, applied to the top-level <g> the export draws it in. */
+export interface ElementMotion {
+  /** Class on the element's <g>. Absent on the opening beat, which shows from the start. */
+  className?: string;
+  /** A solid arrow: the mask its line is seen through, which draws on along the route, and the class of its arrowheads, which follow. */
+  draw?: { mask: RouteMask; heads: string };
+  /** A dashed arrow: the class of its line, whose dashes march. */
+  march?: string;
+}
+
+/**
+ * A mask over an arrow's line, in the line's own coordinates, whose one stroke runs along the route from source to
+ * target. The rough line is two strokes a segment, and a dash pattern starts again on each, so the dash that draws it
+ * on goes on this stroke instead.
+ */
+export interface RouteMask {
+  id: string;
+  /** The route as one subpath through the arrow's points. */
+  d: string;
+  /** Wide enough to take in the rough line wherever it bows off the route. */
+  strokeWidth: number;
+  /** The region the mask covers: the route's box, the stroke's width round it. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Class of the stroke, which draws on along pathLength 1. */
+  className: string;
+}
+
+/** What turns an SVG export into the animated one: a motion per element, in element order, and the CSS they name. */
+export interface AnimationPlan {
+  elements: ElementMotion[];
+  css: string;
+  /** Length of one loop, build and hold, in ms. */
+  cycle: number;
+}
+
+/** What every export of a drawing takes: the theme, and the files its images draw. */
+export interface ExportOptions {
+  dark: boolean;
   files: SceneFiles;
 }
 
 export interface Renderer {
   measurer: TextMeasurer;
   /** Self-contained SVG markup with fonts inlined, in Excalidraw's dark mode when asked. */
-  svg(elements: unknown[], options: { dark: boolean; files: SceneFiles }): Promise<string>;
+  svg(elements: unknown[], options: ExportOptions): Promise<string>;
+  /** The same SVG with the plan's classes on its elements and its CSS in a style element, so it builds itself in a loop. */
+  animatedSvg(elements: unknown[], options: ExportOptions & { plan: AnimationPlan }): Promise<string>;
   /** PNG bytes with each scene pixel drawn as scale pixels a side, in Excalidraw's dark mode when asked. */
-  png(elements: unknown[], options: { dark: boolean; scale: number; files: SceneFiles }): Promise<Uint8Array>;
+  png(elements: unknown[], options: ExportOptions & { scale: number }): Promise<Uint8Array>;
   close(): Promise<void>;
 }
 
@@ -198,6 +250,8 @@ export interface Preview {
 export interface Images {
   svg: string;
   png: Uint8Array;
+  /** Present when the sketch was asked to animate. */
+  animatedSvg?: string;
 }
 
 export interface SketchResult extends Images {

@@ -50,6 +50,8 @@ npx -y playwright@1.63.0 install chromium
 npx -y excalix render spec.json -o out/spec    writes out/spec.excalidraw, .svg and .png
   --theme dark                                 draws the .svg and .png in Excalidraw's dark mode
   --theme both                                 adds out/spec.dark.svg and .dark.png beside the light pair
+  --animate story                              adds out/spec.animated.svg, the diagram drawing itself edge by edge
+  --animate layers                             the same, one layer of the layout at a time
 npx -y excalix validate spec.json              every problem at once, or ok: 7 nodes, 6 edges, 2 groups
 npx -y excalix schema                          JSON Schema of the spec
 ```

@@ -7,19 +7,29 @@ export function altText(title: string | undefined, nodes: Pick<NodeSpec, "label"
   return `${title ?? "architecture diagram"}: ${nodes.map((node) => node.label).join(", ")}`.replace(/\r?\n|\r/g, " ");
 }
 
+const DARK = "(prefers-color-scheme: dark)";
+const LIGHT = "(prefers-color-scheme: light)";
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
 /**
- * Markdown that shows the diagram's SVG, with paths relative to base, the directory relative outputs resolve
- * against. With a dark pair it is a picture that follows the reader's colour scheme, which GitHub renders.
+ * Markdown that shows the diagram's SVG, with paths relative to base, the directory relative outputs resolve against.
+ * With a dark pair it is a picture that follows the reader's colour scheme, which GitHub renders. With an animated SVG
+ * it is a picture of that, whose first sources are the still SVGs for a reader who asks for reduced motion: an SVG
+ * shown as an image is not reliably told of that setting, so its own rule for it may never apply.
  */
-export function markdownSnippet(alt: string, files: Pick<WrittenFiles, "svg" | "dark">, base: string): string {
-  const light = urlOf(files.svg, base);
-  if (!files.dark) return `![${escapeMarkdown(alt)}](${light})`;
-  const dark = urlOf(files.dark.svg, base);
-  return (
-    `<picture><source media="(prefers-color-scheme: dark)" srcset="${escapeAttribute(dark)}">` +
-    `<source media="(prefers-color-scheme: light)" srcset="${escapeAttribute(light)}">` +
-    `<img alt="${escapeAttribute(alt)}" src="${escapeAttribute(light)}"></picture>`
-  );
+export function markdownSnippet(alt: string, files: Pick<WrittenFiles, "svg" | "animatedSvg" | "dark">, base: string): string {
+  const still = urlOf(files.svg, base);
+  const shown = files.animatedSvg === undefined ? still : urlOf(files.animatedSvg, base);
+  const sources: [media: string, url: string][] = [];
+  if (files.animatedSvg !== undefined) {
+    if (files.dark) sources.push([`${DARK} and ${REDUCED_MOTION}`, urlOf(files.dark.svg, base)]);
+    sources.push([REDUCED_MOTION, still]);
+  }
+  if (files.dark) sources.push([DARK, urlOf(files.dark.animatedSvg ?? files.dark.svg, base)], [LIGHT, shown]);
+  if (sources.length === 0) return `![${escapeMarkdown(alt)}](${shown})`;
+  // The first source whose media matches wins, so the still ones go before the colour schemes.
+  const listed = sources.map(([media, url]) => `<source media="${media}" srcset="${escapeAttribute(url)}">`).join("");
+  return `<picture>${listed}<img alt="${escapeAttribute(alt)}" src="${escapeAttribute(shown)}"></picture>`;
 }
 
 // A path outside base would need climbing out of it, which only holds from one place, so it stays absolute.

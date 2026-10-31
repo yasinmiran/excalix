@@ -119,6 +119,25 @@ export const EDGE = {
   roughness: 1,
 };
 
+/**
+ * Timing of the animated SVG, in ms. Beats share `build` between them, within `minBeat` and `maxBeat` each, so a long
+ * spec speeds up rather than dragging on. An element fades in over `fade`; a solid arrow's line draws on over `draw`,
+ * cut to its beat, and its heads then fade in over `heads`. The finished diagram holds for `hold`, then the loop starts
+ * again, and a dashed arrow's dashes march one period every `march` throughout. A line draws on through a mask
+ * whose stroke runs along its route, `mask` px wide or wider for a long segment.
+ */
+export const ANIMATION = {
+  build: 8000,
+  minBeat: 250,
+  maxBeat: 700,
+  fade: 400,
+  draw: 600,
+  heads: 200,
+  hold: 3000,
+  march: 900,
+  mask: 16,
+};
+
 /** How far past the text Excalidraw blanks the line behind a label bound to an arrow: BOUND_TEXT_PADDING. */
 export const LABEL_MASK = 5;
 /** How long Excalidraw draws an arrowhead, or half its end segment when that is shorter: getArrowheadSize. */

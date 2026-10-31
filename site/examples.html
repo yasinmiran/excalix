@@ -81,9 +81,9 @@
     <p class="prose">Left to right, with two nested groups: an EKS cluster inside an AWS region. Two async edges carry an order through a queue to the fulfilment service, and Stripe sits outside every boundary as an external system.</p>
     <figure class="render scrolls">
       <div class="sheet" tabindex="0" role="group" aria-label="Order pipeline diagram">
-        <img src="examples/order-pipeline.svg" width="1165" height="496" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
+        <picture><source media="(prefers-reduced-motion: reduce)" srcset="examples/order-pipeline.svg"><img src="examples/order-pipeline.animated.svg" width="1165" height="496" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge."></picture>
       </div>
-      <figcaption>7 nodes, 6 edges, 2 groups.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/order-pipeline.svg">Open it at full size</a>.</figcaption>
+      <figcaption>7 nodes, 6 edges, 2 groups, drawn in story order by <code>--animate story</code>, or still if you prefer reduced motion.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/order-pipeline.svg">Open it at full size</a>.</figcaption>
     </figure>
     <div class="example-body">
       <figure class="frame">
@@ -120,9 +120,10 @@
           <li><a href="examples/order-pipeline.excalidraw" download>order-pipeline.excalidraw</a> <span>download, then open on excalidraw.com</span></li>
           <li><a href="examples/order-pipeline.svg" download>order-pipeline.svg</a> <span>for docs and the web</span></li>
           <li><a href="examples/order-pipeline.png" download>order-pipeline.png</a> <span>at twice the SVG's size</span></li>
+          <li><a href="examples/order-pipeline.animated.svg" download>order-pipeline.animated.svg</a> <span>the SVG building itself in a loop</span></li>
           <li><a href="examples/order-pipeline.json" download>order-pipeline.json</a> <span>the spec</span></li>
         </ul>
-        <p>The spec is all it takes to regenerate the other three: <code>npx -y excalix render order-pipeline.json</code>.</p>
+        <p>The spec is all it takes to regenerate the other four: <code>npx -y excalix render order-pipeline.json --animate story</code>.</p>
       </div>
     </div>
   </section>

@@ -56,6 +56,7 @@ function fakeRenderer(): Renderer {
   return {
     measurer: { measure: async (texts) => texts.map(() => ({ width: 10, height: 10 })) },
     svg: async () => "<svg/>",
+    animatedSvg: async () => "<svg/>",
     png: async () => PNG,
     close: async () => {},
   };
@@ -135,7 +136,7 @@ describe("sketch tool", () => {
     expect(await readFile(new URL("../site/mcp.html", import.meta.url), "utf8")).toContain(`<p>${instructions}</p>`);
   });
 
-  it("advertises the same spec as excalix schema, plus out and theme", async () => {
+  it("advertises the same spec as excalix schema, plus out, theme and animate", async () => {
     const advertised = structuredClone(await sketchTool()).inputSchema as {
       $schema?: string;
       properties: Record<string, { description?: string }>;
@@ -144,8 +145,10 @@ describe("sketch tool", () => {
 
     expect(advertised.properties.out?.description).toContain("<out>.excalidraw");
     expect(advertised.properties.theme?.description).toContain("colour scheme");
+    expect(advertised.properties.animate?.description).toContain("<out>.animated.svg");
     delete advertised.properties.out;
     delete advertised.properties.theme;
+    delete advertised.properties.animate;
     // One zod schema, serialized twice: the tool targets draft 7, the CLI the draft zod defaults to.
     delete advertised.$schema;
     expect(printed.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
@@ -425,6 +428,60 @@ describe("sketch tool", () => {
 
     expect(result.structuredContent).toMatchObject({ dark: { svg: `${out}.dark.svg`, png: `${out}.dark.png` } });
     expect(Object.keys(result.structuredContent!).slice(0, 4)).toEqual(["excalidraw", "svg", "png", "dark"]);
+  });
+
+  it("reports an order it does not animate in, in the same list", async () => {
+    const { client } = await harness();
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, theme: "sepia", animate: "slow" } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      'theme: got "sepia", expected one of "light", "dark", "both"\nanimate: got "slow", expected one of "story", "layers"',
+    );
+  });
+
+  it.each(["story", "layers"] as const)("passes animate %s to the pipeline, and nothing when there is none", async (animate) => {
+    const { client, out, writeSketch } = await harness();
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out, animate } });
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    expect(writeSketch.mock.calls.map((call) => call[3].animate)).toEqual([animate, undefined]);
+    expect(writeSketch.mock.calls[0]?.[0]).not.toHaveProperty("animate");
+  });
+
+  it("names the animated files after the png and in the dark pair, and points the markdown at them", async () => {
+    const project = await mkdtemp(join(tmpdir(), "excalix-root-"));
+    const { client } = await harness(
+      {
+        writeSketch: async (_input, basename) => ({
+          files: {
+            excalidraw: `${basename}.excalidraw`,
+            svg: `${basename}.svg`,
+            png: `${basename}.png`,
+            animatedSvg: `${basename}.animated.svg`,
+            dark: { svg: `${basename}.dark.svg`, png: `${basename}.dark.png`, animatedSvg: `${basename}.dark.animated.svg` },
+          },
+          result: { excalidraw: "", svg: "", png: PNG, dark: { svg: "", png: PNG } },
+        }),
+      },
+      () => ({ roots: [{ uri: pathToFileURL(project).href }] }),
+    );
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out: "arch", theme: "both", animate: "story" } });
+
+    expect(Object.keys(result.structuredContent!).slice(0, 5)).toEqual(["excalidraw", "svg", "png", "animatedSvg", "dark"]);
+    expect(result.structuredContent).toMatchObject({
+      animatedSvg: join(project, "arch.animated.svg"),
+      dark: { animatedSvg: join(project, "arch.dark.animated.svg") },
+      markdown:
+        '<picture><source media="(prefers-color-scheme: dark) and (prefers-reduced-motion: reduce)" srcset="arch.dark.svg">' +
+        '<source media="(prefers-reduced-motion: reduce)" srcset="arch.svg">' +
+        '<source media="(prefers-color-scheme: dark)" srcset="arch.dark.animated.svg">' +
+        '<source media="(prefers-color-scheme: light)" srcset="arch.animated.svg">' +
+        '<img alt="order pipeline: Web app, Order API" src="arch.animated.svg"></picture>',
+    });
   });
 
   it("reports a call with no arguments at all", async () => {

@@ -9,7 +9,7 @@ import { serveMcp } from "./mcp.js";
 import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { expectedOneOf, parseSpec, SpecError, specSchema } from "./spec.js";
-import type { Theme } from "./types.js";
+import type { AnimationOrder, Theme } from "./types.js";
 import { version } from "./version.js";
 
 export interface Io {
@@ -20,7 +20,7 @@ export interface Io {
 const USAGE = `excalix - architecture diagrams from a topology spec
 
 usage:
-  excalix render <spec.json> [-o <basename>] [--theme light|dark|both]
+  excalix render <spec.json> [-o <basename>] [--theme light|dark|both] [--animate story|layers]
                                                write <basename>.excalidraw, .svg and .png
   excalix validate <spec.json>                 check the spec, print its counts or every problem
   excalix schema                               print the JSON Schema of the spec
@@ -30,9 +30,12 @@ usage:
 
 render defaults the basename to the spec path without its extension. --theme dark
 draws the .svg and .png in Excalidraw's dark mode; both also writes .dark.svg and
-.dark.png beside the light ones.`;
+.dark.png beside the light ones. --animate also writes .animated.svg beside each
+.svg, the diagram building itself in a loop: story brings in the spec's edges in
+order, layers the layout one layer at a time along the flow.`;
 
 const THEMES: readonly Theme[] = ["light", "dark", "both"];
+const ANIMATIONS: readonly AnimationOrder[] = ["story", "layers"];
 
 /** Runs one command and returns the process exit code. */
 export async function main(argv: string[], io: Io): Promise<number> {
@@ -71,7 +74,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
 async function render(argv: string[], io: Io): Promise<number> {
   const { values, positionals } = parseArgs({
     args: argv,
-    options: { out: { type: "string", short: "o" }, theme: { type: "string", default: "light" } },
+    options: { out: { type: "string", short: "o" }, theme: { type: "string", default: "light" }, animate: { type: "string" } },
     allowPositionals: true,
   });
   const specPath = positionals[0];
@@ -80,23 +83,23 @@ async function render(argv: string[], io: Io): Promise<number> {
     return 1;
   }
   const theme = THEMES.find((known) => known === values.theme);
+  const animate = ANIMATIONS.find((known) => known === values.animate);
   const spec = await readSpec(specPath);
   // A bad flag joins the spec's own problems, so one run reports all of them, and none of them starts a browser.
-  const flagProblems = theme === undefined ? [`--theme: ${expectedOneOf(THEMES)({ input: values.theme })}`] : [];
+  const flagProblems = [
+    ...(theme === undefined ? [`--theme: ${expectedOneOf(THEMES)({ input: values.theme })}`] : []),
+    ...(values.animate !== undefined && animate === undefined ? [`--animate: ${expectedOneOf(ANIMATIONS)({ input: values.animate })}`] : []),
+  ];
   const problems = [...problemsOf(spec), ...flagProblems];
   if (theme === undefined || problems.length > 0) throw new SpecError(problems);
   const out = resolve(outputBasename(values.out, specPath));
 
   const renderer = await createBrowserRenderer();
   try {
-    const { files, result } = await writeSketch(spec, out, renderer, { theme });
-    io.stdout(files.excalidraw);
-    io.stdout(files.svg);
-    io.stdout(files.png);
-    if (files.dark) {
-      io.stdout(files.dark.svg);
-      io.stdout(files.dark.png);
-    }
+    const { files, result } = await writeSketch(spec, out, renderer, { theme, animate });
+    const { dark } = files;
+    const written = [files.excalidraw, files.svg, files.png, files.animatedSvg, dark?.svg, dark?.png, dark?.animatedSvg];
+    for (const path of written) if (path !== undefined) io.stdout(path);
     const note = sizeNote(pngSize(result.png));
     if (note !== undefined) io.stdout(note);
   } finally {

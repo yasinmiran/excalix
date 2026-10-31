@@ -1,11 +1,27 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { animationName, animationPlan, beats } from "./animate.js";
 import { buildElements, toDocument } from "./elements.js";
 import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
 import { EDGE_LABEL_WIDTH, FONT, nodeSize, outlineOf, PNG_SCALE } from "./style.js";
-import type { Drawing, Images, LayoutInput, Measured, Preview, Renderer, SketchResult, Spec, TextMeasurer, TextSize, Theme } from "./types.js";
+import type {
+  AnimationOrder,
+  AnimationPlan,
+  Drawing,
+  Images,
+  LayoutInput,
+  LayoutResult,
+  Measured,
+  Preview,
+  Renderer,
+  SketchResult,
+  Spec,
+  TextMeasurer,
+  TextSize,
+  Theme,
+} from "./types.js";
 import { wrapTexts } from "./wrap.js";
 
 export interface SketchOptions {
@@ -13,24 +29,45 @@ export interface SketchOptions {
   theme?: Theme;
   /** Also export the copy an agent is handed, which fits PREVIEW_EDGE pixels a side, in the theme of png. */
   preview?: boolean;
+  /** Also draw each SVG as one that builds itself in a loop, in this order. */
+  animate?: AnimationOrder;
+}
+
+/** A spec as far as the pipeline takes it before anything is rendered. */
+export interface Built {
+  spec: Spec;
+  layout: LayoutResult;
+  drawing: Drawing;
+}
+
+/** Validates, measures, lays out and builds. */
+export async function build(input: unknown, measurer: TextMeasurer): Promise<Built> {
+  const spec = parseSpec(input);
+  const measured = await measureLabels(spec, measurer);
+  const laidOut = await layout(toLayoutInput(spec, measured));
+  return { spec, layout: laidOut, drawing: buildElements(spec, laidOut, measured) };
 }
 
 /** Validates, measures, lays out, builds and renders. The one entry point. */
 export async function sketch(input: unknown, renderer: Renderer, options: SketchOptions = {}): Promise<SketchResult> {
-  const spec = parseSpec(input);
-  const measured = await measureLabels(spec, renderer.measurer);
-  const laidOut = await layout(toLayoutInput(spec, measured));
-  const drawing = buildElements(spec, laidOut, measured);
-  const { theme = "light" } = options;
+  const { spec, layout: laidOut, drawing } = await build(input, renderer.measurer);
+  const { theme = "light", animate } = options;
+  const plan =
+    animate === undefined ? undefined : animationPlan(drawing, beats(spec, laidOut, drawing.keys, animate), animationName(spec, animate));
   const dark = theme === "dark";
-  const result: SketchResult = { excalidraw: toDocument(drawing), ...(await images(drawing, renderer, dark)) };
-  if (theme === "both") result.dark = await images(drawing, renderer, true);
+  const result: SketchResult = { excalidraw: toDocument(drawing), ...(await images(drawing, renderer, dark, plan)) };
+  if (theme === "both") result.dark = await images(drawing, renderer, true, plan);
   if (options.preview) result.preview = await previewOf(drawing, result.png, renderer, dark);
   return result;
 }
 
-async function images({ elements, files }: Drawing, renderer: Renderer, dark: boolean): Promise<Images> {
-  return { svg: await renderer.svg(elements, { dark, files }), png: await renderer.png(elements, { dark, scale: PNG_SCALE, files }) };
+async function images({ elements, files }: Drawing, renderer: Renderer, dark: boolean, plan: AnimationPlan | undefined): Promise<Images> {
+  const drawn: Images = {
+    svg: await renderer.svg(elements, { dark, files }),
+    png: await renderer.png(elements, { dark, scale: PNG_SCALE, files }),
+  };
+  if (plan) drawn.animatedSvg = await renderer.animatedSvg(elements, { dark, files, plan });
+  return drawn;
 }
 
 // The longest side Claude Code passes to a model whole. Exporting at that size, rather than letting the client
@@ -52,7 +89,8 @@ export interface WrittenFiles {
   excalidraw: string;
   svg: string;
   png: string;
-  dark?: { svg: string; png: string };
+  animatedSvg?: string;
+  dark?: { svg: string; png: string; animatedSvg?: string };
 }
 
 export interface Written {
@@ -60,21 +98,32 @@ export interface Written {
   result: SketchResult;
 }
 
-/** Runs sketch and writes <basename>.excalidraw, .svg and .png, and .dark.svg and .dark.png for the theme both. */
+/**
+ * Runs sketch and writes <basename>.excalidraw, .svg and .png, and .dark.svg and .dark.png for the theme both, each SVG
+ * with an .animated.svg beside it when asked to animate.
+ */
 export async function writeSketch(input: unknown, basename: string, renderer: Renderer, options: SketchOptions = {}): Promise<Written> {
   const result = await sketch(input, renderer, options);
   return { files: await writeFiles(result, basename), result };
 }
 
-/** Writes a result to <basename>.excalidraw, .svg and .png, plus its dark pair if it has one. Returns the absolute paths. */
+/** Writes a result to <basename>.excalidraw, .svg and .png, plus its dark and animated files if it has them. Returns the absolute paths. */
 export async function writeFiles(result: SketchResult, basename: string): Promise<WrittenFiles> {
   const base = resolve(basename);
   await mkdir(dirname(base), { recursive: true });
   const paths: WrittenFiles = { excalidraw: `${base}.excalidraw`, svg: `${base}.svg`, png: `${base}.png` };
   const writes = [writeFile(paths.excalidraw, result.excalidraw), writeFile(paths.svg, result.svg), writeFile(paths.png, result.png)];
+  if (result.animatedSvg !== undefined) {
+    paths.animatedSvg = `${base}.animated.svg`;
+    writes.push(writeFile(paths.animatedSvg, result.animatedSvg));
+  }
   if (result.dark) {
     paths.dark = { svg: `${base}.dark.svg`, png: `${base}.dark.png` };
     writes.push(writeFile(paths.dark.svg, result.dark.svg), writeFile(paths.dark.png, result.dark.png));
+    if (result.dark.animatedSvg !== undefined) {
+      paths.dark.animatedSvg = `${base}.dark.animated.svg`;
+      writes.push(writeFile(paths.dark.animatedSvg, result.dark.animatedSvg));
+    }
   }
   await Promise.all(writes);
   return paths;

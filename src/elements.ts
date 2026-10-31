@@ -80,9 +80,19 @@ const TEXT_STROKE: Omit<Stroke, "strokeColor"> = {
   roundness: null,
 };
 
-/** Turns a laid-out spec into Excalidraw elements and the files their images draw. Pure and deterministic. */
+/** Turns a laid-out spec into Excalidraw elements, the files their images draw, and the key of each element. Pure and deterministic. */
 export function buildElements(spec: Spec, layout: LayoutResult, measured: Measured): Drawing {
-  const ids = createIdSource(hashSpec(spec));
+  // Every element's id comes from its key, so remembering the key behind each id names every element, whoever made it.
+  const source = createIdSource(hashSpec(spec));
+  const keyOf = new Map<string, string>();
+  const ids: IdSource = {
+    id: (key) => {
+      const id = source.id(key);
+      keyOf.set(id, key);
+      return id;
+    },
+    seed: source.seed,
+  };
   const parents = new Map(spec.groups.map((group) => [group.id, group.parent]));
   const groupChains = groupChainsOf(spec.groups, parents, ids);
   const chainOf = (group: string | undefined) => (group === undefined ? [] : (groupChains.get(group) ?? []));
@@ -161,7 +171,11 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
   }
   // Restore rewrites an element whose index is not a valid order key ascending with its neighbours,
   // and that rewrite mutates the element, so version, versionNonce and updated move with it.
-  return { elements: elements.map((element, position) => ({ ...element, index: fractionalIndex(position) })), files };
+  return {
+    elements: elements.map((element, position) => ({ ...element, index: fractionalIndex(position) })),
+    files,
+    keys: elements.map((element) => keyOf.get(element.id)!),
+  };
 }
 
 /** Wraps a drawing in a .excalidraw document. */

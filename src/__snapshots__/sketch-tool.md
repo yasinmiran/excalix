@@ -24,9 +24,11 @@ Keep edge labels to a few words, because an edge label sits on its arrow and the
 
 Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong. The image is scaled to fit 2000 pixels a side, and opening the png file whole usually shows you that same copy; to judge a detail, crop that region from the png file, scaling coordinates by pixels.width / preview.width.
 
+For a README or a web page, animate draws the diagram again as <out>.animated.svg, building itself in a loop: story brings in each edge in the order you list them, after its two ends, and layers brings in the layout one layer at a time along the flow. The image you get back stays the finished diagram.
+
 The .svg and .png carry the editable scene, so either one dropped on excalidraw.com opens as the drawing. An image optimiser such as SVGO or a PNG crusher strips it, so the .excalidraw stays the source of truth.
 
-The result's markdown shows the SVG in a README or doc. Its path is relative to the directory a relative out resolves against, usually the project root, or absolute when the file is outside it; rewrite it relative to the .md file it goes into.
+The result's markdown shows the SVG in a README or doc; with animate, the animated one, and the still one to a reader who asks for reduced motion. Its paths are relative to the directory a relative out resolves against, usually the project root, or absolute when the file is outside it; rewrite them relative to the .md file they go into.
 
 ## inputSchema
 
@@ -279,6 +281,21 @@ The result's markdown shows the SVG in a README or doc. Its path is relative to 
           "description": "the light files, plus <out>.dark.svg and <out>.dark.png, for a page that follows the reader's colour scheme"
         }
       ]
+    },
+    "animate": {
+      "description": "also write <out>.animated.svg, and <out>.dark.animated.svg for theme both: the svg building itself in a loop, in this order. <out>.svg stays as it is",
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "story",
+          "description": "the title, then each edge in the order listed: its source, its target, then the arrow; nodes no edge reaches come last"
+        },
+        {
+          "type": "string",
+          "const": "layers",
+          "description": "the layout's layers along the flow, each followed by the arrows whose ends are both in"
+        }
+      ]
     }
   },
   "required": [
@@ -308,14 +325,21 @@ The result's markdown shows the SVG in a README or doc. Its path is relative to 
       "type": "string",
       "description": "the .png file at full size; the image block in this result is a copy that fits 2000 pixels a side"
     },
+    "animatedSvg": {
+      "description": "the .animated.svg file, present when animate is set",
+      "type": "string"
+    },
     "dark": {
-      "description": "the .dark.svg and .dark.png files, present when theme is both",
+      "description": "the .dark.svg and .dark.png files, and .dark.animated.svg when animate is set, present when theme is both",
       "type": "object",
       "properties": {
         "svg": {
           "type": "string"
         },
         "png": {
+          "type": "string"
+        },
+        "animatedSvg": {
           "type": "string"
         }
       },
@@ -361,7 +385,7 @@ The result's markdown shows the SVG in a README or doc. Its path is relative to 
     },
     "markdown": {
       "type": "string",
-      "description": "markdown that shows the svg, with its path relative to the directory a relative out resolves against; a <picture> that follows the reader's colour scheme when theme is both"
+      "description": "markdown that shows the svg, with its paths relative to the directory a relative out resolves against; a <picture> that follows the reader's colour scheme when theme is both, and when animate is set, one of the animated svg that shows the still one to a reader who asks for reduced motion"
     },
     "notes": {
       "description": "what to do about the diagram before showing it, such as splitting one too big to read; absent when there is nothing",

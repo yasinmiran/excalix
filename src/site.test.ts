@@ -80,7 +80,7 @@ describe("sizes the site states for the example renders", () => {
   };
 
   it.each(pages)("site/%s reserves each SVG at its own size", (page) => {
-    for (const [, name, width, height] of read(page).matchAll(/<img src="examples\/([\w-]+\.svg)" width="([^"]+)" height="([^"]+)"/g)) {
+    for (const [, name, width, height] of read(page).matchAll(/<img src="examples\/([\w.-]+\.svg)" width="([^"]+)" height="([^"]+)"/g)) {
       expect({ width, height }, `${page}: ${name}`).toEqual(svgSize(name!));
     }
   });

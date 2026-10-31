@@ -131,6 +131,44 @@ describe("render", () => {
     expect(mocks.createBrowserRenderer).not.toHaveBeenCalled();
   });
 
+  it("animates in the order --animate names, and prints each animated svg after its own files", async () => {
+    mocks.writeSketch.mockImplementation(async (_spec: unknown, basename: string) => ({
+      files: {
+        excalidraw: `${basename}.excalidraw`,
+        svg: `${basename}.svg`,
+        png: `${basename}.png`,
+        animatedSvg: `${basename}.animated.svg`,
+        dark: { svg: `${basename}.dark.svg`, png: `${basename}.dark.png`, animatedSvg: `${basename}.dark.animated.svg` },
+      },
+      result: { excalidraw: "", svg: "", png: png(2404, 811) },
+    }));
+    const { io, out } = collect();
+
+    expect(await main(["render", specPath, "--theme", "both", "--animate", "layers"], io)).toBe(0);
+
+    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "topology"), renderer, { theme: "both", animate: "layers" });
+    expect(out).toEqual(
+      ["excalidraw", "svg", "png", "animated.svg", "dark.svg", "dark.png", "dark.animated.svg"].map((ext) => join(dir, `topology.${ext}`)),
+    );
+  });
+
+  it("reports an order it does not animate in with the theme and the spec's problems, in one run", async () => {
+    const { SpecError } = await import("./spec.js");
+    mocks.parseSpec.mockImplementation(() => {
+      throw new SpecError(['edges[0].to: unknown node "api"']);
+    });
+    const { io, err } = collect();
+
+    expect(await main(["render", specPath, "--theme", "sepia", "--animate", "slow"], io)).toBe(1);
+
+    expect(err).toEqual([
+      'edges[0].to: unknown node "api"',
+      '--theme: got "sepia", expected one of "light", "dark", "both"',
+      '--animate: got "slow", expected one of "story", "layers"',
+    ]);
+    expect(mocks.createBrowserRenderer).not.toHaveBeenCalled();
+  });
+
   it("adds a line when the png is too big to read scaled down", async () => {
     mocks.writeSketch.mockResolvedValue({
       files: { excalidraw: "a.excalidraw", svg: "a.svg", png: "a.png" },

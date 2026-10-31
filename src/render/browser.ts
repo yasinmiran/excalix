@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, extname, resolve, sep } from "node:path";
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { FONT } from "../style.js";
-import type { Renderer, SceneFiles, TextSize } from "../types.js";
+import type { AnimationPlan, ExportOptions, Renderer, SceneFiles, TextSize } from "../types.js";
 import { fontsDir, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
 const ORIGIN = "http://excalix.local";
@@ -196,16 +196,8 @@ export async function createBrowserRenderer(): Promise<Renderer> {
             ({ width, height }) => ({ width: wholePixels(width), height }),
           ),
       },
-      // The SVG export takes dark mode from the appState alone and the PNG export from its config alone.
-      async svg(elements, { dark, files }) {
-        const fontFaces = await pinnedFontFaceRules(drawnTexts(elements));
-        return page.evaluate(svgInPage, {
-          data: exportData(elements, files, dark),
-          padding: PADDING,
-          fontFaces,
-          darkImageFilter: DARK_IMAGE_FILTER,
-        });
-      },
+      svg: (elements, options) => exportSvg(page, elements, options),
+      animatedSvg: (elements, { plan, ...options }) => exportSvg(page, elements, options, plan),
       async png(elements, { dark, scale, files }) {
         const theme: "light" | "dark" = dark ? "dark" : "light";
         const base64 = await page.evaluate(pngInPage, { data: exportData(elements, files, dark), padding: PADDING, scale, theme });
@@ -217,6 +209,19 @@ export async function createBrowserRenderer(): Promise<Renderer> {
     await close();
     throw error;
   }
+}
+
+// The SVG export takes dark mode from the appState alone and the PNG export from its config alone. The animated SVG
+// is the plain one annotated, so both come from this one export.
+async function exportSvg(page: Page, elements: unknown[], { dark, files }: ExportOptions, animation?: AnimationPlan): Promise<string> {
+  const fontFaces = await pinnedFontFaceRules(drawnTexts(elements));
+  return page.evaluate(svgInPage, {
+    data: exportData(elements, files, dark),
+    padding: PADDING,
+    fontFaces,
+    darkImageFilter: DARK_IMAGE_FILTER,
+    animation,
+  });
 }
 
 /** The bundle only adds its font faces to document.fonts on a canvas export, so run one before measuring. */
@@ -291,11 +296,13 @@ async function svgInPage({
   padding,
   fontFaces,
   darkImageFilter,
+  animation,
 }: {
   data: ExportData;
   padding: number;
   fontFaces: string[];
   darkImageFilter: typeof DARK_IMAGE_FILTER;
+  animation?: AnimationPlan;
 }): Promise<string> {
   const { utils } = (window as unknown as ExcalixWindow).excalix;
   const svg = await utils.exportToSvg({ data, config: { padding } });
@@ -311,6 +318,58 @@ async function svgInPage({
     for (const g of filtered) g.setAttribute("filter", darkImageFilter.url);
     defs.insertAdjacentHTML("beforeend", darkImageFilter.markup);
   }
+  if (animation === undefined) return svg.outerHTML;
+
+  // The export draws each element as one top-level <g>, in element order, and marks none of them, so the position is
+  // the only way back to the element. Anything else at the top, a <mask> beside an arrow, is not a <g>.
+  const groups = [...svg.children].filter((child) => child.tagName === "g");
+  if (groups.length !== data.elements.length) {
+    throw new Error(`the exported SVG has ${groups.length} element groups for ${data.elements.length} elements`);
+  }
+  const defs = svg.querySelector("defs");
+  if (!defs) throw new Error("the exported SVG has no defs for the animation");
+  groups.forEach((group, index) => {
+    const { className, draw, march } = animation.elements[index]!;
+    if (className !== undefined) group.setAttribute("class", className);
+    if (draw === undefined && march === undefined) return;
+    // An arrow is its line's group, then one group per arrowhead stroke.
+    const [lineGroup, ...heads] = [...group.children];
+    const line = lineGroup?.querySelector("path");
+    if (!line) throw new Error(`the exported SVG has no line path for element ${index}`);
+    if (march !== undefined) line.setAttribute("class", march);
+    if (draw !== undefined) {
+      const { id, d, strokeWidth, x, y, width, height, className: drawOn } = draw.mask;
+      const mask = document.createElementNS("http://www.w3.org/2000/svg", "mask");
+      const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const attributes: [Element, Record<string, string | number>][] = [
+        [mask, { id, maskUnits: "userSpaceOnUse", x, y, width, height }],
+        [
+          stroke,
+          {
+            d,
+            fill: "none",
+            stroke: "#fff",
+            "stroke-width": strokeWidth,
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            pathLength: 1,
+            class: drawOn,
+          },
+        ],
+      ];
+      for (const [element, values] of attributes) {
+        for (const [name, value] of Object.entries(values)) element.setAttribute(name, String(value));
+      }
+      mask.append(stroke);
+      defs.append(mask);
+      line.setAttribute("mask", `url(#${id})`);
+      for (const head of heads) head.setAttribute("class", draw.heads);
+    }
+  });
+  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  style.setAttribute("class", "excalix-animation");
+  style.textContent = animation.css;
+  defs.append(style);
   return svg.outerHTML;
 }
 

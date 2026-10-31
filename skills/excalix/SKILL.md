@@ -105,6 +105,16 @@ there. `--theme dark` draws the `.svg` and `.png` in Excalidraw's dark mode, and
 tool takes the same as `theme`. A theme is how the picture is shown, never part
 of the spec.
 
+For a README or a web page, `--animate story` adds `.animated.svg` beside each
+`.svg`: the same diagram building itself in a loop, title first, then every edge
+in the order the spec lists it, after its two ends. List the edges in the order
+you would walk someone through the system, then look at the PNG again, since
+edge order also nudges the layout. `--animate layers` brings the layout in one
+layer at a time instead, whatever order the edges are in. The MCP tool takes the
+same as `animate`, and its `markdown` then shows the animated SVG, and the
+still one to a reader who asks for reduced motion, while the image it hands
+back stays the finished diagram.
+
 ## When it says no
 
 Every problem comes back at once, each line naming the path, what arrived and

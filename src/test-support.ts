@@ -212,9 +212,17 @@ export function embeddedScene(image: string | Uint8Array): EmbeddedScene | undef
   return JSON.parse((compressed ? inflateSync(bytes) : bytes).toString("utf8")) as EmbeddedScene;
 }
 
+/** An animated SVG with its style block, its masks and its classes taken out, which leaves the static SVG. */
+export function withoutAnimation(svg: string): string {
+  return svg
+    .replace(/<style class="excalix-animation">[^<]*<\/style>/, "")
+    .replace(/<mask id="xa-[\w-]+"[^>]*><path [^>]*><\/path><\/mask>/g, "")
+    .replace(/ class="xa-[\w-]+"| mask="url\(#xa-[\w-]+\)"/g, "");
+}
+
 /** A renderer for tests that read elements only: it measures, and its svg and png are stubs. */
 export function measuringOnly(measurer: TextMeasurer): Renderer {
-  return { measurer, svg: async () => "", png: async () => new Uint8Array(), close: async () => {} };
+  return { measurer, svg: async () => "", animatedSvg: async () => "", png: async () => new Uint8Array(), close: async () => {} };
 }
 
 async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {

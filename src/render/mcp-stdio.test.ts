@@ -87,6 +87,28 @@ describe("[browser] sketch over stdio", () => {
     expect((await readFile(`${both}.dark.png`)).equals(await readFile(`${both}.png`))).toBe(false);
   });
 
+  it("animates when asked, writing the committed animated svg and its dark twin beside the static files", async () => {
+    const animated = join(dirname(out), "animated", "order-pipeline");
+    const result = await client.callTool({
+      name: "sketch",
+      arguments: { ...(readSpec("examples/order-pipeline.json") as object), out: animated, theme: "both", animate: "story" },
+    });
+
+    const [text, image] = result.content as Block[];
+    expect(result.isError, text?.text).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({
+      svg: `${animated}.svg`,
+      animatedSvg: `${animated}.animated.svg`,
+      dark: { svg: `${animated}.dark.svg`, animatedSvg: `${animated}.dark.animated.svg` },
+    });
+    expect(await readFile(`${animated}.animated.svg`, "utf8")).toBe(await readFile(join(root, "examples/order-pipeline.animated.svg"), "utf8"));
+    expect(await readFile(`${animated}.svg`, "utf8")).toBe(await readFile(join(root, "examples/order-pipeline.svg"), "utf8"));
+    const dark = await readFile(`${animated}.dark.animated.svg`, "utf8");
+    expect(dark).toContain('fill="#121212"');
+    expect(dark).toContain('<style class="excalix-animation">');
+    expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
+  });
+
   it("hands back the note about a diagram too big to read in the structured content and the text alike", async () => {
     const chain = join(dirname(out), "chain");
     const result = await client.callTool({ name: "sketch", arguments: { ...(readSpec("stress/chain.json") as object), out: chain } });

@@ -44,13 +44,15 @@ Keep edge labels to a few words, because an edge label sits on its arrow and the
 
 Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong. The image is scaled to fit 2000 pixels a side, and opening the png file whole usually shows you that same copy; to judge a detail, crop that region from the png file, scaling coordinates by pixels.width / preview.width.
 
+For a README or a web page, animate draws the diagram again as <out>.animated.svg, building itself in a loop: story brings in each edge in the order you list them, after its two ends, and layers brings in the layout one layer at a time along the flow. The image you get back stays the finished diagram.
+
 The .svg and .png carry the editable scene, so either one dropped on excalidraw.com opens as the drawing. An image optimiser such as SVGO or a PNG crusher strips it, so the .excalidraw stays the source of truth.
 
-The result's markdown shows the SVG in a README or doc. Its path is relative to the directory a relative out resolves against, usually the project root, or absolute when the file is outside it; rewrite it relative to the .md file it goes into.`;
+The result's markdown shows the SVG in a README or doc; with animate, the animated one, and the still one to a reader who asks for reduced motion. Its paths are relative to the directory a relative out resolves against, usually the project root, or absolute when the file is outside it; rewrite them relative to the .md file they go into.`;
 
 // With tool search on, a client loads only tool names and these instructions at session start, so this is what
 // decides whether an agent reaches for sketch at all.
-const INSTRUCTIONS = `excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, and the result has markdown to put the diagram in a README.`;
+const INSTRUCTIONS = `excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, and the result has markdown to put the diagram in a README; set animate for an SVG that draws itself.`;
 
 const theme = z
   .union(
@@ -64,6 +66,21 @@ const theme = z
   .default("light")
   .describe("which colour scheme the .svg and .png are drawn in; the .excalidraw is the same scene either way");
 
+const animate = z
+  .union(
+    [
+      z
+        .literal("story")
+        .describe("the title, then each edge in the order listed: its source, its target, then the arrow; nodes no edge reaches come last"),
+      z.literal("layers").describe("the layout's layers along the flow, each followed by the arrows whose ends are both in"),
+    ],
+    { error: expectedOneOf(["story", "layers"]) },
+  )
+  .optional()
+  .describe(
+    "also write <out>.animated.svg, and <out>.dark.animated.svg for theme both: the svg building itself in a loop, in this order. <out>.svg stays as it is",
+  );
+
 const inputSchema = specSchemaWith({
   out: stringField
     .optional()
@@ -71,16 +88,18 @@ const inputSchema = specSchemaWith({
       "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the first root the client declares, usually the project directory, or else the server's working directory. Defaults to diagrams/<title slug>.",
     ),
   theme,
+  animate,
 });
 
 const outputSchema = z.object({
   excalidraw: z.string().describe("the .excalidraw file, the one to open on excalidraw.com"),
   svg: z.string().describe("the .svg file"),
   png: z.string().describe("the .png file at full size; the image block in this result is a copy that fits 2000 pixels a side"),
+  animatedSvg: z.string().optional().describe("the .animated.svg file, present when animate is set"),
   dark: z
-    .object({ svg: z.string(), png: z.string() })
+    .object({ svg: z.string(), png: z.string(), animatedSvg: z.string().optional() })
     .optional()
-    .describe("the .dark.svg and .dark.png files, present when theme is both"),
+    .describe("the .dark.svg and .dark.png files, and .dark.animated.svg when animate is set, present when theme is both"),
   pixels: z
     .object({ width: z.number(), height: z.number() })
     .describe("size of the png file; a very wide one usually means a long node label stretched the layout"),
@@ -90,7 +109,7 @@ const outputSchema = z.object({
   markdown: z
     .string()
     .describe(
-      "markdown that shows the svg, with its path relative to the directory a relative out resolves against; a <picture> that follows the reader's colour scheme when theme is both",
+      "markdown that shows the svg, with its paths relative to the directory a relative out resolves against; a <picture> that follows the reader's colour scheme when theme is both, and when animate is set, one of the animated svg that shows the still one to a reader who asks for reduced motion",
     ),
   notes: z
     .array(z.string())
@@ -151,12 +170,12 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
   server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
     if (params.name !== TOOL.name) throw new McpError(ErrorCode.InvalidParams, `unknown tool "${params.name}"`);
     try {
-      const { out, theme, ...spec } = parseSpecWith(inputSchema, params.arguments);
+      const { out, theme, animate, ...spec } = parseSpecWith(inputSchema, params.arguments);
       const target = out ?? defaultOut(spec.title);
       // Asked even for an absolute out, since the markdown path is written relative to the same directory.
       const directory = await baseReady();
       const basename = isAbsolute(target) ? target : resolve(directory, target);
-      const { files, result } = await deps.writeSketch(spec, basename, await renderReady(), { theme, preview: true });
+      const { files, result } = await deps.writeSketch(spec, basename, await renderReady(), { theme, animate, preview: true });
       const shown = result.preview ?? { png: result.png, scale: PNG_SCALE };
       const pixels = pngSize(result.png);
       const preview = pngSize(shown.png);

@@ -273,7 +273,7 @@ groups[0].parent: "b" closes the cycle a -> b -> a</code></pre>
       <p>Open the PNG and check for labels that collide with a box or another label, arrows that cross more than the topology forces them to, and a flow that reads backwards, with sources on the right and sinks on the left. Flip <code>direction</code>, group nodes that belong together, shorten a label or drop an edge that carries no information, then render again.</p>
 
       <h2 id="schema">The JSON Schema</h2>
-      <p><code>npx -y excalix schema</code> prints the full JSON Schema of the spec, with a description on every field. Point an editor at it for completion, or hand it to a model along with this page. The MCP tool's input schema is the same shape plus two output options, <code>out</code> and <code>theme</code>, described on the <a href="mcp.html#input">MCP server page</a>. Neither is part of the spec, which says what exists and never how it is drawn.</p>
+      <p><code>npx -y excalix schema</code> prints the full JSON Schema of the spec, with a description on every field. Point an editor at it for completion, or hand it to a model along with this page. The MCP tool's input schema is the same shape plus three output options, <code>out</code>, <code>theme</code> and <code>animate</code>, described on the <a href="mcp.html#input">MCP server page</a>. None is part of the spec, which says what exists and never how it is drawn.</p>
     </div>
   </div>
 </main>

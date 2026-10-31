@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { sizeNote, sketch, viewScale, writeSketch } from "./pipeline.js";
 import { estimateMeasurer } from "./render/estimate.js";
-import { embeddedScene, measuringOnly, readSpec, specFiles } from "./test-support.js";
+import { embeddedScene, measuringOnly, readSpec, specFiles, withoutAnimation } from "./test-support.js";
 import type { Renderer } from "./types.js";
 
 const renderer = measuringOnly(estimateMeasurer);
@@ -70,9 +70,11 @@ describe("size note", () => {
 describe("the scene inside the committed renders", () => {
   const examples = specFiles.filter((file) => file.startsWith("examples/")).map((file) => file.replace(/\.json$/, ""));
 
-  it.each(examples.flatMap((example) => [`${example}.svg`, `${example}.png`]))("%s carries the elements and files of its .excalidraw", (file) => {
-    const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url));
-    const written = JSON.parse(read(file.replace(/\.(svg|png)$/, ".excalidraw")).toString("utf8")) as { elements: unknown[]; files: object };
+  const animated = examples.map((example) => `${example}.animated.svg`).filter((file) => existsSync(new URL(`../${file}`, import.meta.url)));
+  const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url));
+
+  it.each(examples.flatMap((example) => [`${example}.svg`, `${example}.png`]).concat(animated))("%s carries the elements and files of its .excalidraw", (file) => {
+    const written = JSON.parse(read(file.replace(/(\.animated)?\.(svg|png)$/, ".excalidraw")).toString("utf8")) as { elements: unknown[]; files: object };
     const image = file.endsWith(".svg") ? read(file).toString("utf8") : new Uint8Array(read(file));
 
     const scene = embeddedScene(image);
@@ -80,6 +82,14 @@ describe("the scene inside the committed renders", () => {
     expect(scene).toMatchObject({ type: "excalidraw", source: "excalix" });
     expect(JSON.stringify(scene!.elements)).toBe(JSON.stringify(written.elements));
     expect(JSON.stringify(scene!.files)).toBe(JSON.stringify(written.files));
+  });
+
+  it("commits an animated example", () => {
+    expect(animated).toEqual(["examples/order-pipeline.animated.svg"]);
+  });
+
+  it.each(animated)("%s is its static svg with the animation added and nothing else changed", (file) => {
+    expect(withoutAnimation(read(file).toString("utf8"))).toBe(read(file.replace(".animated", "")).toString("utf8"));
   });
 });
 
@@ -92,6 +102,10 @@ function recording(): { renderer: Renderer; calls: string[] } {
     svg: async (_elements, { dark }) => {
       calls.push(`svg ${theme(dark)}`);
       return `<svg ${theme(dark)}/>`;
+    },
+    animatedSvg: async (_elements, { dark, plan }) => {
+      calls.push(`animated svg ${theme(dark)} of ${plan.elements.length}`);
+      return `<svg animated ${theme(dark)}/>`;
     },
     png: async (_elements, { dark, scale }) => {
       calls.push(`png ${theme(dark)} at ${scale.toFixed(3)}`);
@@ -131,5 +145,34 @@ describe("theme", () => {
     expect(files.dark).toEqual({ svg: join(dir, "both/diagram.dark.svg"), png: join(dir, "both/diagram.dark.png") });
     expect((await readdir(join(dir, "both"))).sort()).toEqual(["diagram.dark.png", "diagram.dark.svg", "diagram.excalidraw", "diagram.png", "diagram.svg"]);
     expect((await readdir(join(dir, "dark"))).sort()).toEqual(["diagram.excalidraw", "diagram.png", "diagram.svg"]);
+  });
+});
+
+describe("animate", () => {
+  const spec = readSpec("examples/order-pipeline.json");
+
+  it("draws an animated svg after each static pair, in the theme of that pair", async () => {
+    const { renderer, calls } = recording();
+
+    const result = await sketch(spec, renderer, { theme: "both", animate: "story" });
+
+    expect(calls).toEqual(["svg light", "png light at 2.000", "animated svg light of 27", "svg dark", "png dark at 2.000", "animated svg dark of 27"]);
+    expect(result.animatedSvg).toBe("<svg animated light/>");
+    expect(result.dark?.animatedSvg).toBe("<svg animated dark/>");
+  });
+
+  it("writes <out>.animated.svg beside <out>.svg, and the dark one beside the dark pair, only when asked", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "excalix-animate-"));
+
+    const { files } = await writeSketch(spec, join(dir, "both/diagram"), recording().renderer, { theme: "both", animate: "layers" });
+    const { files: still } = await writeSketch(spec, join(dir, "still/diagram"), recording().renderer, { theme: "both" });
+
+    expect(files.animatedSvg).toBe(join(dir, "both/diagram.animated.svg"));
+    expect(files.dark?.animatedSvg).toBe(join(dir, "both/diagram.dark.animated.svg"));
+    expect((await readdir(join(dir, "both"))).sort()).toEqual([
+      "diagram.animated.svg", "diagram.dark.animated.svg", "diagram.dark.png", "diagram.dark.svg", "diagram.excalidraw", "diagram.png", "diagram.svg",
+    ]);
+    expect(still).not.toHaveProperty("animatedSvg");
+    expect(still.dark).not.toHaveProperty("animatedSvg");
   });
 });

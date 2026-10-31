@@ -4,6 +4,8 @@ import { altText, markdownSnippet } from "./markdown.js";
 const BASE = "/work/project";
 const LIGHT = { svg: "/work/project/diagrams/arch.svg" };
 const BOTH = { ...LIGHT, dark: { svg: "/work/project/diagrams/arch.dark.svg", png: "/work/project/diagrams/arch.dark.png" } };
+const ANIMATED = { ...LIGHT, animatedSvg: "/work/project/diagrams/arch.animated.svg" };
+const BOTH_ANIMATED = { ...ANIMATED, dark: { ...BOTH.dark, animatedSvg: "/work/project/diagrams/arch.dark.animated.svg" } };
 
 describe("alt text", () => {
   it.each([
@@ -40,6 +42,23 @@ describe("markdown snippet", () => {
       '<picture><source media="(prefers-color-scheme: dark)" srcset="diagrams/arch.dark.svg">' +
         '<source media="(prefers-color-scheme: light)" srcset="diagrams/arch.svg">' +
         '<img alt="A*b* `c` [d]" src="diagrams/arch.svg"></picture>',
+    ],
+    [
+      "a picture of the animated SVG when there is one, the still one first for a reader who asks for reduced motion",
+      "a",
+      ANIMATED,
+      '<picture><source media="(prefers-reduced-motion: reduce)" srcset="diagrams/arch.svg">' +
+        '<img alt="a" src="diagrams/arch.animated.svg"></picture>',
+    ],
+    [
+      "a picture of the animated pair when there is one, the still pair first for a reader who asks for reduced motion",
+      "a",
+      BOTH_ANIMATED,
+      '<picture><source media="(prefers-color-scheme: dark) and (prefers-reduced-motion: reduce)" srcset="diagrams/arch.dark.svg">' +
+        '<source media="(prefers-reduced-motion: reduce)" srcset="diagrams/arch.svg">' +
+        '<source media="(prefers-color-scheme: dark)" srcset="diagrams/arch.dark.animated.svg">' +
+        '<source media="(prefers-color-scheme: light)" srcset="diagrams/arch.animated.svg">' +
+        '<img alt="a" src="diagrams/arch.animated.svg"></picture>',
     ],
   ])("writes %s", (_case, alt, files, expected) => {
     expect(markdownSnippet(alt, files, BASE)).toBe(expected);
