@@ -75,6 +75,17 @@ describe("[browser] sketch over stdio", () => {
     expect(result.structuredContent).toMatchObject({ png: `${out}.png`, pixels: { width: expect.any(Number), height: expect.any(Number) } });
   });
 
+  it("draws both themes when asked and names the dark pair", async () => {
+    const both = join(dirname(out), "both");
+    const result = await client.callTool({ name: "sketch", arguments: { ...(readSpec("examples/legend.json") as object), out: both, theme: "both" } });
+
+    const [text] = result.content as Block[];
+    expect(result.isError, text?.text).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({ svg: `${both}.svg`, dark: { svg: `${both}.dark.svg`, png: `${both}.dark.png` } });
+    expect(await readFile(`${both}.dark.svg`, "utf8")).toContain('fill="#121212"');
+    expect((await readFile(`${both}.dark.png`)).equals(await readFile(`${both}.png`))).toBe(false);
+  });
+
   it("hands back the note about a diagram too big to read in the structured content and the text alike", async () => {
     const chain = join(dirname(out), "chain");
     const result = await client.callTool({ name: "sketch", arguments: { ...(readSpec("stress/chain.json") as object), out: chain } });

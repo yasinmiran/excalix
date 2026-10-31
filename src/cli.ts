@@ -9,6 +9,7 @@ import { serveMcp } from "./mcp.js";
 import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { parseSpec, SpecError, specSchema } from "./spec.js";
+import type { Theme } from "./types.js";
 import { version } from "./version.js";
 
 export interface Io {
@@ -19,14 +20,19 @@ export interface Io {
 const USAGE = `excalix - architecture diagrams from a topology spec
 
 usage:
-  excalix render <spec.json> [-o <basename>]   write <basename>.excalidraw, .svg and .png
+  excalix render <spec.json> [-o <basename>] [--theme light|dark|both]
+                                               write <basename>.excalidraw, .svg and .png
   excalix validate <spec.json>                 check the spec, print its counts or every problem
   excalix schema                               print the JSON Schema of the spec
   excalix mcp                                  serve the sketch tool over stdio
   excalix --version                            print the version
   excalix --help                               show this message
 
-render defaults the basename to the spec path without its extension.`;
+render defaults the basename to the spec path without its extension. --theme dark
+draws the .svg and .png in Excalidraw's dark mode; both also writes .dark.svg and
+.dark.png beside the light ones.`;
+
+const THEMES: readonly Theme[] = ["light", "dark", "both"];
 
 /** Runs one command and returns the process exit code. */
 export async function main(argv: string[], io: Io): Promise<number> {
@@ -65,7 +71,7 @@ export async function main(argv: string[], io: Io): Promise<number> {
 async function render(argv: string[], io: Io): Promise<number> {
   const { values, positionals } = parseArgs({
     args: argv,
-    options: { out: { type: "string", short: "o" } },
+    options: { out: { type: "string", short: "o" }, theme: { type: "string", default: "light" } },
     allowPositionals: true,
   });
   const specPath = positionals[0];
@@ -73,16 +79,21 @@ async function render(argv: string[], io: Io): Promise<number> {
     io.stderr("render needs a spec file");
     return 1;
   }
+  const theme = themeOf(values.theme);
   const spec = await readSpec(specPath);
   parseSpec(spec);
   const out = resolve(outputBasename(values.out, specPath));
 
   const renderer = await createBrowserRenderer();
   try {
-    const { files, result } = await writeSketch(spec, out, renderer);
+    const { files, result } = await writeSketch(spec, out, renderer, { theme });
     io.stdout(files.excalidraw);
     io.stdout(files.svg);
     io.stdout(files.png);
+    if (files.dark) {
+      io.stdout(files.dark.svg);
+      io.stdout(files.dark.png);
+    }
     const note = sizeNote(pngSize(result.png));
     if (note !== undefined) io.stdout(note);
   } finally {
@@ -121,6 +132,12 @@ async function readSpec(specPath: string): Promise<unknown> {
   } catch (error) {
     throw new Error(`invalid JSON in ${path}: ${(error as Error).message}`);
   }
+}
+
+function themeOf(value: string): Theme {
+  const theme = THEMES.find((known) => known === value);
+  if (theme === undefined) throw new Error(`--theme: got ${JSON.stringify(value)}, expected one of ${THEMES.map((known) => `"${known}"`).join(", ")}`);
+  return theme;
 }
 
 function outputBasename(out: string | undefined, specPath: string): string {

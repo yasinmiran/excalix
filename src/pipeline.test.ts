@@ -1,8 +1,12 @@
 import { readFileSync } from "node:fs";
+import { mkdtemp, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { sizeNote, sketch, viewScale } from "./pipeline.js";
+import { sizeNote, sketch, viewScale, writeSketch } from "./pipeline.js";
 import { estimateMeasurer } from "./render/estimate.js";
 import { embeddedScene, measuringOnly, readSpec, specFiles } from "./test-support.js";
+import type { Renderer } from "./types.js";
 
 const renderer = measuringOnly(estimateMeasurer);
 
@@ -75,5 +79,56 @@ describe("the scene inside the committed renders", () => {
 
     expect(scene).toMatchObject({ type: "excalidraw", source: "excalix" });
     expect(JSON.stringify(scene!.elements)).toBe(JSON.stringify(written.elements));
+  });
+});
+
+/** A renderer that answers with what it was asked for, and a PNG header 4400 pixels wide at 2x. */
+function recording(): { renderer: Renderer; calls: string[] } {
+  const calls: string[] = [];
+  const theme = (dark: boolean) => (dark ? "dark" : "light");
+  const renderer: Renderer = {
+    measurer: estimateMeasurer,
+    svg: async (_elements, { dark }) => {
+      calls.push(`svg ${theme(dark)}`);
+      return `<svg ${theme(dark)}/>`;
+    },
+    png: async (_elements, { dark, scale }) => {
+      calls.push(`png ${theme(dark)} at ${scale.toFixed(3)}`);
+      const header = new Uint8Array(24);
+      new DataView(header.buffer).setUint32(16, Math.trunc(2200 * scale));
+      new DataView(header.buffer).setUint32(20, Math.trunc(500 * scale));
+      return header;
+    },
+    close: async () => {},
+  };
+  return { renderer, calls };
+}
+
+describe("theme", () => {
+  const spec = readSpec("examples/order-pipeline.json");
+
+  it.each([
+    ["light", ["svg light", "png light at 2.000", "png light at 0.909"], "<svg light/>", undefined],
+    ["dark", ["svg dark", "png dark at 2.000", "png dark at 0.909"], "<svg dark/>", undefined],
+    ["both", ["svg light", "png light at 2.000", "svg dark", "png dark at 2.000", "png light at 0.909"], "<svg light/>", "<svg dark/>"],
+  ] as const)("draws %s, with the preview in the theme of the png", async (theme, expected, svg, dark) => {
+    const { renderer, calls } = recording();
+
+    const result = await sketch(spec, renderer, { theme, preview: true });
+
+    expect(calls).toEqual(expected);
+    expect(result.svg).toBe(svg);
+    expect(result.dark?.svg).toBe(dark);
+  });
+
+  it("writes the dark pair beside the light files only for both", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "excalix-theme-"));
+
+    const { files } = await writeSketch(spec, join(dir, "both/diagram"), recording().renderer, { theme: "both" });
+    await writeSketch(spec, join(dir, "dark/diagram"), recording().renderer, { theme: "dark" });
+
+    expect(files.dark).toEqual({ svg: join(dir, "both/diagram.dark.svg"), png: join(dir, "both/diagram.dark.png") });
+    expect((await readdir(join(dir, "both"))).sort()).toEqual(["diagram.dark.png", "diagram.dark.svg", "diagram.excalidraw", "diagram.png", "diagram.svg"]);
+    expect((await readdir(join(dir, "dark"))).sort()).toEqual(["diagram.excalidraw", "diagram.png", "diagram.svg"]);
   });
 });

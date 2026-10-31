@@ -48,6 +48,11 @@ function strict<T extends z.ZodRawShape>(shape: T, description: string) {
 /** A string field, for the spec and for a caller's own keys, so both report a wrong type the same way. */
 export const stringField = z.string({ error: problem("expected a string") });
 
+/** The problem for a value outside a fixed set, for a caller's own keys, worded as the spec words its own. */
+export function expectedOneOf(values: readonly string[]) {
+  return problem(oneOf(values));
+}
+
 function id(description: string, base: z.ZodString = stringField) {
   return base.regex(ID_PATTERN, { error: problem('expected letters, digits, "_" and "-" only') }).describe(description);
 }

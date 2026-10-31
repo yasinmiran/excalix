@@ -39,7 +39,7 @@ const PAGE = `<!doctype html>
 
 interface ExportData {
   elements: unknown[];
-  appState: { exportBackground: boolean; viewBackgroundColor: string; exportEmbedScene: boolean };
+  appState: { exportBackground: boolean; viewBackgroundColor: string; exportEmbedScene: boolean; exportWithDarkMode: boolean };
   files: Record<string, never>;
 }
 
@@ -47,7 +47,7 @@ interface ExportData {
 interface Utils {
   exportToCanvas(args: { data: ExportData }): Promise<HTMLCanvasElement>;
   exportToSvg(args: { data: ExportData; config: { padding: number } }): Promise<SVGSVGElement>;
-  exportToBlob(args: { data: ExportData; config: { padding: number; scale: number; mimeType: string } }): Promise<Blob>;
+  exportToBlob(args: { data: ExportData; config: { padding: number; scale: number; mimeType: string; theme: "light" | "dark" } }): Promise<Blob>;
 }
 
 interface ExcalixWindow {
@@ -68,9 +68,14 @@ const servedDirs: ReadonlyArray<readonly [string, string]> = [
 ];
 const playwrightVersion = (require("playwright-core/package.json") as { version: string }).version;
 
-// The scene goes into the SVG and the PNG too, so either opens in Excalidraw as an editable drawing.
-function exportData(elements: unknown[]): ExportData {
-  return { elements, appState: { exportBackground: true, viewBackgroundColor: "#ffffff", exportEmbedScene: true }, files: {} };
+// The scene goes into the SVG and the PNG too, so either opens in Excalidraw as an editable drawing. Dark mode is
+// not part of that scene, so a dark export reopens as the light drawing.
+function exportData(elements: unknown[], dark = false): ExportData {
+  return {
+    elements,
+    appState: { exportBackground: true, viewBackgroundColor: "#ffffff", exportEmbedScene: true, exportWithDarkMode: dark },
+    files: {},
+  };
 }
 
 function fontString(fontSize: number): string {
@@ -158,12 +163,14 @@ export async function createBrowserRenderer(): Promise<Renderer> {
         measure: (texts, fontSize) =>
           page.evaluate(measureInPage, { texts, font: fontString(fontSize), fontSize, lineHeight: FONT.lineHeight }),
       },
-      async svg(elements) {
+      // The SVG export takes dark mode from the appState alone and the PNG export from its config alone.
+      async svg(elements, { dark }) {
         const fontFaces = await pinnedFontFaceRules(drawnTexts(elements));
-        return page.evaluate(svgInPage, { data: exportData(elements), padding: PADDING, fontFaces });
+        return page.evaluate(svgInPage, { data: exportData(elements, dark), padding: PADDING, fontFaces });
       },
-      async png(elements, { scale }) {
-        const base64 = await page.evaluate(pngInPage, { data: exportData(elements), padding: PADDING, scale });
+      async png(elements, { dark, scale }) {
+        const theme: "light" | "dark" = dark ? "dark" : "light";
+        const base64 = await page.evaluate(pngInPage, { data: exportData(elements, dark), padding: PADDING, scale, theme });
         return new Uint8Array(Buffer.from(base64, "base64"));
       },
       close,
@@ -254,9 +261,19 @@ async function svgInPage({ data, padding, fontFaces }: { data: ExportData; paddi
   return svg.outerHTML;
 }
 
-async function pngInPage({ data, padding, scale }: { data: ExportData; padding: number; scale: number }): Promise<string> {
+async function pngInPage({
+  data,
+  padding,
+  scale,
+  theme,
+}: {
+  data: ExportData;
+  padding: number;
+  scale: number;
+  theme: "light" | "dark";
+}): Promise<string> {
   const { utils } = (window as unknown as ExcalixWindow).excalix;
-  const blob = await utils.exportToBlob({ data, config: { padding, scale, mimeType: "image/png" } });
+  const blob = await utils.exportToBlob({ data, config: { padding, scale, mimeType: "image/png", theme } });
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");

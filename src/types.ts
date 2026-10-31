@@ -4,6 +4,8 @@ export type Kind = "client" | "service" | "datastore" | "queue" | "cache" | "ext
 export type EdgeStyle = "sync" | "async";
 export type Arrows = "forward" | "both" | "none";
 export type Direction = "lr" | "tb";
+/** Which renders to write: light, dark, or both side by side. An output option, never part of the spec. */
+export type Theme = "light" | "dark" | "both";
 
 export interface GroupSpec {
   id: string;
@@ -126,10 +128,10 @@ export interface Measured {
 
 export interface Renderer {
   measurer: TextMeasurer;
-  /** Self-contained SVG markup with fonts inlined. */
-  svg(elements: unknown[]): Promise<string>;
-  /** PNG bytes with each scene pixel drawn as scale pixels a side. */
-  png(elements: unknown[], options: { scale: number }): Promise<Uint8Array>;
+  /** Self-contained SVG markup with fonts inlined, in Excalidraw's dark mode when asked. */
+  svg(elements: unknown[], options: { dark: boolean }): Promise<string>;
+  /** PNG bytes with each scene pixel drawn as scale pixels a side, in Excalidraw's dark mode when asked. */
+  png(elements: unknown[], options: { dark: boolean; scale: number }): Promise<Uint8Array>;
   close(): Promise<void>;
 }
 
@@ -139,11 +141,16 @@ export interface Preview {
   scale: number;
 }
 
-export interface SketchResult {
-  /** Full .excalidraw document as a JSON string. */
-  excalidraw: string;
+export interface Images {
   svg: string;
   png: Uint8Array;
+}
+
+export interface SketchResult extends Images {
+  /** Full .excalidraw document as a JSON string. */
+  excalidraw: string;
+  /** The dark renders, beside the light ones in svg and png, when the theme is both. */
+  dark?: Images;
   /** Present when the sketch was asked for one. */
   preview?: Preview;
 }

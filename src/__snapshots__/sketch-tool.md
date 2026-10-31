@@ -216,6 +216,27 @@ The .svg and .png carry the editable scene, so either one dropped on excalidraw.
     "out": {
       "description": "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the first root the client declares, usually the project directory, or else the server's working directory. Defaults to diagrams/<title slug>.",
       "type": "string"
+    },
+    "theme": {
+      "default": "light",
+      "description": "which colour scheme the .svg and .png are drawn in; the .excalidraw is the same scene either way",
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "light",
+          "description": "dark lines on white"
+        },
+        {
+          "type": "string",
+          "const": "dark",
+          "description": "Excalidraw's dark mode, light lines on #121212; <out>.svg and <out>.png come out dark"
+        },
+        {
+          "type": "string",
+          "const": "both",
+          "description": "the light files, plus <out>.dark.svg and <out>.dark.png, for a page that follows the reader's colour scheme"
+        }
+      ]
     }
   },
   "required": [
@@ -244,6 +265,23 @@ The .svg and .png carry the editable scene, so either one dropped on excalidraw.
     "png": {
       "type": "string",
       "description": "the .png file at full size; the image block in this result is a copy that fits 2000 pixels a side"
+    },
+    "dark": {
+      "description": "the .dark.svg and .dark.png files, present when theme is both",
+      "type": "object",
+      "properties": {
+        "svg": {
+          "type": "string"
+        },
+        "png": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "svg",
+        "png"
+      ],
+      "additionalProperties": false
     },
     "pixels": {
       "type": "object",

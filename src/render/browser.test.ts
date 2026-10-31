@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { inflateSync } from "node:zlib";
 import type { ExcalidrawElement, ExcalidrawTextElement } from "excalidraw-types/element/src/types";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -13,6 +14,8 @@ import { createBrowserRenderer, launchBrowser, openRenderPage } from "./browser.
 import { codePointRanges, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
 const OUT_DIR = "out/render-check";
+const LIGHT = { dark: false };
+const DARK = { dark: true };
 const EXCALIFONT_STACK = "Excalifont, Xiaolai, sans-serif, Segoe UI Emoji";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -102,6 +105,17 @@ async function plainPngInPage(elements: unknown[]): Promise<number[]> {
   return Array.from(new Uint8Array(await blob.arrayBuffer()));
 }
 
+/** The colour of the top-left pixel as #rrggbb: every PNG filter leaves the first pixel of the first row as it is. */
+function cornerColour(png: Uint8Array): string {
+  const pixels = inflateSync(Buffer.concat(pngChunks(png).flatMap(({ type, data }) => (type === "IDAT" ? [data] : []))));
+  return `#${pixels.subarray(1, 4).toString("hex")}`;
+}
+
+/** The fill of the rect an SVG export draws its background with. */
+function backgroundFill(svg: string): string | undefined {
+  return /<rect x="0" y="0" width="[\d.]+" height="[\d.]+" fill="(#[0-9a-f]+)">/.exec(svg)?.[1];
+}
+
 function pngDimensions(png: Uint8Array): { width: number; height: number } {
   const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
   return { width: view.getUint32(16), height: view.getUint32(20) };
@@ -139,7 +153,7 @@ describe("[browser] createBrowserRenderer", () => {
   });
 
   it("exports a self-contained SVG with a subsetted Excalifont", async () => {
-    const svg = await renderer.svg(elements);
+    const svg = await renderer.svg(elements, LIGHT);
     await writeFile(join(OUT_DIR, "sample.svg"), svg);
 
     expect(svg.startsWith("<svg")).toBe(true);
@@ -153,16 +167,16 @@ describe("[browser] createBrowserRenderer", () => {
   });
 
   it("renders byte-identical SVG for the same elements", async () => {
-    const first = await renderer.svg(elements);
-    const second = await renderer.svg(elements);
+    const first = await renderer.svg(elements, LIGHT);
+    const second = await renderer.svg(elements, LIGHT);
     expect(second).toBe(first);
   });
 
   it("renders byte-identical SVG when several font faces are inlined", async () => {
     const [size] = await renderer.measurer.measure(["Łódź API"], 20);
     const mixed = scene("Łódź API", size!);
-    const first = await renderer.svg(mixed);
-    const second = await renderer.svg(mixed);
+    const first = await renderer.svg(mixed, LIGHT);
+    const second = await renderer.svg(mixed, LIGHT);
     expect(first.match(/@font-face/g)).toHaveLength(2);
     expect(second).toBe(first);
   });
@@ -173,7 +187,7 @@ describe("[browser] createBrowserRenderer", () => {
     try {
       const page = await openRenderPage(browser);
       const plain = new Uint8Array(await page.evaluate(plainPngInPage, elements));
-      const embedded = await renderer.png(elements, { scale: 2 });
+      const embedded = await renderer.png(elements, { ...LIGHT, scale: 2 });
 
       const idat = (png: Uint8Array) => Buffer.concat(pngChunks(png).flatMap(({ type, data }) => (type === "IDAT" ? [data] : [])));
       expect(pngChunks(embedded).map(({ type }) => type)).toEqual([...pngChunks(plain).map(({ type }) => type).slice(0, -1), "tEXt", "IEND"]);
@@ -181,14 +195,32 @@ describe("[browser] createBrowserRenderer", () => {
       // Restore fills in a field or two these hand-made elements leave out; file-load.test.ts holds a sketch's to the byte.
       const ids = (scene: { elements: unknown[] } | undefined) => scene?.elements.map((element) => (element as { id: string }).id);
       expect(ids(embeddedScene(embedded))).toEqual(elements.map((element) => element.id));
-      expect(ids(embeddedScene(await renderer.svg(elements)))).toEqual(elements.map((element) => element.id));
+      expect(ids(embeddedScene(await renderer.svg(elements, LIGHT)))).toEqual(elements.map((element) => element.id));
     } finally {
       await browser.close();
     }
   });
 
+  // Each format reads dark mode from a different switch and ignores the other's, so only the output tells.
+  it("draws the dark SVG and PNG on Excalidraw's dark background, at the light ones' size", async () => {
+    const [lightSvg, darkSvg] = await Promise.all([renderer.svg(elements, LIGHT), renderer.svg(elements, DARK)]);
+    const [lightPng, darkPng] = await Promise.all([renderer.png(elements, { ...LIGHT, scale: 2 }), renderer.png(elements, { ...DARK, scale: 2 })]);
+    await writeFile(join(OUT_DIR, "sample.dark.png"), darkPng);
+
+    expect([backgroundFill(lightSvg), backgroundFill(darkSvg)]).toEqual(["#ffffff", "#121212"]);
+    expect([cornerColour(lightPng), cornerColour(darkPng)]).toEqual(["#ffffff", "#121212"]);
+    expect(Buffer.from(darkPng).equals(Buffer.from(lightPng))).toBe(false);
+    expect(pngDimensions(darkPng)).toEqual(pngDimensions(lightPng));
+  });
+
+  it("renders the dark SVG and PNG byte for byte the same twice", async () => {
+    expect(await renderer.svg(elements, DARK)).toBe(await renderer.svg(elements, DARK));
+    const [first, second] = [await renderer.png(elements, { ...DARK, scale: 2 }), await renderer.png(elements, { ...DARK, scale: 2 })];
+    expect(Buffer.from(second).equals(Buffer.from(first))).toBe(true);
+  });
+
   it("exports a PNG at 2x the SVG size", async () => {
-    const [svg, png] = await Promise.all([renderer.svg(elements), renderer.png(elements, { scale: 2 })]);
+    const [svg, png] = await Promise.all([renderer.svg(elements, LIGHT), renderer.png(elements, { ...LIGHT, scale: 2 })]);
     await writeFile(join(OUT_DIR, "sample.png"), png);
 
     expect(Array.from(png.subarray(0, 8))).toEqual(PNG_SIGNATURE);
@@ -376,7 +408,7 @@ describe("[browser] pinned fallback fonts", () => {
   it("embeds the pinned glyphs an SVG draws, so it renders the same in a browser without them", async () => {
     const text = "api → ✓ ☁ ⚙ ≤ ┌─┐ Ελληνικά שלום مرحبا";
     const [size] = await renderer.measurer.measure([text], 20);
-    const svg = await renderer.svg(scene(text, size!));
+    const svg = await renderer.svg(scene(text, size!), LIGHT);
     const page = await openRenderPage(browser);
     await showLines(page, [text]);
     const [measured] = await platformFonts(page, "body > div");
@@ -397,8 +429,8 @@ describe("[browser] pinned fallback fonts", () => {
   it("embeds only the glyphs drawn as text, byte for byte the same each time, and leaves color emoji to the viewer", async () => {
     const text = "deploy 🚀 ☁️ 1️⃣ ☁ → ✓";
     const [size] = await renderer.measurer.measure([text], 20);
-    const first = await renderer.svg(scene(text, size!));
-    const second = await renderer.svg(scene(text, size!));
+    const first = await renderer.svg(scene(text, size!), LIGHT);
+    const second = await renderer.svg(scene(text, size!), LIGHT);
     const pinnedRanges = [...first.matchAll(/font-family: Xiaolai; src: url\(data:font\/ttf;base64,[\w+/=]+\); unicode-range: ([^;]+);/g)];
 
     expect(pinnedRanges.map(([, range]) => range)).toEqual(["U+2192,U+2601,U+2713"]);

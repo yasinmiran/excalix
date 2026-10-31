@@ -86,7 +86,10 @@ npx -y excalix render docs/arch.json -o docs/arch
 
 Writes `<basename>.excalidraw`, `.svg` and `.png`. End `-o` with a slash and it
 is a directory: `-o docs/diagrams/` writes `arch.excalidraw` and its siblings in
-there.
+there. `--theme dark` draws the `.svg` and `.png` in Excalidraw's dark mode, and
+`--theme both` adds `.dark.svg` and `.dark.png` beside the light pair; the MCP
+tool takes the same as `theme`. A theme is how the picture is shown, never part
+of the spec.
 
 ## When it says no
 

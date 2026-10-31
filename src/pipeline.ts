@@ -5,11 +5,13 @@ import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
 import { EDGE_LABEL_WIDTH, FONT, nodeSize, outlineOf, PNG_SCALE } from "./style.js";
-import type { LayoutInput, Measured, Preview, Renderer, SketchResult, Spec, TextMeasurer, TextSize } from "./types.js";
+import type { Images, LayoutInput, Measured, Preview, Renderer, SketchResult, Spec, TextMeasurer, TextSize, Theme } from "./types.js";
 import { wrapTexts } from "./wrap.js";
 
 export interface SketchOptions {
-  /** Also export the copy an agent is handed, which fits PREVIEW_EDGE pixels a side. */
+  /** light by default; dark draws svg and png in Excalidraw's dark mode, and both adds the dark pair as dark. */
+  theme?: Theme;
+  /** Also export the copy an agent is handed, which fits PREVIEW_EDGE pixels a side, in the theme of png. */
   preview?: boolean;
 }
 
@@ -19,11 +21,16 @@ export async function sketch(input: unknown, renderer: Renderer, options: Sketch
   const measured = await measureLabels(spec, renderer.measurer);
   const laidOut = await layout(toLayoutInput(spec, measured));
   const elements = buildElements(spec, laidOut, measured);
-  const svg = await renderer.svg(elements);
-  const png = await renderer.png(elements, { scale: PNG_SCALE });
-  const result: SketchResult = { excalidraw: toDocument(elements), svg, png };
-  if (options.preview) result.preview = await previewOf(elements, png, renderer);
+  const { theme = "light" } = options;
+  const dark = theme === "dark";
+  const result: SketchResult = { excalidraw: toDocument(elements), ...(await images(elements, renderer, dark)) };
+  if (theme === "both") result.dark = await images(elements, renderer, true);
+  if (options.preview) result.preview = await previewOf(elements, result.png, renderer, dark);
   return result;
+}
+
+async function images(elements: unknown[], renderer: Renderer, dark: boolean): Promise<Images> {
+  return { svg: await renderer.svg(elements, { dark }), png: await renderer.png(elements, { dark, scale: PNG_SCALE }) };
 }
 
 // The longest side Claude Code passes to a model whole. Exporting at that size, rather than letting the client
@@ -35,16 +42,17 @@ const PREVIEW_EDGE = 2000;
  * fits. The canvas truncates to whole pixels, so the full PNG's long edge L can be a pixel short of the scene's at
  * PNG_SCALE; the preview then comes out under PREVIEW_EDGE + PREVIEW_EDGE / L, which truncates to PREVIEW_EDGE.
  */
-async function previewOf(elements: unknown[], png: Uint8Array, renderer: Renderer): Promise<Preview> {
+async function previewOf(elements: unknown[], png: Uint8Array, renderer: Renderer, dark: boolean): Promise<Preview> {
   const { width, height } = pngSize(png);
   const scale = Math.min(PNG_SCALE, (PREVIEW_EDGE * PNG_SCALE) / Math.max(width, height));
-  return scale === PNG_SCALE ? { png, scale } : { png: await renderer.png(elements, { scale }), scale };
+  return scale === PNG_SCALE ? { png, scale } : { png: await renderer.png(elements, { dark, scale }), scale };
 }
 
 export interface WrittenFiles {
   excalidraw: string;
   svg: string;
   png: string;
+  dark?: { svg: string; png: string };
 }
 
 export interface Written {
@@ -52,22 +60,23 @@ export interface Written {
   result: SketchResult;
 }
 
-/** Runs sketch and writes <basename>.excalidraw, .svg and .png. */
+/** Runs sketch and writes <basename>.excalidraw, .svg and .png, and .dark.svg and .dark.png for the theme both. */
 export async function writeSketch(input: unknown, basename: string, renderer: Renderer, options: SketchOptions = {}): Promise<Written> {
   const result = await sketch(input, renderer, options);
   return { files: await writeFiles(result, basename), result };
 }
 
-/** Writes a result to <basename>.excalidraw, .svg and .png. Returns the absolute paths. */
+/** Writes a result to <basename>.excalidraw, .svg and .png, plus its dark pair if it has one. Returns the absolute paths. */
 export async function writeFiles(result: SketchResult, basename: string): Promise<WrittenFiles> {
   const base = resolve(basename);
   await mkdir(dirname(base), { recursive: true });
-  const paths = { excalidraw: `${base}.excalidraw`, svg: `${base}.svg`, png: `${base}.png` };
-  await Promise.all([
-    writeFile(paths.excalidraw, result.excalidraw),
-    writeFile(paths.svg, result.svg),
-    writeFile(paths.png, result.png),
-  ]);
+  const paths: WrittenFiles = { excalidraw: `${base}.excalidraw`, svg: `${base}.svg`, png: `${base}.png` };
+  const writes = [writeFile(paths.excalidraw, result.excalidraw), writeFile(paths.svg, result.svg), writeFile(paths.png, result.png)];
+  if (result.dark) {
+    paths.dark = { svg: `${base}.dark.svg`, png: `${base}.dark.png` };
+    writes.push(writeFile(paths.dark.svg, result.dark.svg), writeFile(paths.dark.png, result.dark.png));
+  }
+  await Promise.all(writes);
   return paths;
 }
 

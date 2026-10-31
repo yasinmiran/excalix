@@ -115,13 +115,14 @@
       <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles, gives the sizing advice from the <a href="spec.html#writing">spec reference</a>, and says the SVG and PNG carry the scene. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, and the instructions in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/server-instructions.md">their own</a>; the test suite keeps both in step with the server.</p>
 
       <h2 id="input">Input</h2>
-      <p>The input schema is the <a href="spec.html">spec</a>, unchanged, plus one optional field:</p>
+      <p>The input schema is the <a href="spec.html">spec</a>, unchanged, plus two optional fields:</p>
       <div class="table-scroll">
         <table>
           <thead><tr><th scope="col">field</th><th scope="col">meaning</th></tr></thead>
           <tbody>
             <tr><td>the spec</td><td><code>title</code>, <code>direction</code>, <code>groups</code>, <code>nodes</code> and <code>edges</code>, as in the <a href="spec.html#shape">spec reference</a>. Only <code>nodes</code> is required.</td></tr>
             <tr><td><code>out</code></td><td>Output basename without extension; writes <code>&lt;out&gt;.excalidraw</code>, <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code>. Relative paths resolve against the first root the client declares through MCP roots, usually the project directory. When the client declares no roots, or the request fails or takes over two seconds, the server's working directory stands in, which is the project directory when Claude Code launches the server. Absolute paths are used as given. Defaults to <code>diagrams/&lt;title slug&gt;</code>, or <code>diagrams/diagram</code> with no title.</td></tr>
+            <tr><td><code>theme</code></td><td><code>"light"</code> by default. <code>"dark"</code> draws <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code> in Excalidraw's dark mode, light lines on an opaque <code>#121212</code>. <code>"both"</code> writes the light files and adds <code>&lt;out&gt;.dark.svg</code> and <code>&lt;out&gt;.dark.png</code>, for a page that follows the reader's colour scheme. The <code>.excalidraw</code> is the same either way, and a dark image reopens in Excalidraw as the light scene, since dark mode is how it is shown, not what it holds.</td></tr>
           </tbody>
         </table>
       </div>
@@ -141,11 +142,11 @@
   "preview": { "width": 2000, "height": 851 }
 }</code></pre>
       </figure>
-      <p><code>pixels</code> is the size of the PNG on disk, and <code>preview</code> the size of the image block. A very wide <code>pixels.width</code> usually means a long node label stretched the layout. When there is something to act on before the diagram is shown, such as a size too big to read, a <code>notes</code> array holds one line per thing; see <a href="#size">large diagrams</a>. Without anything to say, the field is absent.</p>
+      <p>With <code>theme</code> set to <code>"both"</code>, a <code>dark</code> field after <code>png</code> names the dark pair: <code>{ "svg": ".../order-pipeline.dark.svg", "png": ".../order-pipeline.dark.png" }</code>. <code>pixels</code> is the size of the PNG on disk, and <code>preview</code> the size of the image block. A very wide <code>pixels.width</code> usually means a long node label stretched the layout. When there is something to act on before the diagram is shown, such as a size too big to read, a <code>notes</code> array holds one line per thing; see <a href="#size">large diagrams</a>. Without anything to say, the field is absent.</p>
       <h3 id="result-text">A text block</h3>
       <p>The structured content again, serialized as JSON on one line. Claude Code shows the model the image and the structured content and drops text blocks, while some clients read only the content, so each carries the whole answer.</p>
       <h3 id="result-image">An image block</h3>
-      <p>The diagram as a PNG, base64 encoded with <code>mimeType</code> <code>image/png</code>, so the agent can look at it without a separate read and call again if a label collides or the flow reads backwards. It is exported again at whatever scale up to the file's own fits 2000 pixels a side, the most Claude Code passes to a model whole, so the payload stays small and what the model sees is the image the size note judges. A diagram that already fits gets the file itself. The <code>.png</code> on disk stays the full 2x export, for a closer look at a detail.</p>
+      <p>The diagram as a PNG, base64 encoded with <code>mimeType</code> <code>image/png</code>, so the agent can look at it without a separate read and call again if a label collides or the flow reads backwards. It is exported again at whatever scale up to the file's own fits 2000 pixels a side, the most Claude Code passes to a model whole, so the payload stays small and what the model sees is the image the size note judges. A diagram that already fits gets the file itself. The <code>.png</code> on disk stays the full 2x export, for a closer look at a detail. With <code>theme</code> set to <code>"dark"</code> the image is dark too; with <code>"both"</code> it is the light one.</p>
 
       <h2 id="errors">Errors</h2>
       <p>A spec that fails validation does not throw a protocol error. The result has <code>isError: true</code> and one text block with every problem on its own line, the same lines <code>excalix validate</code> prints:</p>

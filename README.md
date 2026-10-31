@@ -48,6 +48,8 @@ npx -y playwright@1.63.0 install chromium
 
 ```
 npx -y excalix render spec.json -o out/spec    writes out/spec.excalidraw, .svg and .png
+  --theme dark                                 draws the .svg and .png in Excalidraw's dark mode
+  --theme both                                 adds out/spec.dark.svg and .dark.png beside the light pair
 npx -y excalix validate spec.json              every problem at once, or ok: 7 nodes, 6 edges, 2 groups
 npx -y excalix schema                          JSON Schema of the spec
 ```

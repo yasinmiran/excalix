@@ -8,7 +8,7 @@ import { z } from "zod";
 import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
 import type { SketchOptions, Written } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
-import { parseSpecWith, SpecError, specSchemaWith, stringField } from "./spec.js";
+import { expectedOneOf, parseSpecWith, SpecError, specSchemaWith, stringField } from "./spec.js";
 import type { Renderer } from "./types.js";
 import { PNG_SCALE } from "./style.js";
 import { version } from "./version.js";
@@ -41,18 +41,35 @@ The .svg and .png carry the editable scene, so either one dropped on excalidraw.
 // decides whether an agent reaches for sketch at all.
 const INSTRUCTIONS = `excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, so either opens in Excalidraw.`;
 
+const theme = z
+  .union(
+    [
+      z.literal("light").describe("dark lines on white"),
+      z.literal("dark").describe("Excalidraw's dark mode, light lines on #121212; <out>.svg and <out>.png come out dark"),
+      z.literal("both").describe("the light files, plus <out>.dark.svg and <out>.dark.png, for a page that follows the reader's colour scheme"),
+    ],
+    { error: expectedOneOf(["light", "dark", "both"]) },
+  )
+  .default("light")
+  .describe("which colour scheme the .svg and .png are drawn in; the .excalidraw is the same scene either way");
+
 const inputSchema = specSchemaWith({
   out: stringField
     .optional()
     .describe(
       "output basename without extension; writes <out>.excalidraw, <out>.svg and <out>.png. Relative paths resolve against the first root the client declares, usually the project directory, or else the server's working directory. Defaults to diagrams/<title slug>.",
     ),
+  theme,
 });
 
 const outputSchema = z.object({
   excalidraw: z.string().describe("the .excalidraw file, the one to open on excalidraw.com"),
   svg: z.string().describe("the .svg file"),
   png: z.string().describe("the .png file at full size; the image block in this result is a copy that fits 2000 pixels a side"),
+  dark: z
+    .object({ svg: z.string(), png: z.string() })
+    .optional()
+    .describe("the .dark.svg and .dark.png files, present when theme is both"),
   pixels: z
     .object({ width: z.number(), height: z.number() })
     .describe("size of that png; a very wide one usually means a long node label stretched the layout"),
@@ -111,10 +128,10 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
   server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
     if (params.name !== TOOL.name) throw new McpError(ErrorCode.InvalidParams, `unknown tool "${params.name}"`);
     try {
-      const { out, ...spec } = parseSpecWith(inputSchema, params.arguments);
+      const { out, theme, ...spec } = parseSpecWith(inputSchema, params.arguments);
       const target = out ?? defaultOut(spec.title);
       const basename = isAbsolute(target) ? target : resolve(await baseDirectory(server), target);
-      const { files, result } = await deps.writeSketch(spec, basename, await renderReady(), { preview: true });
+      const { files, result } = await deps.writeSketch(spec, basename, await renderReady(), { theme, preview: true });
       const shown = result.preview ?? { png: result.png, scale: PNG_SCALE };
       const pixels = pngSize(result.png);
       const preview = pngSize(shown.png);

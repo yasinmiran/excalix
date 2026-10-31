@@ -134,7 +134,7 @@ describe("sketch tool", () => {
     expect(await readFile(new URL("../site/mcp.html", import.meta.url), "utf8")).toContain(`<p>${instructions}</p>`);
   });
 
-  it("advertises the same spec as excalix schema, plus out", async () => {
+  it("advertises the same spec as excalix schema, plus out and theme", async () => {
     const advertised = structuredClone(await sketchTool()).inputSchema as {
       $schema?: string;
       properties: Record<string, { description?: string }>;
@@ -142,7 +142,9 @@ describe("sketch tool", () => {
     const printed = await cliSchema();
 
     expect(advertised.properties.out?.description).toContain("<out>.excalidraw");
+    expect(advertised.properties.theme?.description).toContain("colour scheme");
     delete advertised.properties.out;
+    delete advertised.properties.theme;
     // One zod schema, serialized twice: the tool targets draft 7, the CLI the draft zod defaults to.
     delete advertised.$schema;
     expect(printed.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
@@ -223,7 +225,7 @@ describe("sketch tool", () => {
 
     await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
 
-    expect(writeSketch.mock.calls[0]?.[3]).toEqual({ preview: true });
+    expect(writeSketch.mock.calls[0]?.[3]).toMatchObject({ preview: true });
   });
 
   it("defaults out to diagrams/<title slug>", async () => {
@@ -326,6 +328,44 @@ describe("sketch tool", () => {
 
     expect(result.isError).toBe(true);
     expect(textOf(result)).toBe('out: got 5, expected a string\nedges[0].to: unknown node "apy", did you mean "api"?');
+  });
+
+  it("reports a theme it does not draw in the same list", async () => {
+    const { client } = await harness();
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out: 5, theme: "sepia" } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe('out: got 5, expected a string\ntheme: got "sepia", expected one of "light", "dark", "both"');
+  });
+
+  it.each(["light", "dark", "both"] as const)("passes theme %s to the pipeline, and light when there is none", async (theme) => {
+    const { client, out, writeSketch } = await harness();
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out, theme } });
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    expect(writeSketch.mock.calls.map((call) => call[3].theme)).toEqual([theme, "light"]);
+    expect(writeSketch.mock.calls[0]?.[0]).not.toHaveProperty("theme");
+  });
+
+  it("names the dark files when there are some", async () => {
+    const { client, out } = await harness({
+      writeSketch: async (_input, basename) => ({
+        files: {
+          excalidraw: `${basename}.excalidraw`,
+          svg: `${basename}.svg`,
+          png: `${basename}.png`,
+          dark: { svg: `${basename}.dark.svg`, png: `${basename}.dark.png` },
+        },
+        result: { excalidraw: "", svg: "", png: PNG, dark: { svg: "", png: PNG } },
+      }),
+    });
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out, theme: "both" } });
+
+    expect(result.structuredContent).toMatchObject({ dark: { svg: `${out}.dark.svg`, png: `${out}.dark.png` } });
+    expect(Object.keys(result.structuredContent!).slice(0, 4)).toEqual(["excalidraw", "svg", "png", "dark"]);
   });
 
   it("reports a call with no arguments at all", async () => {

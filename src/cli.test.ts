@@ -76,13 +76,40 @@ describe("render", () => {
 
     expect(code).toBe(0);
     expect(err).toEqual([]);
-    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "topology"), renderer);
+    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "topology"), renderer, { theme: "light" });
     expect(out).toEqual([
       join(dir, "topology.excalidraw"),
       join(dir, "topology.svg"),
       join(dir, "topology.png"),
     ]);
     expect(mocks.close).toHaveBeenCalledOnce();
+  });
+
+  it("draws in the theme --theme names, and prints the dark pair when there is one", async () => {
+    mocks.writeSketch.mockImplementation(async (_spec: unknown, basename: string) => ({
+      files: {
+        excalidraw: `${basename}.excalidraw`,
+        svg: `${basename}.svg`,
+        png: `${basename}.png`,
+        dark: { svg: `${basename}.dark.svg`, png: `${basename}.dark.png` },
+      },
+      result: { excalidraw: "", svg: "", png: png(2404, 811) },
+    }));
+    const { io, out } = collect();
+
+    expect(await main(["render", specPath, "--theme", "both"], io)).toBe(0);
+
+    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "topology"), renderer, { theme: "both" });
+    expect(out).toEqual(["excalidraw", "svg", "png", "dark.svg", "dark.png"].map((ext) => join(dir, `topology.${ext}`)));
+  });
+
+  it("refuses a theme it does not draw before starting a browser", async () => {
+    const { io, err } = collect();
+
+    expect(await main(["render", specPath, "--theme", "sepia"], io)).toBe(1);
+
+    expect(err).toEqual(['error: --theme: got "sepia", expected one of "light", "dark", "both"']);
+    expect(mocks.createBrowserRenderer).not.toHaveBeenCalled();
   });
 
   it("adds a line when the png is too big to read scaled down", async () => {
@@ -108,7 +135,7 @@ describe("render", () => {
       process.chdir(cwd);
     }
 
-    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "out/nested/diagram"), renderer);
+    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "out/nested/diagram"), renderer, { theme: "light" });
   });
 
   it("treats a trailing slash on -o as a directory", async () => {
@@ -116,7 +143,7 @@ describe("render", () => {
 
     expect(await main(["render", specPath, "-o", join(dir, "diagrams/")], io)).toBe(0);
 
-    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "diagrams/topology"), renderer);
+    expect(mocks.writeSketch).toHaveBeenCalledWith(specJson, join(dir, "diagrams/topology"), renderer, { theme: "light" });
   });
 
   it("closes the renderer when writeSketch throws", async () => {

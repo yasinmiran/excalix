@@ -324,19 +324,25 @@ describe("[browser] Excalidraw image load", () => {
     await renderer?.close();
   });
 
-  // The two formats embed different appState, so the elements are what has to come back as written.
+  // The two formats embed different appState, so the elements are what has to come back as written. Dark mode is
+  // an export setting and not part of the scene, so the dark pair reopens as the same light drawing.
   for (const file of specFiles.filter((file) => file.startsWith("examples/"))) {
-    it(`reopens the SVG and the PNG of ${file} as the elements of its .excalidraw`, async () => {
-      const { excalidraw, svg, png } = await sketch(readSpec(file), renderer);
+    it(`reopens the SVG and the PNG of ${file}, light and dark, as the elements of its .excalidraw`, async () => {
+      const { excalidraw, svg, png, dark } = await sketch(readSpec(file), renderer, { theme: "both" });
       const written = JSON.stringify(JSON.parse(excalidraw).elements);
+      const images = [
+        { image: svg, type: "image/svg+xml" },
+        { image: png, type: "image/png" },
+        { image: dark!.svg, type: "image/svg+xml" },
+        { image: dark!.png, type: "image/png" },
+      ];
 
-      const fromSvg = await page.evaluate(loadImageInPage, { base64: Buffer.from(svg).toString("base64"), type: "image/svg+xml" });
-      const fromPng = await page.evaluate(loadImageInPage, { base64: Buffer.from(png).toString("base64"), type: "image/png" });
-
-      expect(JSON.stringify(fromSvg)).toBe(written);
-      expect(JSON.stringify(fromPng)).toBe(written);
-      expect(embeddedScene(svg)?.source).toBe("excalix");
-      expect(embeddedScene(png)?.source).toBe("excalix");
+      for (const { image, type } of images) {
+        const loaded = await page.evaluate(loadImageInPage, { base64: Buffer.from(image).toString("base64"), type });
+        expect(JSON.stringify(loaded), type).toBe(written);
+        expect(embeddedScene(image)).toMatchObject({ source: "excalix", appState: { viewBackgroundColor: "#ffffff" } });
+        expect(embeddedScene(image)?.appState).not.toHaveProperty("exportWithDarkMode");
+      }
     });
   }
 });
