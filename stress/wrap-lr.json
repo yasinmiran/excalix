@@ -1,0 +1,21 @@
+{
+  "title": "edge labels wrapped, left to right",
+  "direction": "lr",
+  "groups": [{ "id": "edge", "label": "edge" }],
+  "nodes": [
+    { "id": "app", "label": "Mobile app", "kind": "client" },
+    { "id": "gateway", "label": "API gateway", "kind": "service", "group": "edge" },
+    { "id": "orders", "label": "注文サービス", "kind": "service" },
+    { "id": "stock", "label": "库存服务", "kind": "service" },
+    { "id": "lake", "label": "Data lake", "kind": "datastore" },
+    { "id": "push", "label": "Push service", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "app", "to": "gateway", "label": "GET https://api.example.com/v2/orders/{orderId}/line-items" },
+    { "from": "gateway", "to": "orders", "label": "fan-out to the order-service and the billing-service workers" },
+    { "from": "orders", "to": "stock", "label": "注文を作成して、在庫サービスに「予約」を依頼する" },
+    { "from": "stock", "to": "lake", "label": "下单后通知库存服务预留商品并发送确认邮件给用户", "style": "async" },
+    { "from": "orders", "to": "lake", "label": "POST  /exports   with   the   nightly   batch" },
+    { "from": "orders", "to": "push", "label": "👨‍👩‍👧 family plan 🇳🇴🇸🇪🇩🇰 nordic launch 👍🏽 approved", "style": "async" }
+  ]
+}

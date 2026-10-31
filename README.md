@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/yasinmiran/excalix/main/skills/exca
 | `cache` | cache or in-memory store |
 | `external` | a system another company operates and you only call |
 
-`edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows` is `forward` (default), `both` or `none`. A `\n` in any label starts a new line.
+`edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows` is `forward` (default), `both` or `none`. A `\n` in any label starts a new line, and an edge label past about twenty characters wraps onto more lines. The breaks are written into the file, so a label keeps its lines when you drag things around in Excalidraw.
 
 List nodes in reading order, keep edge labels to a few words, and split anything past about twenty nodes into an overview and a detail diagram. [skills/excalix/SKILL.md](https://github.com/yasinmiran/excalix/blob/main/skills/excalix/SKILL.md) has the rest. Validation names every problem in one go:
 

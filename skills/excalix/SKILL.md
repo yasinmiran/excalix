@@ -54,8 +54,9 @@ reorders some of them when that keeps arrows from crossing. It will not move an
 arrow onto a different route. When a route is what you want changed, the levers
 are the direction of the edge itself, which nodes share a group, and `direction`.
 
-Keep edge labels to a few words. A label sits on its arrow and reserves that
-much width, so a sentence on one edge pushes the whole diagram wide. `\n`
+Keep edge labels to a few words. A label sits on its arrow and the layout makes
+room for it; past about twenty characters it wraps onto more lines, so a
+sentence on one edge becomes a block that pushes the nodes apart. `\n`
 anywhere in a label starts a new line, which is the way out when a node name is
 genuinely long. An edge from a node back to itself is fine, and so are two edges
 between the same pair; each one draws as its own arrow. A label on a self edge

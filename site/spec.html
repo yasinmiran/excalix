@@ -151,7 +151,7 @@
           <tbody>
             <tr><td><code>style</code></td><td><code>sync</code> (default) for request and response, drawn solid. <code>async</code> for a message or event, drawn dashed.</td></tr>
             <tr><td><code>arrows</code></td><td><code>forward</code> (default) puts one head at the target, <code>both</code> one at each end, <code>none</code> draws a plain association.</td></tr>
-            <tr><td><code>label</code></td><td>Text drawn on the arrow, a few words at most.</td></tr>
+            <tr><td><code>label</code></td><td>Text drawn on the arrow, a few words at most. Past about twenty characters it wraps onto more lines.</td></tr>
           </tbody>
         </table>
       </div>
@@ -199,7 +199,8 @@ groups[0].parent: "b" closes the cycle a -> b -> a</code></pre>
       <p>Sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, so the layout reorders some of them when that keeps arrows from crossing, and it will not move an arrow onto a different route. When a route is what you want changed, the levers are the direction of the edge itself, which nodes share a group, and <code>direction</code>.</p>
 
       <h3 id="labels">Keep edge labels short</h3>
-      <p>A label sits on its arrow and reserves that much width, so a sentence on one edge pushes the whole diagram wide. A few words is plenty. When a node name is genuinely long, a <code>\n</code> breaks it.</p>
+      <p>A label sits on its arrow and the layout makes room for it. Past about twenty characters it wraps onto more lines, so a sentence on one edge becomes a block that pushes the nodes apart. A few words is plenty. When a node name is genuinely long, a <code>\n</code> breaks it.</p>
+      <p>The breaks are written into the file where Excalidraw's own wrapping allows one, so a wrapped label keeps its lines when you drag a node in the editor.</p>
 
       <h3 id="size">Stay near twenty nodes</h3>
       <p>Twenty nodes is roughly the ceiling for one picture, and a dozen boxes in a single run reaches it sooner, since a chain stretches one way and stays thin the other. A long chain reads better as <code>lr</code> and a deep hierarchy as <code>tb</code>, so try <code>direction</code> first.</p>

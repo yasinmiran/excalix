@@ -76,6 +76,12 @@ export const EDGE = {
 export const LABEL_MASK = 5;
 /** How long Excalidraw draws an arrowhead, or half its end segment when that is shorter: getArrowheadSize. */
 export const ARROWHEAD_LENGTH = 25;
+/**
+ * Widest line an edge label is wrapped to. Excalidraw re-wraps an arrow's label whenever the arrow changes, at the
+ * larger of 0.7 of the arrow's width and 11 times the font size, so a line under that floor stays whole however the
+ * arrow is dragged. One font size under it leaves room for a browser that measures the same line a little wider.
+ */
+export const EDGE_LABEL_WIDTH = FONT.edge * 10;
 
 export const TITLE_GAP = 32;
 

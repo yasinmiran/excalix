@@ -111,11 +111,16 @@ export interface LayoutResult {
   bounds: Box;
 }
 
+/** An edge label as it is written to the file: wrapped to lines, and the size of that text. */
+export interface WrappedLabel extends TextSize {
+  text: string;
+}
+
 export interface Measured {
   nodeLabels: Record<string, TextSize>;
   groupLabels: Record<string, TextSize>;
   /** Keyed by LayoutEdge id. Only edges with a label. */
-  edgeLabels: Record<string, TextSize>;
+  edgeLabels: Record<string, WrappedLabel>;
   title?: TextSize;
 }
 

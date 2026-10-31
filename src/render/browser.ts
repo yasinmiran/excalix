@@ -91,7 +91,8 @@ export async function openBundlePage(browser: Browser): Promise<Page> {
 // a pixel or two off what macOS and the Excalidraw editor measure. Both flags are no-ops where that is already the case.
 const TEXT_METRIC_FLAGS = ["--font-render-hinting=none", "--enable-font-subpixel-positioning"];
 
-async function launch(): Promise<Browser> {
+/** Starts headless Chromium with the flags that make it measure text as macOS and the editor do. */
+export async function launchBrowser(): Promise<Browser> {
   try {
     return await chromium.launch({ args: TEXT_METRIC_FLAGS });
   } catch (error) {
@@ -105,12 +106,11 @@ async function launch(): Promise<Browser> {
 
 /** Starts headless Chromium with @excalidraw/utils loaded. Call close() when done. */
 export async function createBrowserRenderer(): Promise<Renderer> {
-  const browser = await launch();
+  const browser = await launchBrowser();
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => (closing ??= browser.close());
   try {
-    const page = await openBundlePage(browser);
-    await page.evaluate(registerFonts, { probe: exportData([fontProbe()]), family: "Excalifont" });
+    const page = await openMeasuringPage(browser);
 
     return {
       measurer: {
@@ -128,6 +128,13 @@ export async function createBrowserRenderer(): Promise<Renderer> {
     await close();
     throw error;
   }
+}
+
+/** Opens a bundle page with Excalifont registered, so text measured in it measures as it renders. */
+export async function openMeasuringPage(browser: Browser): Promise<Page> {
+  const page = await openBundlePage(browser);
+  await page.evaluate(registerFonts, { probe: exportData([fontProbe()]), family: "Excalifont" });
+  return page;
 }
 
 /** The bundle only adds its font faces to document.fonts on a canvas export, so run one before measuring. */

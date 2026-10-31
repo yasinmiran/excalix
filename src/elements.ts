@@ -11,7 +11,7 @@ import type { LocalPoint, Radians } from "excalidraw-types/math/src/types";
 import { fractionalIndex } from "./fractional-index.js";
 import { createIdSource, edgeKey, hashSpec, type IdSource } from "./ids.js";
 import { EDGE, EDGE_STYLES, FONT, GROUP_STYLE, NODE, NODE_STYLES, STROKE, TITLE_GAP, arrowheads } from "./style.js";
-import type { Box, EdgeSpec, GroupSpec, LayoutResult, Measured, NodeSpec, Point, Spec, TextSize } from "./types.js";
+import type { Box, EdgeSpec, GroupSpec, LayoutResult, Measured, NodeSpec, Point, Spec, TextSize, WrappedLabel } from "./types.js";
 
 export const EXCALIX_EPOCH = 1_700_000_000_000;
 
@@ -229,7 +229,7 @@ function edgeElements(
   index: number,
   ids: IdSource,
   routed: LayoutResult["edges"][string],
-  label: TextSize | undefined,
+  label: WrappedLabel | undefined,
   groupIds: string[],
   nodeIds: Map<string, string>,
   nodeBoxes: LayoutResult["nodes"],
@@ -276,7 +276,7 @@ function edgeElements(
     arrow,
     textElement(ids, {
       key: `${key}:label`,
-      text: edge.label,
+      text: label.text,
       fontSize: FONT.edge,
       color: STROKE,
       position: routed.label,

@@ -18,7 +18,7 @@ A node sits in exactly one group: name the group it runs in, and let an edge acr
 
 List nodes in reading order, sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, and the layout reorders some of them when that keeps arrows from crossing. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.
 
-Keep edge labels to a few words, because an edge label sits on its arrow and reserves that much width. A \n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
+Keep edge labels to a few words, because an edge label sits on its arrow and the layout makes room for it: past about twenty characters it wraps onto more lines, and a sentence becomes a block that pushes the nodes apart. A \n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
 
 Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.
 
@@ -163,7 +163,7 @@ Look at the returned image and call again with an adjusted spec if labels overla
           },
           "label": {
             "type": "string",
-            "description": "text drawn on the arrow, a few words at most: the arrow reserves the width"
+            "description": "text drawn on the arrow, a few words at most: past about twenty characters it wraps onto more lines"
           },
           "style": {
             "default": "sync",
@@ -258,7 +258,7 @@ Look at the returned image and call again with an adjusted spec if labels overla
         "height"
       ],
       "additionalProperties": false,
-      "description": "size of that png; a very wide one usually means a long label stretched the layout"
+      "description": "size of that png; a very wide one usually means a long node label stretched the layout"
     }
   },
   "required": [

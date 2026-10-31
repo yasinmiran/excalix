@@ -1,0 +1,20 @@
+{
+  "title": "edge labels wrapped, top to bottom",
+  "direction": "tb",
+  "groups": [{ "id": "core", "label": "core" }],
+  "nodes": [
+    { "id": "web", "label": "Web", "kind": "client" },
+    { "id": "api", "label": "Orders API", "kind": "service", "group": "core" },
+    { "id": "bus", "label": "Event bus", "kind": "queue", "group": "core" },
+    { "id": "db", "label": "Postgres", "kind": "datastore", "group": "core" },
+    { "id": "mail", "label": "Mailer", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "web", "to": "api", "label": "places an order with the cart contents and the payment token" },
+    { "from": "api", "to": "bus", "label": "emits com.example.orders.OrderCreated", "style": "async" },
+    { "from": "api", "to": "db", "label": "writes the order\nand its line items in one transaction" },
+    { "from": "api", "to": "api", "label": "retries the payment call with backoff" },
+    { "from": "bus", "to": "mail", "label": "order confirmed 📦 send the receipt email", "style": "async" },
+    { "from": "web", "to": "mail", "label": "unsubscribe", "arrows": "both" }
+  ]
+}

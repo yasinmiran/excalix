@@ -38,7 +38,7 @@ async function measure(source: Spec): Promise<Measured> {
   for (const node of source.nodes) measured.nodeLabels[node.id] = await one(node.label, FONT.node);
   for (const group of source.groups) measured.groupLabels[group.id] = await one(group.label, FONT.group);
   for (const [index, edge] of source.edges.entries()) {
-    if (edge.label) measured.edgeLabels[`edge:${index}`] = await one(edge.label, FONT.edge);
+    if (edge.label) measured.edgeLabels[`edge:${index}`] = { text: edge.label, ...(await one(edge.label, FONT.edge)) };
   }
   if (source.title) measured.title = await one(source.title, FONT.title);
   return measured;

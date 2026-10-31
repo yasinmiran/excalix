@@ -4,8 +4,9 @@ import { buildElements, toDocument } from "./elements.js";
 import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
-import { FONT, nodeSize, outlineOf } from "./style.js";
+import { EDGE_LABEL_WIDTH, FONT, nodeSize, outlineOf } from "./style.js";
 import type { LayoutInput, Measured, Renderer, SketchResult, Spec, TextMeasurer, TextSize } from "./types.js";
+import { wrapTexts } from "./wrap.js";
 
 /** Validates, measures, lays out, builds and renders. The one entry point. */
 export async function sketch(input: unknown, renderer: Renderer): Promise<SketchResult> {
@@ -69,7 +70,9 @@ async function measureLabels(spec: Spec, measurer: TextMeasurer): Promise<Measur
   const nodeLabels = await measureKeyed(measurer, spec.nodes.map((n) => [n.id, n.label]), FONT.node);
   const groupLabels = await measureKeyed(measurer, spec.groups.map((g) => [g.id, g.label]), FONT.group);
   const labelled = spec.edges.flatMap((e, i): [string, string][] => (e.label ? [[edgeKey(i), e.label]] : []));
-  const edgeLabels = await measureKeyed(measurer, labelled, FONT.edge);
+  const texts = await wrapTexts(labelled.map(([, text]) => text), FONT.edge, EDGE_LABEL_WIDTH, measurer);
+  const sizes = await measureKeyed(measurer, labelled.map(([key], i) => [key, texts[i]!]), FONT.edge);
+  const edgeLabels = Object.fromEntries(labelled.map(([key], i) => [key, { text: texts[i]!, ...sizes[key]! }]));
   const measured: Measured = { nodeLabels, groupLabels, edgeLabels };
   if (spec.title) {
     [measured.title] = await measurer.measure([spec.title], FONT.title);

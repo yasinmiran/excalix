@@ -138,7 +138,7 @@ const edge = strict(
   {
     from: id("id of the node the arrow leaves"),
     to: id("id of the node the arrow points at"),
-    label: text("text drawn on the arrow, a few words at most: the arrow reserves the width").optional(),
+    label: text("text drawn on the arrow, a few words at most: past about twenty characters it wraps onto more lines").optional(),
     style: edgeStyle,
     arrows,
   },
