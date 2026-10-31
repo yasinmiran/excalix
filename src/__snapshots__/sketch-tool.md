@@ -300,7 +300,7 @@ The result's markdown shows the SVG in a README or doc. Its path is relative to 
         "height"
       ],
       "additionalProperties": false,
-      "description": "size of that png; a very wide one usually means a long node label stretched the layout"
+      "description": "size of the png file; a very wide one usually means a long node label stretched the layout"
     },
     "preview": {
       "type": "object",

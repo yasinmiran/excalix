@@ -5,13 +5,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } from "@modelcontextprotocol/sdk/types.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { altText, markdownSnippet } from "./markdown.js";
 import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
 import type { SketchOptions, Written } from "./pipeline.js";
-import { altText, markdownSnippet } from "./markdown.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { expectedOneOf, parseSpecWith, SpecError, specSchemaWith, stringField } from "./spec.js";
-import type { Renderer } from "./types.js";
 import { PNG_SCALE } from "./style.js";
+import type { Renderer } from "./types.js";
 import { version } from "./version.js";
 
 const DESCRIPTION = `Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.
@@ -75,7 +75,7 @@ const outputSchema = z.object({
     .describe("the .dark.svg and .dark.png files, present when theme is both"),
   pixels: z
     .object({ width: z.number(), height: z.number() })
-    .describe("size of that png; a very wide one usually means a long node label stretched the layout"),
+    .describe("size of the png file; a very wide one usually means a long node label stretched the layout"),
   preview: z
     .object({ width: z.number(), height: z.number() })
     .describe("size of the image block, the png scaled down to fit 2000 pixels a side, or the png itself when it fits"),
