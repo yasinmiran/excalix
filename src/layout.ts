@@ -524,9 +524,73 @@ function removeJogs(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>):
       ];
       const inner = options.filter(([index]) => isInner(points, index));
       const ends = options.filter(([index, to]) => !isInner(points, index) && endCanSlide(routes, at, index, to, shaped));
-      if ([...inner, ...ends].some(([index, to]) => tryRoute(routes, at, moveRun(points, index, to), boxes, "short"))) jog = 0;
+      const sides = options.filter(([index]) => !isInner(points, index));
+      if (
+        [...inner, ...ends].some(([index, to]) => tryRoute(routes, at, moveRun(points, index, to), boxes, "short")) ||
+        sides.some(([index, to]) => slideSide(routes, at, index, to, shaped, boxes))
+      ) {
+        jog = 0;
+      }
     }
   }
+}
+
+// When an end cannot slide for the ends beside it, every end on that side of that node slides with it by the same
+// amount, which keeps them END_SPACING apart: ELK can space two facing sides alike a pixel out of line, and then
+// the only route between them steps. The outermost ends keep SLIDE_CORNER_ROOM from the corners, a self loop keeps
+// its feet, and each moved route has a bend to take up the shift.
+function slideSide(routes: Route[], at: number, index: number, to: number, shaped: Map<string, Shaped>, boxes: Box[]): boolean {
+  const route = routes[at]!;
+  const start = index === 0;
+  const node = start ? route.edge.from : route.edge.to;
+  const end = start ? route.points[0]! : route.points.at(-1)!;
+  const side = arrival(end, start ? route.points[1]! : route.points.at(-2)!);
+  const vertical = side === "top" || side === "bottom";
+  const along = (p: Point): number => (vertical ? p.x : p.y);
+  const shift = to - along(end);
+  const members = routes.flatMap((other, i): [number, number][] => {
+    const { points, edge } = other;
+    if (points.length < 2) return [];
+    const found: [number, number][] = [];
+    if (edge.from === node && arrival(points[0]!, points[1]!) === side) found.push([i, 0]);
+    if (edge.to === node && arrival(points.at(-1)!, points.at(-2)!) === side) found.push([i, points.length - 2]);
+    return found;
+  });
+  const { box } = shaped.get(node)!;
+  const [low, high] = vertical ? [box.x, box.x + box.width] : [box.y, box.y + box.height];
+  const keeps = (now: number, after: number): boolean => after >= Math.min(SLIDE_CORNER_ROOM, now);
+  const movable = members.every(([i, run]) => {
+    const { points, edge } = routes[i]!;
+    const place = along(run === 0 ? points[0]! : points.at(-1)!);
+    return (
+      edge.from !== edge.to &&
+      points.length >= 3 &&
+      Math.abs(shift) <= labelRoom(routes[i]!, run) &&
+      keeps(place - low, place + shift - low) &&
+      keeps(high - place, high - place - shift)
+    );
+  });
+  if (!movable) return false;
+  const moved = new Map(members.map(([i, run]) => [i, moveRun(routes[i]!.points, run, runsOf(routes[i]!.points)[run]!.at + shift)]));
+  return tryRoutes(routes, moved, boxes);
+}
+
+// Replaces several routes at once when that lowers their short segments and raises no other fault, counted over the
+// moved routes against every route as it would then stand.
+function tryRoutes(routes: Route[], moved: Map<number, Point[]>, boxes: Box[]): boolean {
+  const after = routes.map((route, i) => moved.get(i) ?? route.points);
+  const total = (points: Point[][]): Faults[] =>
+    [...moved.keys()].map((i) => faults(points[i]!, points.filter((_, j) => j !== i), boxes));
+  const now = total(routes.map((route) => route.points));
+  const next = total(after);
+  const sum = (list: Faults[], key: keyof Faults): number => list.reduce((acc, f) => acc + f[key], 0);
+  const fixed = sum(next, "short") < sum(now, "short");
+  const worse =
+    (["crowded", "crossings", "entered", "short"] as const).some((key) => sum(next, key) > sum(now, key)) ||
+    next.some((f, k) => f.endRun < now[k]!.endRun);
+  if (!fixed || worse) return false;
+  for (const [i, points] of moved) routes[i]!.points = points;
+  return true;
 }
 
 // A segment under MIN_SEGMENT between two runs that carry on the same way.

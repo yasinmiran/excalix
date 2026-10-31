@@ -1,0 +1,34 @@
+{
+  "title": "packed sides",
+  "direction": "lr",
+  "groups": [{ "id": "g0", "label": "Group 0 cluster" }],
+  "nodes": [
+    { "id": "n0", "label": "Kafka", "kind": "datastore" },
+    { "id": "n1", "label": "Search", "kind": "cache", "group": "g0" },
+    { "id": "n2", "label": "Mobile", "kind": "queue" },
+    { "id": "n3", "label": "Billing", "kind": "queue", "group": "g0" },
+    { "id": "n4", "label": "Redis", "kind": "client" },
+    { "id": "n5", "label": "Auth", "kind": "cache", "group": "g0" },
+    { "id": "n6", "label": "Search", "kind": "cache" },
+    { "id": "n7", "label": "Search", "kind": "service" },
+    { "id": "n8", "label": "API", "kind": "service" },
+    { "id": "n9", "label": "Stripe", "kind": "service" },
+    { "id": "n10", "label": "Mobile", "kind": "queue" }
+  ],
+  "edges": [
+    { "from": "n10", "to": "n10", "label": "ack" },
+    { "from": "n1", "to": "n7" },
+    { "from": "n6", "to": "n10" },
+    { "from": "n6", "to": "n2", "label": "query", "arrows": "both" },
+    { "from": "n2", "to": "n3", "label": "query" },
+    { "from": "n7", "to": "n6", "style": "async" },
+    { "from": "n10", "to": "n10", "label": "ack", "style": "async", "arrows": "none" },
+    { "from": "n2", "to": "n9" },
+    { "from": "n1", "to": "n8", "style": "async" },
+    { "from": "n5", "to": "n9", "label": "fetch config", "arrows": "both" },
+    { "from": "n0", "to": "n6", "arrows": "both" },
+    { "from": "n2", "to": "n7", "style": "async" },
+    { "from": "n2", "to": "n8", "style": "async" },
+    { "from": "n7", "to": "n7" }
+  ]
+}

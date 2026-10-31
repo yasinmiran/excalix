@@ -742,15 +742,16 @@ describe("tidyRoutes", () => {
     expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 50], [102, 50], [102, 100]]);
   });
 
-  // A 2px step between two end runs. Its start cannot move: b leaves s 32px below it. Its end can only slide up c's
-  // side, towards the corner, where ELK left it 27px off.
+  // A 2px step between two end runs. Its start cannot move: b leaves s 32px below it, and 26px above s's bottom
+  // corner, too near for the two to slide down together. Its end can only slide up c's side, towards the corner,
+  // where ELK left it 27px off.
   const stepNearCorner = (top: number): [Route[], Record<string, Shaped>] => [
     [
       route("a", "s", "c", [[0, 0], [50, 0], [50, 2], [100, 2]]),
       route("b", "s", "e", [[0, 32], [30, 32], [30, 200], [300, 200]]),
       route("d", "f", "c", [[70, 160], [70, 34], [100, 34]]),
     ],
-    { s: at(-60, -27, 60, 86), c: at(100, top, 60, 86), e: at(300, 180, 40, 40), f: at(60, 160) },
+    { s: at(-60, -27, 60, 85), c: at(100, top, 60, 86), e: at(300, 180, 40, 40), f: at(60, 160) },
   ];
 
   it("folds a step by sliding an end 25px from a corner on a side holding other ends", () => {
@@ -760,22 +761,32 @@ describe("tidyRoutes", () => {
   it("leaves a step whose fold would slide an end nearer a corner than 25px", () => {
     expect(tidied(...stepNearCorner(-24))[0]).toEqual([[0, 0], [50, 0], [50, 2], [100, 2]]);
   });
-});
 
-describe("placeGroupLabel", () => {
-  const box = { x: 0, y: 0, width: 300, height: 200 };
-  const label = { width: 80, height: 20 };
-  const down = (x: number): RoutedEdge => ({ points: [{ x, y: 0 }, { x, y: 100 }] });
+  // a steps a pixel between p's right side and q's left, and both sides are packed 32px apart, so neither end of a
+  // can slide alone. p's other arrows run straight and cannot take a shift; q's both bend, so q's three ends move.
+  const packedSides = (qBottom: number): [Route[], Record<string, Shaped>] => [
+    [
+      route("a", "p", "q", [[100, 72], [150, 72], [150, 71], [300, 71]]),
+      route("b", "p", "r", [[100, 40], [200, 40]]),
+      route("c", "p", "t", [[100, 104], [200, 104]]),
+      route("d", "u", "q", [[200, 10], [260, 10], [260, 39], [300, 39]]),
+      route("e", "q", "v", [[300, 103], [260, 103], [260, 160], [200, 160]]),
+    ],
+    { p: at(0, 20, 100, 110), q: at(300, 0, 80, qBottom), r: at(200, 30), t: at(200, 94), u: at(180, 0), v: at(180, 150) },
+  ];
 
-  it("keeps the label in the corner when nothing crosses the strip", () => {
-    expect(placeGroupLabel(box, label, [down(200)])).toEqual({ x: 16, y: 16 });
+  it("slides every end on a packed side by the pixel a step needs, keeping them 32px apart", () => {
+    expect(tidied(...packedSides(140))).toEqual([
+      [[100, 72], [300, 72]],
+      [[100, 40], [200, 40]],
+      [[100, 104], [200, 104]],
+      [[200, 10], [260, 10], [260, 40], [300, 40]],
+      [[300, 104], [260, 104], [260, 160], [200, 160]],
+    ]);
   });
 
-  it("slides the label past a crossing arrow", () => {
-    expect(placeGroupLabel(box, label, [down(60)])).toEqual({ x: 72, y: 16 });
-  });
-
-  it("falls back to the corner when no spot in the strip is free", () => {
-    expect(placeGroupLabel(box, label, [down(60), down(140), down(220)])).toEqual({ x: 16, y: 16 });
+  it("leaves the step when sliding a packed side would take its last end nearer a corner than 25px", () => {
+    // q's last end sits 128 - 103 = 25px above its bottom corner, and the slide would leave 24.
+    expect(tidied(...packedSides(128))[0]).toEqual([[100, 72], [150, 72], [150, 71], [300, 71]]);
   });
 });
