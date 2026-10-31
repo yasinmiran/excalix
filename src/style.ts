@@ -19,7 +19,7 @@ export const NODE_STYLES: Record<Kind, NodeStyle> = {
   client: { shape: "ellipse", rounded: false, fill: "#e9ecef", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
   service: { shape: "rectangle", rounded: true, fill: "#a5d8ff", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
   datastore: { shape: "rectangle", rounded: false, fill: "#b2f2bb", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
-  queue: { shape: "rectangle", rounded: false, fill: "#ffec99", fillStyle: "hachure", stroke: STROKE, strokeStyle: "solid" },
+  queue: { shape: "rectangle", rounded: false, fill: "#fab005", fillStyle: "hachure", stroke: STROKE, strokeStyle: "solid" },
   cache: { shape: "rectangle", rounded: false, fill: "#ffd8a8", fillStyle: "solid", stroke: STROKE, strokeStyle: "solid" },
   external: { shape: "rectangle", rounded: true, fill: "transparent", fillStyle: "solid", stroke: STROKE, strokeStyle: "dashed" },
 };
