@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Example architecture diagrams from JSON | excalix</title>
-<meta name="description" content="Four architecture diagrams drawn by excalix from JSON specs, each with its spec and the .excalidraw, SVG and PNG files to download and edit.">
+<meta name="description" content="Five architecture diagrams drawn by excalix from JSON specs, each with its spec and the .excalidraw, SVG and PNG files to download and edit.">
 <link rel="canonical" href="https://yasinmiran.github.io/excalix/examples.html">
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -13,7 +13,7 @@
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="excalix">
 <meta property="og:title" content="Example architecture diagrams from JSON">
-<meta property="og:description" content="An order pipeline, a login flow, a ride-hailing backend and a legend of every kind, each with its spec and the files it produced.">
+<meta property="og:description" content="An order pipeline, a login flow, a ride-hailing backend, a legend of every kind and a food delivery system with icons, each with its spec and the files it produced.">
 <meta property="og:url" content="https://yasinmiran.github.io/excalix/examples.html">
 <meta property="og:image" content="https://yasinmiran.github.io/excalix/og.png">
 <meta property="og:image:width" content="1200">
@@ -21,7 +21,7 @@
 <meta property="og:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Example architecture diagrams from JSON">
-<meta name="twitter:description" content="An order pipeline, a login flow, a ride-hailing backend and a legend of every kind, each with its spec and the files it produced.">
+<meta name="twitter:description" content="An order pipeline, a login flow, a ride-hailing backend, a legend of every kind and a food delivery system with icons, each with its spec and the files it produced.">
 <meta name="twitter:image" content="https://yasinmiran.github.io/excalix/og.png">
 <meta name="twitter:image:alt" content="The excalix wordmark beside a hand-drawn order pipeline diagram: a web app calling an Order API inside nested AWS and EKS boundaries, with Postgres, Redis, a queue and Stripe.">
 <script type="application/ld+json">
@@ -45,7 +45,8 @@
         { "@type": "ImageObject", "name": "order pipeline", "contentUrl": "https://yasinmiran.github.io/excalix/examples/order-pipeline.png", "encodingFormat": "image/png", "width": 2330, "height": 992 },
         { "@type": "ImageObject", "name": "login flow", "contentUrl": "https://yasinmiran.github.io/excalix/examples/auth-flow.png", "encodingFormat": "image/png", "width": 1606, "height": 1338 },
         { "@type": "ImageObject", "name": "ride-hailing backend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/ride-hailing.png", "encodingFormat": "image/png", "width": 5344, "height": 1138 },
-        { "@type": "ImageObject", "name": "legend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/legend.png", "encodingFormat": "image/png", "width": 2054, "height": 844 }
+        { "@type": "ImageObject", "name": "legend", "contentUrl": "https://yasinmiran.github.io/excalix/examples/legend.png", "encodingFormat": "image/png", "width": 2054, "height": 844 },
+        { "@type": "ImageObject", "name": "food delivery", "contentUrl": "https://yasinmiran.github.io/excalix/examples/icons.png", "encodingFormat": "image/png", "width": 4242, "height": 1186 }
       ]
     }
   ]
@@ -72,7 +73,7 @@
 <main id="main" class="wrap">
   <div class="page-head">
     <h1>Examples</h1>
-    <p class="lede">Four diagrams, each beside the spec that drew it. To keep editing one by hand, download its <code>.excalidraw</code> file and open it on excalidraw.com; the labels and arrow bindings come through intact.</p>
+    <p class="lede">Five diagrams, each beside the spec that drew it. To keep editing one by hand, download its <code>.excalidraw</code> file and open it on excalidraw.com; the labels and arrow bindings come through intact.</p>
   </div>
 
   <section class="example" aria-labelledby="order-pipeline">
@@ -80,9 +81,9 @@
     <p class="prose">Left to right, with two nested groups: an EKS cluster inside an AWS region. Two async edges carry an order through a queue to the fulfilment service, and Stripe sits outside every boundary as an external system.</p>
     <figure class="render scrolls">
       <div class="sheet" tabindex="0" role="group" aria-label="Order pipeline diagram">
-        <img src="examples/order-pipeline.svg" width="1165" height="496" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
+        <picture><source media="(prefers-reduced-motion: reduce)" srcset="examples/order-pipeline.svg"><img src="examples/order-pipeline.animated.svg" width="1165" height="496" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge."></picture>
       </div>
-      <figcaption>7 nodes, 6 edges, 2 groups.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/order-pipeline.svg">Open it at full size</a>.</figcaption>
+      <figcaption>7 nodes, 6 edges, 2 groups, drawn in story order by <code>--animate story</code>, or still if you prefer reduced motion.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/order-pipeline.svg">Open it at full size</a>.</figcaption>
     </figure>
     <div class="example-body">
       <figure class="frame">
@@ -119,9 +120,10 @@
           <li><a href="examples/order-pipeline.excalidraw" download>order-pipeline.excalidraw</a> <span>download, then open on excalidraw.com</span></li>
           <li><a href="examples/order-pipeline.svg" download>order-pipeline.svg</a> <span>for docs and the web</span></li>
           <li><a href="examples/order-pipeline.png" download>order-pipeline.png</a> <span>at twice the SVG's size</span></li>
+          <li><a href="examples/order-pipeline.animated.svg" download>order-pipeline.animated.svg</a> <span>the SVG building itself in a loop</span></li>
           <li><a href="examples/order-pipeline.json" download>order-pipeline.json</a> <span>the spec</span></li>
         </ul>
-        <p>The spec is all it takes to regenerate the other three: <code>npx -y excalix render order-pipeline.json</code>.</p>
+        <p>The spec is all it takes to regenerate the other four: <code>npx -y excalix render order-pipeline.json --animate story</code>.</p>
       </div>
     </div>
   </section>
@@ -285,6 +287,65 @@
           <li><a href="examples/legend.json" download>legend.json</a> <span>the spec</span></li>
         </ul>
         <p>The spec is all it takes to regenerate the other three: <code>npx -y excalix render legend.json</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="example" aria-labelledby="icons">
+    <h2 id="icons">Food delivery, with icons</h2>
+    <p class="prose">Every node names an <code>icon</code> as well as its kind, so a phone, a padlock and a database sit beside the labels. The catalog and what each icon is for are in <a href="spec.html#icons">the spec reference</a>.</p>
+    <figure class="render scrolls wide">
+      <div class="sheet" tabindex="0" role="group" aria-label="Food delivery diagram">
+        <img src="examples/icons.svg" width="2121" height="593" loading="lazy" alt="Hand-drawn diagram titled food delivery, flowing left to right, with a small line icon left of every label. A Customer app with a phone icon and a Restaurant dashboard with a browser window icon, both grey ellipses, call an API gateway with a network icon inside an AWS eu-central-1 group. The gateway calls Auth, with a padlock, and an Order service, with a server rack, inside a nested EKS group. The Order service writes to Postgres, with a database cylinder, talks both ways with Redis, with a database and lightning bolt, charges Stripe, with a credit card, and sends events along a dashed arrow to an order.events queue, which feeds a Notifier with a bell. The Notifier sends a receipt to SendGrid, with an envelope.">
+      </div>
+      <figcaption>11 nodes, 10 edges, 2 groups.<span class="narrow-only"> The diagram scrolls sideways.</span> <a href="examples/icons.svg">Open it at full size</a>.</figcaption>
+    </figure>
+    <div class="example-body">
+      <figure class="frame">
+        <figcaption>icons.json</figcaption>
+<pre tabindex="0"><code>{
+  "title": "food delivery",
+  "direction": "lr",
+  "groups": [
+    { "id": "aws", "label": "AWS eu-central-1" },
+    { "id": "k8s", "label": "EKS", "parent": "aws" }
+  ],
+  "nodes": [
+    { "id": "customer", "label": "Customer app", "kind": "client", "icon": "phone" },
+    { "id": "restaurant", "label": "Restaurant\ndashboard", "kind": "client", "icon": "browser" },
+    { "id": "gateway", "label": "API gateway", "kind": "service", "icon": "gateway", "group": "aws" },
+    { "id": "auth", "label": "Auth", "kind": "service", "icon": "lock", "group": "k8s" },
+    { "id": "orders", "label": "Order service", "kind": "service", "icon": "server", "group": "k8s" },
+    { "id": "notifier", "label": "Notifier", "kind": "service", "icon": "bell", "group": "k8s" },
+    { "id": "events", "label": "order.events", "kind": "queue", "icon": "queue", "group": "aws" },
+    { "id": "db", "label": "Postgres", "kind": "datastore", "icon": "database", "group": "aws" },
+    { "id": "cache", "label": "Redis", "kind": "cache", "icon": "cache", "group": "aws" },
+    { "id": "stripe", "label": "Stripe", "kind": "external", "icon": "payment" },
+    { "id": "sendgrid", "label": "SendGrid", "kind": "external", "icon": "mail" }
+  ],
+  "edges": [
+    { "from": "customer", "to": "gateway", "label": "place order" },
+    { "from": "restaurant", "to": "gateway" },
+    { "from": "gateway", "to": "auth" },
+    { "from": "gateway", "to": "orders" },
+    { "from": "orders", "to": "db" },
+    { "from": "orders", "to": "cache", "arrows": "both" },
+    { "from": "orders", "to": "stripe", "label": "charge" },
+    { "from": "orders", "to": "events", "style": "async" },
+    { "from": "events", "to": "notifier", "style": "async" },
+    { "from": "notifier", "to": "sendgrid", "label": "receipt" }
+  ]
+}</code></pre>
+      </figure>
+      <div>
+        <h3 id="icons-files">Files</h3>
+        <ul class="downloads">
+          <li><a href="examples/icons.excalidraw" download>icons.excalidraw</a> <span>download, then open on excalidraw.com</span></li>
+          <li><a href="examples/icons.svg" download>icons.svg</a> <span>for docs and the web</span></li>
+          <li><a href="examples/icons.png" download>icons.png</a> <span>at twice the SVG's size</span></li>
+          <li><a href="examples/icons.json" download>icons.json</a> <span>the spec</span></li>
+        </ul>
+        <p>The spec is all it takes to regenerate the other three: <code>npx -y excalix render icons.json</code>.</p>
       </div>
     </div>
   </section>

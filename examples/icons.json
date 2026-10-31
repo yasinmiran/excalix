@@ -1,0 +1,33 @@
+{
+  "title": "food delivery",
+  "direction": "lr",
+  "groups": [
+    { "id": "aws", "label": "AWS eu-central-1" },
+    { "id": "k8s", "label": "EKS", "parent": "aws" }
+  ],
+  "nodes": [
+    { "id": "customer", "label": "Customer app", "kind": "client", "icon": "phone" },
+    { "id": "restaurant", "label": "Restaurant\ndashboard", "kind": "client", "icon": "browser" },
+    { "id": "gateway", "label": "API gateway", "kind": "service", "icon": "gateway", "group": "aws" },
+    { "id": "auth", "label": "Auth", "kind": "service", "icon": "lock", "group": "k8s" },
+    { "id": "orders", "label": "Order service", "kind": "service", "icon": "server", "group": "k8s" },
+    { "id": "notifier", "label": "Notifier", "kind": "service", "icon": "bell", "group": "k8s" },
+    { "id": "events", "label": "order.events", "kind": "queue", "icon": "queue", "group": "aws" },
+    { "id": "db", "label": "Postgres", "kind": "datastore", "icon": "database", "group": "aws" },
+    { "id": "cache", "label": "Redis", "kind": "cache", "icon": "cache", "group": "aws" },
+    { "id": "stripe", "label": "Stripe", "kind": "external", "icon": "payment" },
+    { "id": "sendgrid", "label": "SendGrid", "kind": "external", "icon": "mail" }
+  ],
+  "edges": [
+    { "from": "customer", "to": "gateway", "label": "place order" },
+    { "from": "restaurant", "to": "gateway" },
+    { "from": "gateway", "to": "auth" },
+    { "from": "gateway", "to": "orders" },
+    { "from": "orders", "to": "db" },
+    { "from": "orders", "to": "cache", "arrows": "both" },
+    { "from": "orders", "to": "stripe", "label": "charge" },
+    { "from": "orders", "to": "events", "style": "async" },
+    { "from": "events", "to": "notifier", "style": "async" },
+    { "from": "notifier", "to": "sendgrid", "label": "receipt" }
+  ]
+}
