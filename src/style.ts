@@ -85,6 +85,9 @@ export const EDGE_LABEL_WIDTH = FONT.edge * 10;
 
 export const TITLE_GAP = 32;
 
+/** PNG pixels per scene pixel in the file written to disk, so a 16px edge label is 32px tall in it. */
+export const PNG_SCALE = 2;
+
 /**
  * Corner radius Excalidraw draws on a rounded node: a quarter of the shorter side, capped at 32. That is
  * getCornerRadius for the adaptive roundness elements.ts sets, whose cap is DEFAULT_ADAPTIVE_RADIUS.

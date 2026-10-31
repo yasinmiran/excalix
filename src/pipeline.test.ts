@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sketch } from "./pipeline.js";
+import { sizeNote, sketch, viewScale } from "./pipeline.js";
 import { estimateMeasurer } from "./render/estimate.js";
 import { measuringOnly, readSpec, specFiles } from "./test-support.js";
 
@@ -33,5 +33,30 @@ describe("sketch determinism", () => {
     const shuffled = reverseKeys(spec);
     expect(JSON.stringify(shuffled)).not.toBe(JSON.stringify(spec));
     expect((await sketch(shuffled, renderer)).excalidraw).toBe((await sketch(spec, renderer)).excalidraw);
+  });
+});
+
+// What a model is handed passes through Claude Code's 2000px cap on a side, then the API's cap of 4784 tiles.
+describe("size note", () => {
+  it.each([
+    ["a long strip, shrunk by its long edge", { width: 11124, height: 354 }, 2000 / 11124, "2000x64 px", 5],
+    ["a dense square, shrunk by its area more than by its edge", { width: 5700, height: 5700 }, Math.sqrt((4784 * 784) / 5700 ** 2), "1937x1937 px", 10],
+  ])("speaks up for %s", (_case, full, scale, seen, label) => {
+    expect(viewScale(full)).toBeCloseTo(scale, 10);
+    expect(sizeNote(full)).toBe(
+      `note: a model reads this diagram at ${seen}, where its edge labels are about ${label}px tall, too small to read. ` +
+        `Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full ${full.width}x${full.height}.`,
+    );
+  });
+
+  it("lets the dense square through on its long edge alone, which is why the area counts", () => {
+    expect(16 * 2 * (2000 / 5700)).toBeGreaterThan(11);
+  });
+
+  it.each([
+    ["a small diagram that arrives whole", { width: 1606, height: 1338 }],
+    ["one wide enough to be scaled, with labels that still read", { width: 5344, height: 1138 }],
+  ])("stays quiet for %s", (_case, full) => {
+    expect(sizeNote(full)).toBeUndefined();
   });
 });

@@ -184,7 +184,7 @@ describe("sketch tool", () => {
     expect(result.structuredContent).toMatchObject({
       pixels: { width: 7929, height: 1775 },
       notes: [
-        "note: 7929x1775 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.",
+        "note: a model reads this diagram at 2000x448 px, where its edge labels are about 8px tall, too small to read. Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full 7929x1775.",
       ],
     });
     expect(JSON.parse(textOf(result))).toEqual(result.structuredContent);

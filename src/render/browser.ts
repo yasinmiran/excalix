@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, resolve, sep } from "node:path";
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
-import { FONT } from "../style.js";
+import { FONT, PNG_SCALE } from "../style.js";
 import type { Renderer, TextSize } from "../types.js";
 import { fontsDir, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
@@ -11,7 +11,6 @@ const ORIGIN = "http://excalix.local";
 const VENDOR_PATH = "/vendor/";
 const FONTS_PATH = "/fonts/";
 const PADDING = 24;
-const PNG_SCALE = 2;
 
 /** Fallback order the bundle's getFontString produces for Excalifont. */
 const EXCALIFONT_STACK = "Excalifont, Xiaolai, sans-serif, Segoe UI Emoji";

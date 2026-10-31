@@ -94,7 +94,7 @@ describe("render", () => {
 
     expect(await main(["render", specPath], io)).toBe(0);
     expect(out[3]).toBe(
-      "note: 7929x1775 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.",
+      "note: a model reads this diagram at 2000x448 px, where its edge labels are about 8px tall, too small to read. Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full 7929x1775.",
     );
   });
 

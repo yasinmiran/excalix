@@ -204,10 +204,10 @@ groups[0].parent: "b" closes the cycle a -> b -> a</code></pre>
 
       <h3 id="size">Stay near twenty nodes</h3>
       <p>Twenty nodes is roughly the ceiling for one picture, and a dozen boxes in a single run reaches it sooner, since a chain stretches one way and stays thin the other. A long chain reads better as <code>lr</code> and a deep hierarchy as <code>tb</code>, so try <code>direction</code> first.</p>
-      <p>When direction is not the problem, make two diagrams: an overview that collapses each region to one node, then a detail diagram of the part under discussion. Once the longest side of the image passes 6000 pixels, rendering says so:</p>
+      <p>When direction is not the problem, make two diagrams: an overview that collapses each region to one node, then a detail diagram of the part under discussion. Once the copy a model reads would shrink edge labels below about 11 pixels, rendering says so. For a long strip that happens past about 5800 pixels on its long side, and for a dense square sooner, since the model's copy is capped by area as well as by edge:</p>
       <figure class="frame">
         <figcaption>Size note</figcaption>
-<pre class="output"><code>note: 9124x1748 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.</code></pre>
+<pre class="output"><code>note: a model reads this diagram at 2000x383 px, where its edge labels are about 7px tall, too small to read. Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full 9124x1748.</code></pre>
       </figure>
 
       <h3 id="look">Then look at it</h3>

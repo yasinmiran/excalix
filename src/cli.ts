@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { serveMcp } from "./mcp.js";
-import { sizeNote, writeSketch } from "./pipeline.js";
+import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { parseSpec, SpecError, specSchema } from "./spec.js";
 import { version } from "./version.js";
@@ -83,7 +83,7 @@ async function render(argv: string[], io: Io): Promise<number> {
     io.stdout(files.excalidraw);
     io.stdout(files.svg);
     io.stdout(files.png);
-    const note = sizeNote(result.png);
+    const note = sizeNote(pngSize(result.png));
     if (note !== undefined) io.stdout(note);
   } finally {
     await renderer.close();

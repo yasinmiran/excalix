@@ -74,8 +74,9 @@ coordinates do not say.
 A long chain still reads better as `lr` and a deep hierarchy as `tb`, so try
 `direction` first. When direction is not what is wrong, two diagrams is the
 ordinary answer: an overview that collapses each region to one node, then a
-detail diagram of the part under discussion. Rendering adds a line of its own
-once the longest side of the image passes 6000 pixels.
+detail diagram of the part under discussion. Rendering adds a note of its own
+once the copy you would read shrinks edge labels below about 11 pixels: past
+about 5800 pixels on the long side of a strip, sooner for a dense square.
 
 ## Running it
 

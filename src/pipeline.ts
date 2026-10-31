@@ -4,7 +4,7 @@ import { buildElements, toDocument } from "./elements.js";
 import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
-import { EDGE_LABEL_WIDTH, FONT, nodeSize, outlineOf } from "./style.js";
+import { EDGE_LABEL_WIDTH, FONT, nodeSize, outlineOf, PNG_SCALE } from "./style.js";
 import type { LayoutInput, Measured, Renderer, SketchResult, Spec, TextMeasurer, TextSize } from "./types.js";
 import { wrapTexts } from "./wrap.js";
 
@@ -49,21 +49,45 @@ export async function writeFiles(result: SketchResult, basename: string): Promis
   return paths;
 }
 
+export interface Size {
+  width: number;
+  height: number;
+}
+
+/** An image as an agent is handed it: its size, and how many of its pixels one scene pixel became. */
+export interface Shown extends Size {
+  scale: number;
+}
+
 /** The PNG's own size, from the two big-endian uint32s in its IHDR chunk at byte 16 and 20. */
-export function pngSize(png: Uint8Array): { width: number; height: number } {
+export function pngSize(png: Uint8Array): Size {
   const header = new DataView(png.buffer, png.byteOffset, png.byteLength);
   return { width: header.getUint32(16), height: header.getUint32(20) };
 }
 
-// An agent reads the PNG downscaled to roughly 1568px on its longest side. The export is 2x, so a 20pt node label
-// is 40px in the file; past 6000 the reduction approaches 4x and that label lands around 10px in the copy being read.
-const LEGIBLE_PIXELS = 6000;
+// Claude Code fits an image into 2000px a side before the model sees it, and the API's high-res tier then fits it
+// into 4784 tiles of 28x28px. Either can shrink it, a long strip by its edge and a dense square by its area.
+const CLIENT_EDGE = 2000;
+const MAX_TILES = 4784;
+const TILE = 28;
+// Below this an edge label, the smallest text in a diagram, stops reading reliably in the copy a model sees.
+const LEGIBLE_LABEL = 11;
 
-/** One line about a diagram too big to read once it is scaled down, or undefined while it still reads. */
-export function sizeNote(png: Uint8Array): string | undefined {
-  const { width, height } = pngSize(png);
-  if (Math.max(width, height) <= LEGIBLE_PIXELS) return undefined;
-  return `note: ${width}x${height} px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.`;
+/** How much a model's copy of an image this size is scaled down: 1 when it arrives whole. */
+export function viewScale({ width, height }: Size): number {
+  return Math.min(1, CLIENT_EDGE / Math.max(width, height), Math.sqrt((MAX_TILES * TILE * TILE) / (width * height)));
+}
+
+/**
+ * One line about a diagram whose edge labels come out too small to read in the copy a model sees, or undefined
+ * while they still read. full is the PNG on disk; shown is the image the model is handed, the same one by default.
+ */
+export function sizeNote(full: Size, shown: Shown = { ...full, scale: PNG_SCALE }): string | undefined {
+  const scale = viewScale(shown);
+  const label = FONT.edge * shown.scale * scale;
+  if (label >= LEGIBLE_LABEL) return undefined;
+  const seen = `${Math.round(shown.width * scale)}x${Math.round(shown.height * scale)}`;
+  return `note: a model reads this diagram at ${seen} px, where its edge labels are about ${Math.floor(label)}px tall, too small to read. Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full ${full.width}x${full.height}.`;
 }
 
 async function measureLabels(spec: Spec, measurer: TextMeasurer): Promise<Measured> {

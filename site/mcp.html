@@ -161,12 +161,12 @@ edges[0].to: unknown node "apy", did you mean "api"?</code></pre>
       <p>After an error of that kind the server closes its browser and opens a fresh one on the next call. A call to any tool name other than <code>sketch</code> gets a protocol error instead.</p>
 
       <h2 id="size">Large diagrams</h2>
-      <p>When the longest side of the PNG passes 6000 pixels, the result carries a note:</p>
+      <p>When the copy of the image a model reads would shrink edge labels below about 11 pixels, the result carries a note. That copy is what Claude Code hands over, fitted into 2000 pixels a side, and then what the model's high-resolution tier keeps of it, about 4784 tiles of 28 by 28 pixels; a long strip is shrunk by its edge and a dense square by its area:</p>
       <figure class="frame">
         <figcaption>structuredContent.notes[0]</figcaption>
-<pre class="output"><code>note: 9124x1748 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.</code></pre>
+<pre class="output"><code>note: a model reads this diagram at 2000x383 px, where its edge labels are about 7px tall, too small to read. Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full 9124x1748.</code></pre>
       </figure>
-      <p>Past that size the copy of the image a model sees is scaled down far enough that thin lines and small labels go missing. The usual answer is two diagrams: an overview that collapses each region to one node, and a detail diagram of the part under discussion.</p>
+      <p>Past that point thin lines and small labels go missing from what the model sees, even though the PNG on disk is sharp. The usual answer is two diagrams: an overview that collapses each region to one node, and a detail diagram of the part under discussion.</p>
     </div>
   </div>
 </main>

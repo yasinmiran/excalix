@@ -109,8 +109,9 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
       const target = out ?? defaultOut(spec.title);
       const basename = isAbsolute(target) ? target : resolve(await baseDirectory(server), target);
       const { files, result } = await deps.writeSketch(spec, basename, await renderReady());
-      const notes = [sizeNote(result.png)].filter((note) => note !== undefined);
-      const structuredContent = { ...files, pixels: pngSize(result.png), ...(notes.length > 0 && { notes }) };
+      const pixels = pngSize(result.png);
+      const notes = [sizeNote(pixels)].filter((note) => note !== undefined);
+      const structuredContent = { ...files, pixels, ...(notes.length > 0 && { notes }) };
       // Claude Code shows the model the image and structuredContent and drops text blocks, so the text block is
       // the same JSON, as the spec asks, and a client that reads only content loses nothing either.
       return {
