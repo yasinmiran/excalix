@@ -562,16 +562,29 @@ describe("tidyRoutes", () => {
     expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 100], [200, 100]]);
   });
   it("slides a crowded run that ends its route along its node's side when no run between two bends will go", () => {
-    // a's last run and b's first pass 10px apart; only a's end on c can move, 6px up c's side.
+    // a's last run and b's first pass 10px apart. Moving either one's channel clear of the other would leave its
+    // end run under ARROWHEAD_ROOM, so a's end on c moves instead, 6px up c's side.
     const routes = [
-      route("a", "s", "c", [[0, 0], [60, 0], [60, 22], [128, 22]]),
+      route("a", "s", "c", [[0, 0], [50, 0], [50, 22], [128, 22]]),
       route("b", "s", "d", [[0, 32], [92, 32], [92, 74], [320, 74]]),
     ];
     const nodes = { s: at(-60, -20, 60, 72), c: at(128, -10, 60, 60), d: at(320, 54, 40, 40) };
     expect(tidied(routes, nodes)).toEqual([
-      [[0, 0], [60, 0], [60, 16], [128, 16]],
+      [[0, 0], [50, 0], [50, 16], [128, 16]],
       [[0, 32], [92, 32], [92, 74], [320, 74]],
     ]);
+  });
+
+  it("spaces two arrows that swap sides in a channel by swapping their places in it", () => {
+    // a's last run and b's first pass 10px apart, and neither end can slide: a's would come within 25px of c's top
+    // corner, b's of s's bottom one. a's channel moves to 16px past where b turns down instead.
+    const routes = [
+      route("a", "s", "c", [[0, 0], [60, 0], [60, 22], [300, 22]]),
+      route("b", "s", "d", [[0, 32], [92, 32], [92, 200], [320, 200]]),
+      route("e", "f", "c", [[200, 150], [250, 150], [250, 54], [300, 54]]),
+    ];
+    const nodes = { s: at(-60, -27, 60, 86), c: at(300, -5, 60, 86), d: at(320, 180, 40, 40), f: at(180, 140) };
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [108, 0], [108, 22], [300, 22]]);
   });
 
   // A 2px step between two end runs. Its start cannot move: b leaves s 32px below it. Its end can only slide up c's

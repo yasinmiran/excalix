@@ -438,12 +438,13 @@ export const MIN_SEGMENT = 3;
 function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>): void {
   for (let a = 0; a < routes.length; a++) {
     for (let b = a + 1; b < routes.length; b++) {
+      const moves = [
+        (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, false),
+        (at: number, index: number, other: Point[], from: number) => pullBack(routes, at, index, other, from, boxes),
+        (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, true),
+      ];
       const push = ([i, j]: [number, number]): boolean =>
-        [false, true].some(
-          (slide) =>
-            pushAway(routes, a, i, routes[b]!.points, j, boxes, shaped, slide) ||
-            pushAway(routes, b, j, routes[a]!.points, i, boxes, shaped, slide),
-        );
+        moves.some((move) => move(a, i, routes[b]!.points, j) || move(b, j, routes[a]!.points, i));
       // Each push leaves fewer crowded pairs, so this ends.
       let pushed = true;
       while (pushed) pushed = crowdedPairs(routes[a]!, routes[b]!).some(push);
@@ -481,6 +482,29 @@ function pushAway(
   if (Math.abs(to - run.at) > labelRoom(route, index)) return false;
   if (slide && !endCanSlide(routes, at, index, to, shaped)) return false;
   return tryRoute(routes, at, moveRun(points, index, to), boxes, "crowded");
+}
+
+// Moves the run between two bends at one end of run `index` of routes[at] along that run, so the run stops
+// LANE_SPACING short of where run `from` of `other` turns and no longer shares a stretch with it. Two arrows that swap
+// sides in a channel are spaced this way by swapping their places in it, without moving an end.
+function pullBack(routes: Route[], at: number, index: number, other: Point[], from: number, boxes: Box[]): boolean {
+  const route = routes[at]!;
+  const { points } = route;
+  if (route.edge.from === route.edge.to || labelRoom(route, index) < Infinity) return false;
+  const run = runsOf(points)[index]!;
+  const away = runsOf(other)[from]!;
+  const along = (p: Point): number => (run.vertical ? p.y : p.x);
+  const [low, high] = along(points[index]!) < along(points[index + 1]!) ? [index - 1, index + 1] : [index + 1, index - 1];
+  const options: [number, number][] = [
+    ...(run.high > away.high + LANE_SPACING ? [[low, away.high + LANE_SPACING] as [number, number]] : []),
+    ...(run.low < away.low - LANE_SPACING ? [[high, away.low - LANE_SPACING] as [number, number]] : []),
+  ];
+  return options.some(
+    ([neighbour, to]) =>
+      isInner(points, neighbour) &&
+      Math.abs(to - runsOf(points)[neighbour]!.at) <= labelRoom(route, neighbour) &&
+      tryRoute(routes, at, moveRun(points, neighbour, to), boxes, "crowded"),
+  );
 }
 
 // Folds each step under MIN_SEGMENT into the runs either side of it by moving one of them onto the other: a run
