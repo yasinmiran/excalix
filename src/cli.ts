@@ -8,7 +8,7 @@ import { z } from "zod";
 import { serveMcp } from "./mcp.js";
 import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
-import { parseSpec, SpecError, specSchema } from "./spec.js";
+import { expectedOneOf, parseSpec, SpecError, specSchema } from "./spec.js";
 import type { Theme } from "./types.js";
 import { version } from "./version.js";
 
@@ -79,9 +79,12 @@ async function render(argv: string[], io: Io): Promise<number> {
     io.stderr("render needs a spec file");
     return 1;
   }
-  const theme = themeOf(values.theme);
+  const theme = THEMES.find((known) => known === values.theme);
   const spec = await readSpec(specPath);
-  parseSpec(spec);
+  // A bad flag joins the spec's own problems, so one run reports all of them, and none of them starts a browser.
+  const flagProblems = theme === undefined ? [`--theme: ${expectedOneOf(THEMES)({ input: values.theme })}`] : [];
+  const problems = [...problemsOf(spec), ...flagProblems];
+  if (theme === undefined || problems.length > 0) throw new SpecError(problems);
   const out = resolve(outputBasename(values.out, specPath));
 
   const renderer = await createBrowserRenderer();
@@ -134,10 +137,14 @@ async function readSpec(specPath: string): Promise<unknown> {
   }
 }
 
-function themeOf(value: string): Theme {
-  const theme = THEMES.find((known) => known === value);
-  if (theme === undefined) throw new Error(`--theme: got ${JSON.stringify(value)}, expected one of ${THEMES.map((known) => `"${known}"`).join(", ")}`);
-  return theme;
+function problemsOf(spec: unknown): string[] {
+  try {
+    parseSpec(spec);
+    return [];
+  } catch (error) {
+    if (error instanceof SpecError) return error.problems;
+    throw error;
+  }
 }
 
 function outputBasename(out: string | undefined, specPath: string): string {

@@ -19,8 +19,9 @@ vi.mock("./pipeline.js", async (importOriginal) => ({
 }));
 vi.mock("./render/browser.js", () => ({ createBrowserRenderer: mocks.createBrowserRenderer }));
 vi.mock("./mcp.js", () => ({ serveMcp: mocks.serveMcp }));
-vi.mock("./spec.js", async () => {
+vi.mock("./spec.js", async (importOriginal) => {
   const { z } = await import("zod");
+  const { expectedOneOf } = await importOriginal<typeof import("./spec.js")>();
   class SpecError extends Error {
     constructor(readonly problems: string[]) {
       super(problems.join("\n"));
@@ -29,6 +30,7 @@ vi.mock("./spec.js", async () => {
   }
   return {
     SpecError,
+    expectedOneOf,
     parseSpec: mocks.parseSpec,
     specSchema: z.object({ title: z.string().optional() }),
   };
@@ -108,7 +110,24 @@ describe("render", () => {
 
     expect(await main(["render", specPath, "--theme", "sepia"], io)).toBe(1);
 
-    expect(err).toEqual(['error: --theme: got "sepia", expected one of "light", "dark", "both"']);
+    expect(err).toEqual(['--theme: got "sepia", expected one of "light", "dark", "both"']);
+    expect(mocks.createBrowserRenderer).not.toHaveBeenCalled();
+  });
+
+  it("reports a theme it does not draw after every problem of the spec, in one run", async () => {
+    const { SpecError } = await import("./spec.js");
+    mocks.parseSpec.mockImplementation(() => {
+      throw new SpecError(['nodes[0].kind: got "browser", expected one of "client", "service"', 'edges[0].to: unknown node "api"']);
+    });
+    const { io, err } = collect();
+
+    expect(await main(["render", specPath, "--theme", "Dark"], io)).toBe(1);
+
+    expect(err).toEqual([
+      'nodes[0].kind: got "browser", expected one of "client", "service"',
+      'edges[0].to: unknown node "api"',
+      '--theme: got "Dark", expected one of "light", "dark", "both"',
+    ]);
     expect(mocks.createBrowserRenderer).not.toHaveBeenCalled();
   });
 
