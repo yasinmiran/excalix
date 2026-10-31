@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, resolve, sep } from "node:path";
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
-import { FONT, PNG_SCALE } from "../style.js";
+import { FONT } from "../style.js";
 import type { Renderer, TextSize } from "../types.js";
 import { fontsDir, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
@@ -157,8 +157,8 @@ export async function createBrowserRenderer(): Promise<Renderer> {
         const fontFaces = await pinnedFontFaceRules(drawnTexts(elements));
         return page.evaluate(svgInPage, { data: exportData(elements), padding: PADDING, fontFaces });
       },
-      async png(elements) {
-        const base64 = await page.evaluate(pngInPage, { data: exportData(elements), padding: PADDING, scale: PNG_SCALE });
+      async png(elements, { scale }) {
+        const base64 = await page.evaluate(pngInPage, { data: exportData(elements), padding: PADDING, scale });
         return new Uint8Array(Buffer.from(base64, "base64"));
       },
       close,

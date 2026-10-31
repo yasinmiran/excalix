@@ -128,9 +128,15 @@ export interface Renderer {
   measurer: TextMeasurer;
   /** Self-contained SVG markup with fonts inlined. */
   svg(elements: unknown[]): Promise<string>;
-  /** PNG bytes at 2x device scale. */
-  png(elements: unknown[]): Promise<Uint8Array>;
+  /** PNG bytes with each scene pixel drawn as scale pixels a side. */
+  png(elements: unknown[], options: { scale: number }): Promise<Uint8Array>;
   close(): Promise<void>;
+}
+
+/** The PNG an agent is handed in place of the one on disk, and how many of its pixels one scene pixel became. */
+export interface Preview {
+  png: Uint8Array;
+  scale: number;
 }
 
 export interface SketchResult {
@@ -138,4 +144,6 @@ export interface SketchResult {
   excalidraw: string;
   svg: string;
   png: Uint8Array;
+  /** Present when the sketch was asked for one. */
+  preview?: Preview;
 }

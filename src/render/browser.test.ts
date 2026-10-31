@@ -1,9 +1,12 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExcalidrawElement, ExcalidrawTextElement } from "excalidraw-types/element/src/types";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lineHeight, localPoint, radians } from "../elements.js";
+import { pngSize, sketch, writeSketch } from "../pipeline.js";
+import { readSpec, specFiles } from "../test-support.js";
 import type { Renderer } from "../types.js";
 import { createBrowserRenderer, openRenderPage } from "./browser.js";
 import { codePointRanges, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
@@ -151,7 +154,7 @@ describe("[browser] createBrowserRenderer", () => {
   });
 
   it("exports a PNG at 2x the SVG size", async () => {
-    const [svg, png] = await Promise.all([renderer.svg(elements), renderer.png(elements)]);
+    const [svg, png] = await Promise.all([renderer.svg(elements), renderer.png(elements, { scale: 2 })]);
     await writeFile(join(OUT_DIR, "sample.png"), png);
 
     expect(Array.from(png.subarray(0, 8))).toEqual(PNG_SIGNATURE);
@@ -159,6 +162,46 @@ describe("[browser] createBrowserRenderer", () => {
     const actual = pngDimensions(png);
     expect(Math.abs(actual.width - expected.width * 2)).toBeLessThanOrEqual(2);
     expect(Math.abs(actual.height - expected.height * 2)).toBeLessThanOrEqual(2);
+  });
+});
+
+// The copy an agent is handed: as large as Claude Code passes through whole, and never at the cost of the file.
+describe("[browser] preview", () => {
+  let renderer: Renderer;
+
+  beforeAll(async () => {
+    renderer = await createBrowserRenderer();
+  });
+
+  afterAll(async () => {
+    await renderer?.close();
+  });
+
+  for (const file of specFiles) {
+    it(`fits the preview of ${file} into 2000 pixels a side, filling them when it has to shrink`, async () => {
+      const { png, preview } = await sketch(readSpec(file), renderer, { preview: true });
+
+      const full = pngSize(png);
+      const shown = pngSize(preview!.png);
+      if (Math.max(full.width, full.height) <= 2000) {
+        expect(preview!.png).toBe(png);
+        expect(preview!.scale).toBe(2);
+      } else {
+        expect(Math.max(shown.width, shown.height)).toBeLessThanOrEqual(2000);
+        expect(Math.max(shown.width, shown.height)).toBeGreaterThanOrEqual(1999);
+        expect(preview!.scale).toBeLessThan(2);
+      }
+    });
+  }
+
+  it("leaves the PNG it writes to disk as it is without a preview", async () => {
+    const spec = readSpec("stress/multi-region-lr.json");
+    const out = join(await mkdtemp(join(tmpdir(), "excalix-preview-")), "diagram");
+
+    const { result } = await writeSketch(spec, out, renderer, { preview: true });
+
+    expect(pngSize(result.preview!.png).width).toBe(2000);
+    expect((await readFile(`${out}.png`)).equals((await sketch(spec, renderer)).png)).toBe(true);
   });
 });
 

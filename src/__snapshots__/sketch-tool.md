@@ -20,7 +20,7 @@ List nodes in reading order, sources first. Where edges form a loop, order decid
 
 Keep edge labels to a few words, because an edge label sits on its arrow and the layout makes room for it: past about twenty characters it wraps onto more lines, and a sentence becomes a block that pushes the nodes apart. A \n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
 
-Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.
+Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong. The image is scaled to fit 2000 pixels a side, and the png file holds it at full size for a closer look.
 
 ## inputSchema
 
@@ -241,7 +241,7 @@ Look at the returned image, and act on the notes when the result has any; call a
     },
     "png": {
       "type": "string",
-      "description": "the .png file, the same image as the image block in this result"
+      "description": "the .png file at full size; the image block in this result is a copy that fits 2000 pixels a side"
     },
     "pixels": {
       "type": "object",
@@ -260,6 +260,23 @@ Look at the returned image, and act on the notes when the result has any; call a
       "additionalProperties": false,
       "description": "size of that png; a very wide one usually means a long node label stretched the layout"
     },
+    "preview": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "additionalProperties": false,
+      "description": "size of the image block, the png scaled down to fit 2000 pixels a side, or the png itself when it fits"
+    },
     "notes": {
       "description": "what to do about the diagram before showing it, such as splitting one too big to read; absent when there is nothing",
       "type": "array",
@@ -272,7 +289,8 @@ Look at the returned image, and act on the notes when the result has any; call a
     "excalidraw",
     "svg",
     "png",
-    "pixels"
+    "pixels",
+    "preview"
   ],
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false

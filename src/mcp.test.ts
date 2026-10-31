@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { main } from "./cli.js";
 import { createServer } from "./mcp.js";
 import type { SketchDeps } from "./mcp.js";
+import type { SketchOptions } from "./pipeline.js";
 import { SpecError } from "./spec.js";
 import type { Renderer } from "./types.js";
 
@@ -18,7 +19,14 @@ const PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 7
 const PIXELS = { width: 2404, height: 811 };
 
 // The same header at 7929 x 1775, past the size the tool speaks up about.
-const BIG_PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 30, 249, 0, 0, 6, 239]);
+const BIG_PNG = header(7929, 1775);
+
+function header(width: number, height: number): Uint8Array {
+  const bytes = PNG.slice();
+  new DataView(bytes.buffer).setUint32(16, width);
+  new DataView(bytes.buffer).setUint32(20, height);
+  return bytes;
+}
 
 const SPEC = {
   title: "order pipeline",
@@ -60,7 +68,7 @@ async function harness(overrides: Partial<SketchDeps> = {}, roots?: Roots) {
   const dir = await mkdtemp(join(tmpdir(), "excalix-mcp-"));
   const close = vi.fn(async () => {});
   const createRenderer = vi.fn(async () => ({ ...fakeRenderer(), close }));
-  const writeSketch = vi.fn(async (_input: unknown, basename: string) => ({
+  const writeSketch = vi.fn(async (_input: unknown, basename: string, _renderer: Renderer, _options: SketchOptions) => ({
     files: { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` },
     result: { excalidraw: "", svg: "", png: PNG },
   }));
@@ -153,6 +161,7 @@ describe("sketch tool", () => {
       svg: `${out}.svg`,
       png: `${out}.png`,
       pixels: PIXELS,
+      preview: PIXELS,
     });
     const [, image] = blocks(result);
     expect(image).toMatchObject({ type: "image", mimeType: "image/png", data: Buffer.from(PNG).toString("base64") });
@@ -188,6 +197,33 @@ describe("sketch tool", () => {
       ],
     });
     expect(JSON.parse(textOf(result))).toEqual(result.structuredContent);
+  });
+
+  it("hands back the preview as the image, and judges the note by it", async () => {
+    const preview = header(2000, 448);
+    const { client, out } = await harness({
+      writeSketch: async (_input, basename) => ({
+        files: { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` },
+        result: { excalidraw: "", svg: "", png: BIG_PNG, preview: { png: preview, scale: 4000 / 7929 } },
+      }),
+    });
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    expect(blocks(result)[1]).toMatchObject({ type: "image", data: Buffer.from(preview).toString("base64") });
+    expect(result.structuredContent).toMatchObject({
+      pixels: { width: 7929, height: 1775 },
+      preview: { width: 2000, height: 448 },
+      notes: [expect.stringContaining("reads this diagram at 2000x448 px, where its edge labels are about 8px tall")],
+    });
+  });
+
+  it("asks the pipeline for a preview", async () => {
+    const { client, out, writeSketch } = await harness();
+
+    await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    expect(writeSketch.mock.calls[0]?.[3]).toEqual({ preview: true });
   });
 
   it("defaults out to diagrams/<title slug>", async () => {

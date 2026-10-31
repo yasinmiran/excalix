@@ -128,7 +128,8 @@ Commit the spec JSON beside its outputs, so the next person regenerates the
 diagram instead of redrawing it.
 
 When the excalix MCP server is registered, the `sketch` tool does all of this in
-one call and hands back the PNG inline, which saves the read. Its `out` is the
-same basename. A relative one resolves against the first root your client
+one call and hands back the picture inline, which saves the read. That copy fits
+2000 pixels a side; the `png` path in the result is the full-size file, worth
+opening when a detail is too small to judge. Its `out` is the same basename. A relative one resolves against the first root your client
 declares, usually the project, or else against the directory the server was
 started in.

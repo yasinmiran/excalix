@@ -6,10 +6,11 @@ import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } fr
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
-import type { Written } from "./pipeline.js";
+import type { SketchOptions, Written } from "./pipeline.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { parseSpecWith, SpecError, specSchemaWith, stringField } from "./spec.js";
 import type { Renderer } from "./types.js";
+import { PNG_SCALE } from "./style.js";
 import { version } from "./version.js";
 
 const DESCRIPTION = `Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.
@@ -32,7 +33,7 @@ List nodes in reading order, sources first. Where edges form a loop, order decid
 
 Keep edge labels to a few words, because an edge label sits on its arrow and the layout makes room for it: past about twenty characters it wraps onto more lines, and a sentence becomes a block that pushes the nodes apart. A \\n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
 
-Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.`;
+Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong. The image is scaled to fit 2000 pixels a side, and the png file holds it at full size for a closer look.`;
 
 // With tool search on, a client loads only tool names and these instructions at session start, so this is what
 // decides whether an agent reaches for sketch at all.
@@ -49,10 +50,13 @@ const inputSchema = specSchemaWith({
 const outputSchema = z.object({
   excalidraw: z.string().describe("the .excalidraw file, the one to open on excalidraw.com"),
   svg: z.string().describe("the .svg file"),
-  png: z.string().describe("the .png file, the same image as the image block in this result"),
+  png: z.string().describe("the .png file at full size; the image block in this result is a copy that fits 2000 pixels a side"),
   pixels: z
     .object({ width: z.number(), height: z.number() })
     .describe("size of that png; a very wide one usually means a long node label stretched the layout"),
+  preview: z
+    .object({ width: z.number(), height: z.number() })
+    .describe("size of the image block, the png scaled down to fit 2000 pixels a side, or the png itself when it fits"),
   notes: z
     .array(z.string())
     .optional()
@@ -73,7 +77,7 @@ const ROOTS_TIMEOUT_MS = 2000;
 
 
 export interface SketchDeps {
-  writeSketch: (input: unknown, basename: string, renderer: Renderer) => Promise<Written>;
+  writeSketch: (input: unknown, basename: string, renderer: Renderer, options: SketchOptions) => Promise<Written>;
   createRenderer: () => Promise<Renderer>;
 }
 
@@ -108,16 +112,18 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
       const { out, ...spec } = parseSpecWith(inputSchema, params.arguments);
       const target = out ?? defaultOut(spec.title);
       const basename = isAbsolute(target) ? target : resolve(await baseDirectory(server), target);
-      const { files, result } = await deps.writeSketch(spec, basename, await renderReady());
+      const { files, result } = await deps.writeSketch(spec, basename, await renderReady(), { preview: true });
+      const shown = result.preview ?? { png: result.png, scale: PNG_SCALE };
       const pixels = pngSize(result.png);
-      const notes = [sizeNote(pixels)].filter((note) => note !== undefined);
-      const structuredContent = { ...files, pixels, ...(notes.length > 0 && { notes }) };
+      const preview = pngSize(shown.png);
+      const notes = [sizeNote(pixels, { ...preview, scale: shown.scale })].filter((note) => note !== undefined);
+      const structuredContent = { ...files, pixels, preview, ...(notes.length > 0 && { notes }) };
       // Claude Code shows the model the image and structuredContent and drops text blocks, so the text block is
       // the same JSON, as the spec asks, and a client that reads only content loses nothing either.
       return {
         content: [
           { type: "text", text: JSON.stringify(structuredContent) },
-          { type: "image", data: Buffer.from(result.png).toString("base64"), mimeType: "image/png" },
+          { type: "image", data: Buffer.from(shown.png).toString("base64"), mimeType: "image/png" },
         ],
         structuredContent,
       };

@@ -5,18 +5,40 @@ import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
 import { EDGE_LABEL_WIDTH, FONT, nodeSize, outlineOf, PNG_SCALE } from "./style.js";
-import type { LayoutInput, Measured, Renderer, SketchResult, Spec, TextMeasurer, TextSize } from "./types.js";
+import type { LayoutInput, Measured, Preview, Renderer, SketchResult, Spec, TextMeasurer, TextSize } from "./types.js";
 import { wrapTexts } from "./wrap.js";
 
+export interface SketchOptions {
+  /** Also export the copy an agent is handed, which fits PREVIEW_EDGE pixels a side. */
+  preview?: boolean;
+}
+
 /** Validates, measures, lays out, builds and renders. The one entry point. */
-export async function sketch(input: unknown, renderer: Renderer): Promise<SketchResult> {
+export async function sketch(input: unknown, renderer: Renderer, options: SketchOptions = {}): Promise<SketchResult> {
   const spec = parseSpec(input);
   const measured = await measureLabels(spec, renderer.measurer);
   const laidOut = await layout(toLayoutInput(spec, measured));
   const elements = buildElements(spec, laidOut, measured);
   const svg = await renderer.svg(elements);
-  const png = await renderer.png(elements);
-  return { excalidraw: toDocument(elements), svg, png };
+  const png = await renderer.png(elements, { scale: PNG_SCALE });
+  const result: SketchResult = { excalidraw: toDocument(elements), svg, png };
+  if (options.preview) result.preview = await previewOf(elements, png, renderer);
+  return result;
+}
+
+// The longest side Claude Code passes to a model whole. Exporting at that size, rather than letting the client
+// shrink the full PNG, keeps the result small and what the model sees exactly what the size note judges.
+const PREVIEW_EDGE = 2000;
+
+/**
+ * The PNG again at the largest scale up to PNG_SCALE that fits PREVIEW_EDGE a side, or the full one when it already
+ * fits. The canvas truncates to whole pixels, so the full PNG's long edge L can be a pixel short of the scene's at
+ * PNG_SCALE; the preview then comes out under PREVIEW_EDGE + PREVIEW_EDGE / L, which truncates to PREVIEW_EDGE.
+ */
+async function previewOf(elements: unknown[], png: Uint8Array, renderer: Renderer): Promise<Preview> {
+  const { width, height } = pngSize(png);
+  const scale = Math.min(PNG_SCALE, (PREVIEW_EDGE * PNG_SCALE) / Math.max(width, height));
+  return scale === PNG_SCALE ? { png, scale } : { png: await renderer.png(elements, { scale }), scale };
 }
 
 export interface WrittenFiles {
@@ -31,8 +53,8 @@ export interface Written {
 }
 
 /** Runs sketch and writes <basename>.excalidraw, .svg and .png. */
-export async function writeSketch(input: unknown, basename: string, renderer: Renderer): Promise<Written> {
-  const result = await sketch(input, renderer);
+export async function writeSketch(input: unknown, basename: string, renderer: Renderer, options: SketchOptions = {}): Promise<Written> {
+  const result = await sketch(input, renderer, options);
   return { files: await writeFiles(result, basename), result };
 }
 

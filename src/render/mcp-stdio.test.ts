@@ -65,8 +65,11 @@ describe("[browser] sketch over stdio", () => {
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
     expect([...Buffer.from(image!.data!, "base64").subarray(0, 8)]).toEqual(PNG_SIGNATURE);
 
+    const shown = Buffer.from(image!.data!, "base64");
     const onDisk = await readFile(`${out}.png`);
-    expect(onDisk.equals(Buffer.from(image!.data!, "base64"))).toBe(true);
+    const size = (png: Buffer) => ({ width: png.readUInt32BE(16), height: png.readUInt32BE(20) });
+    expect(Math.max(size(shown).width, size(shown).height)).toBeLessThanOrEqual(2000);
+    expect(result.structuredContent).toMatchObject({ pixels: size(onDisk), preview: size(shown) });
     expect((await stat(`${out}.svg`)).size).toBeGreaterThan(0);
     expect(await readFile(`${out}.excalidraw`, "utf8")).toBe(await readFile(join(root, "examples/order-pipeline.excalidraw"), "utf8"));
     expect(result.structuredContent).toMatchObject({ png: `${out}.png`, pixels: { width: expect.any(Number), height: expect.any(Number) } });
