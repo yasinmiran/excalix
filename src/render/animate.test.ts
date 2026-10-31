@@ -156,11 +156,13 @@ describe("[browser] animated SVG", () => {
     });
   }
 
-  it.each<[AnimationOrder, boolean]>([
-    ["story", false],
-    ["layers", true],
-  ])("shows only the opening beat at the start and the picture at rest once built, %s order, dark %s", async (order, dark) => {
-    const { animated, plan } = await render(renderer, "examples/order-pipeline.json", order, dark);
+  it.each<[string, AnimationOrder, boolean]>([
+    ["examples/order-pipeline.json", "story", false],
+    ["examples/order-pipeline.json", "layers", true],
+    ["examples/icons.json", "story", false],
+    ["examples/icons.json", "layers", true],
+  ])("shows only the opening beat of %s at the start and the picture at rest once built, %s order, dark %s", async (file, order, dark) => {
+    const { animated, plan } = await render(renderer, file, order, dark);
     const rest = await atRest(page, animated);
     await show(page, animated);
 
@@ -180,6 +182,44 @@ describe("[browser] animated SVG", () => {
     // Whole, solid lines and their masks undashed, and an async line on its own dashes at their starting phase.
     expect(new Set(held)).toEqual(new Set(["1 none 0px", "1 8px, 10px 0px"]));
     expect((await page.locator("svg").screenshot()).equals(rest)).toBe(true);
+  });
+
+  it.each<[AnimationOrder, boolean]>([
+    ["story", false],
+    ["layers", true],
+  ])("brings each icon of examples/icons in on its node's beat and draws it as the static SVG does, %s order, dark %s", async (order, dark) => {
+    const { plain, animated, plan, keys } = await render(renderer, "examples/icons.json", order, dark);
+    const icons = keys.flatMap((key, index) => (key.endsWith(":icon") ? [index] : []));
+    expect(icons).toHaveLength(11);
+
+    const drawn = await page.evaluate((svg) => {
+      const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+      const groups = [...root.children].filter((child) => child.tagName === "g");
+      return {
+        icons: groups.flatMap((group, index) => {
+          const use = group.querySelector('use[href^="#image-"]');
+          return use ? [{ index, filter: use.parentElement!.getAttribute("filter") }] : [];
+        }),
+        filters: root.querySelectorAll("filter#excalix-dark-image").length,
+      };
+    }, animated);
+    // Each icon is its own top-level <g>, so it takes its node's class; dark keeps the filter that draws it light.
+    expect(drawn.icons.map(({ index }) => index)).toEqual(icons);
+    expect(drawn.icons.map(({ filter }) => filter)).toEqual(icons.map(() => (dark ? "url(#excalix-dark-image)" : null)));
+    expect(drawn.filters).toBe(dark ? 1 : 0);
+    for (const index of icons) expect(plan.elements[index]).toEqual(plan.elements[keys.indexOf(keys[index]!.replace(/:icon$/, ""))]);
+
+    const crops = async (ms?: number) => {
+      await show(page, ms === undefined ? plain : animated);
+      if (ms !== undefined) await freezeAt(page, ms);
+      const uses = page.locator('svg use[href^="#image-"]');
+      return Promise.all(icons.map((_, at) => uses.nth(at).screenshot()));
+    };
+    const still = await crops();
+    const held = await crops(plan.cycle - 1);
+    const opening = await crops(0);
+    held.forEach((crop, at) => expect(crop.equals(still[at]!), keys[icons[at]!]).toBe(true));
+    opening.forEach((crop, at) => expect(crop.equals(still[at]!), keys[icons[at]!]).toBe(false));
   });
 
   it("marches the dashes of an async arrow a period every 900 ms, and draws a sync arrow on along its length", async () => {

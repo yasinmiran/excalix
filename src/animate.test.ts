@@ -71,13 +71,23 @@ describe("beats", () => {
     });
   }
 
-  it("brings in an element under a node with its node, whatever follows the node id", async () => {
-    const { spec, layout, drawing } = await builtOf("examples/order-pipeline.json");
-    const keys = drawing.keys.flatMap((key) => (key === "node:api:label" ? [key, "node:api:icon"] : [key]));
+  it.each<[string, AnimationOrder]>([
+    ["examples/icons.json", "story"],
+    ["examples/icons.json", "layers"],
+    ["stress/icons-lr.json", "story"],
+    ["stress/icons-tb.json", "layers"],
+  ])("brings each icon of %s in with its node, in %s order", async (file, order) => {
+    const { spec, drawing } = await builtOf(file);
+    const beatOf = new Map((await beatsOf(file, order)).flatMap((keys, beat) => keys.map((key) => [key, beat] as const)));
+    const plan = await planOf(file, order);
+    const motionOf = (key: string) => plan.elements[drawing.keys.indexOf(key)];
+    const iconNodes = spec.nodes.filter((node) => node.icon !== undefined);
 
-    const story = beats(spec, layout, keys, "story");
-
-    expect(story[2]).toEqual(["group:aws", "group:aws:label", "group:k8s", "group:k8s:label", "node:api", "node:api:label", "node:api:icon"]);
+    expect(iconNodes.length).toBeGreaterThan(10);
+    for (const { id } of iconNodes) {
+      expect(beatOf.get(`node:${id}:icon`), id).toBe(beatOf.get(`node:${id}`));
+      expect(motionOf(`node:${id}:icon`), id).toEqual(motionOf(`node:${id}`));
+    }
   });
 
   it("names a key that belongs to nothing in the spec", async () => {
