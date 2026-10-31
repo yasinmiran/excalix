@@ -1,6 +1,42 @@
 // Shared contracts between excalix modules. Geometry is absolute, top-left origin, pixels.
 
+import type { ExcalidrawElement } from "excalidraw-types/element/src/types";
+
 export type Kind = "client" | "service" | "datastore" | "queue" | "cache" | "external";
+/** What a node is, beside its kind, drawn as a small line icon in it. style.ts maps each to its glyph. */
+export type IconName =
+  | "user"
+  | "users"
+  | "browser"
+  | "phone"
+  | "desktop"
+  | "terminal"
+  | "bot"
+  | "globe"
+  | "cloud"
+  | "gateway"
+  | "server"
+  | "container"
+  | "function"
+  | "database"
+  | "cache"
+  | "queue"
+  | "storage"
+  | "search"
+  | "file"
+  | "mail"
+  | "chat"
+  | "bell"
+  | "webhook"
+  | "payment"
+  | "lock"
+  | "key"
+  | "shield"
+  | "chart"
+  | "logs"
+  | "clock"
+  | "settings"
+  | "git";
 export type EdgeStyle = "sync" | "async";
 export type Arrows = "forward" | "both" | "none";
 export type Direction = "lr" | "tb";
@@ -17,6 +53,7 @@ export interface NodeSpec {
   id: string;
   label: string;
   kind: Kind;
+  icon?: IconName;
   group?: string;
 }
 
@@ -126,12 +163,29 @@ export interface Measured {
   title?: TextSize;
 }
 
+/** An image file as the .excalidraw files map holds it. */
+export interface SceneFile {
+  mimeType: "image/svg+xml";
+  /** The sha1 hex of the file's bytes, which is also its key in the files map and the fileId of its images. */
+  id: string;
+  dataURL: string;
+  created: number;
+}
+
+export type SceneFiles = Record<string, SceneFile>;
+
+/** What buildElements makes of a spec: the elements, and the files their images draw. */
+export interface Drawing {
+  elements: ExcalidrawElement[];
+  files: SceneFiles;
+}
+
 export interface Renderer {
   measurer: TextMeasurer;
   /** Self-contained SVG markup with fonts inlined, in Excalidraw's dark mode when asked. */
-  svg(elements: unknown[], options: { dark: boolean }): Promise<string>;
+  svg(elements: unknown[], options: { dark: boolean; files: SceneFiles }): Promise<string>;
   /** PNG bytes with each scene pixel drawn as scale pixels a side, in Excalidraw's dark mode when asked. */
-  png(elements: unknown[], options: { dark: boolean; scale: number }): Promise<Uint8Array>;
+  png(elements: unknown[], options: { dark: boolean; scale: number; files: SceneFiles }): Promise<Uint8Array>;
   close(): Promise<void>;
 }
 

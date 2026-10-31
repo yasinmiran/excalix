@@ -1,4 +1,4 @@
-import type { Arrows, EdgeStyle, Kind, Outline, TextSize } from "./types.js";
+import type { Arrows, EdgeStyle, IconName, Kind, Outline, TextSize } from "./types.js";
 
 export type Shape = "rectangle" | "ellipse";
 export type FillStyle = "hachure" | "cross-hatch" | "solid" | "zigzag";
@@ -67,6 +67,53 @@ export const NODE = {
   minHeight: 56,
 };
 
+/**
+ * A node's icon: a Lucide glyph from icons/, drawn size pixels a side in color, gap pixels left of its label. The
+ * label stays centred, because the editor puts a bound text back in the middle of its container on any edit, so the
+ * node reserves the icon's width on both sides of it.
+ */
+export const ICON = {
+  size: 28,
+  gap: 8,
+  color: STROKE,
+};
+
+/** The file in icons/ each icon name draws, without its .svg. */
+export const ICON_GLYPHS: Record<IconName, string> = {
+  user: "user",
+  users: "users",
+  browser: "app-window",
+  phone: "smartphone",
+  desktop: "monitor",
+  terminal: "terminal",
+  bot: "bot",
+  globe: "globe",
+  cloud: "cloud",
+  gateway: "network",
+  server: "server",
+  container: "container",
+  function: "square-function",
+  database: "database",
+  cache: "database-zap",
+  queue: "gallery-horizontal-end",
+  storage: "hard-drive",
+  search: "search",
+  file: "file-text",
+  mail: "mail",
+  chat: "message-square",
+  bell: "bell",
+  webhook: "webhook",
+  payment: "credit-card",
+  lock: "lock",
+  key: "key-round",
+  shield: "shield",
+  chart: "chart-column",
+  logs: "logs",
+  clock: "clock",
+  settings: "settings",
+  git: "git-branch",
+};
+
 export const EDGE = {
   strokeWidth: 2,
   roughness: 1,
@@ -103,11 +150,12 @@ export function outlineOf(kind: Kind): Outline {
   return rounded ? "rounded" : "sharp";
 }
 
-/** Box size for a node of the given kind around its measured label. */
-export function nodeSize(kind: Kind, label: TextSize): { width: number; height: number } {
+/** Box size for a node of the given kind around its measured label, and its icon when it has one. */
+export function nodeSize(kind: Kind, label: TextSize, icon = false): { width: number; height: number } {
   const factor = NODE_STYLES[kind].shape === "ellipse" ? Math.SQRT2 : 1;
+  const content = icon ? { width: label.width + 2 * (ICON.size + ICON.gap), height: Math.max(label.height, ICON.size) } : label;
   return {
-    width: Math.max(NODE.minWidth, Math.ceil(label.width * factor + NODE.paddingX * 2)),
-    height: Math.max(NODE.minHeight, Math.ceil(label.height + NODE.paddingY * 2)),
+    width: Math.max(NODE.minWidth, Math.ceil(content.width * factor + NODE.paddingX * 2)),
+    height: Math.max(NODE.minHeight, Math.ceil(content.height + NODE.paddingY * 2)),
   };
 }

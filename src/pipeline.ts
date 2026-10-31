@@ -5,7 +5,7 @@ import { edgeKey } from "./ids.js";
 import { layout } from "./layout.js";
 import { parseSpec } from "./spec.js";
 import { EDGE_LABEL_WIDTH, FONT, nodeSize, outlineOf, PNG_SCALE } from "./style.js";
-import type { Images, LayoutInput, Measured, Preview, Renderer, SketchResult, Spec, TextMeasurer, TextSize, Theme } from "./types.js";
+import type { Drawing, Images, LayoutInput, Measured, Preview, Renderer, SketchResult, Spec, TextMeasurer, TextSize, Theme } from "./types.js";
 import { wrapTexts } from "./wrap.js";
 
 export interface SketchOptions {
@@ -20,17 +20,17 @@ export async function sketch(input: unknown, renderer: Renderer, options: Sketch
   const spec = parseSpec(input);
   const measured = await measureLabels(spec, renderer.measurer);
   const laidOut = await layout(toLayoutInput(spec, measured));
-  const elements = buildElements(spec, laidOut, measured);
+  const drawing = buildElements(spec, laidOut, measured);
   const { theme = "light" } = options;
   const dark = theme === "dark";
-  const result: SketchResult = { excalidraw: toDocument(elements), ...(await images(elements, renderer, dark)) };
-  if (theme === "both") result.dark = await images(elements, renderer, true);
-  if (options.preview) result.preview = await previewOf(elements, result.png, renderer, dark);
+  const result: SketchResult = { excalidraw: toDocument(drawing), ...(await images(drawing, renderer, dark)) };
+  if (theme === "both") result.dark = await images(drawing, renderer, true);
+  if (options.preview) result.preview = await previewOf(drawing, result.png, renderer, dark);
   return result;
 }
 
-async function images(elements: unknown[], renderer: Renderer, dark: boolean): Promise<Images> {
-  return { svg: await renderer.svg(elements, { dark }), png: await renderer.png(elements, { dark, scale: PNG_SCALE }) };
+async function images({ elements, files }: Drawing, renderer: Renderer, dark: boolean): Promise<Images> {
+  return { svg: await renderer.svg(elements, { dark, files }), png: await renderer.png(elements, { dark, scale: PNG_SCALE, files }) };
 }
 
 // The longest side Claude Code passes to a model whole. Exporting at that size, rather than letting the client
@@ -42,10 +42,10 @@ const PREVIEW_EDGE = 2000;
  * fits. The canvas truncates to whole pixels, so the full PNG's long edge L can be a pixel short of the scene's at
  * PNG_SCALE; the preview then comes out under PREVIEW_EDGE + PREVIEW_EDGE / L, which truncates to PREVIEW_EDGE.
  */
-async function previewOf(elements: unknown[], png: Uint8Array, renderer: Renderer, dark: boolean): Promise<Preview> {
+async function previewOf({ elements, files }: Drawing, png: Uint8Array, renderer: Renderer, dark: boolean): Promise<Preview> {
   const { width, height } = pngSize(png);
   const scale = Math.min(PNG_SCALE, (PREVIEW_EDGE * PNG_SCALE) / Math.max(width, height));
-  return scale === PNG_SCALE ? { png, scale } : { png: await renderer.png(elements, { dark, scale }), scale };
+  return scale === PNG_SCALE ? { png, scale } : { png: await renderer.png(elements, { dark, scale, files }), scale };
 }
 
 export interface WrittenFiles {
@@ -153,7 +153,7 @@ function toLayoutInput(spec: Spec, measured: Measured): LayoutInput {
       id: n.id,
       group: n.group,
       outline: outlineOf(n.kind),
-      ...nodeSize(n.kind, measured.nodeLabels[n.id]!),
+      ...nodeSize(n.kind, measured.nodeLabels[n.id]!, n.icon !== undefined),
     })),
     edges: spec.edges.map((e, i) => ({
       id: edgeKey(i),

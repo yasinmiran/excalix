@@ -80,6 +80,10 @@ curl -fsSL https://raw.githubusercontent.com/yasinmiran/excalix/main/skills/exca
 | `cache` | cache or in-memory store |
 | `external` | a system another company operates and you only call |
 
+A node can also name an `icon` from a fixed catalog of 32, such as `database`, `gateway`, `lock` or `payment`; `excalix schema` lists them all. Like `kind`, it says what the node is, and excalix draws it, a small line icon left of the label in the label's colour:
+
+![food delivery, with icons](https://raw.githubusercontent.com/yasinmiran/excalix/main/examples/icons.png)
+
 `edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows` is `forward` (default), `both` or `none`. A `\n` in any label starts a new line, and an edge label past about twenty characters wraps onto more lines. The breaks are written into the file, so a label keeps its lines when you drag things around in Excalidraw.
 
 List nodes in reading order, keep edge labels to a few words, and split anything past about twenty nodes into an overview and a detail diagram. [skills/excalix/SKILL.md](https://github.com/yasinmiran/excalix/blob/main/skills/excalix/SKILL.md) has the rest. Validation names every problem in one go:
@@ -93,4 +97,4 @@ nodes[2].kind: got "db", expected one of "client", "service", "datastore", "queu
 
 An `.excalidraw` file is nothing but coordinates, and an agent asked to draw one has to invent all of them. excalix takes the geometry away, so two diagrams made a year apart look like one set, and a change to the spec shows up as a reviewable diff.
 
-The [docs](https://yasinmiran.github.io/excalix/) have the full spec reference, the `sketch` tool's contract and more [examples](https://yasinmiran.github.io/excalix/examples.html). `pnpm test` and `pnpm typecheck` run the checks. MIT, and not affiliated with Excalidraw. The fallback fonts in [fonts/](https://github.com/yasinmiran/excalix/tree/main/fonts) keep their own licences: DejaVu Sans the Bitstream Vera and Arev ones, Twemoji the SIL OFL 1.1 for the font and CC BY 4.0 for the art.
+The [docs](https://yasinmiran.github.io/excalix/) have the full spec reference, the `sketch` tool's contract and more [examples](https://yasinmiran.github.io/excalix/examples.html). `pnpm test` and `pnpm typecheck` run the checks; the tests draw in Chromium and WebKit, so install both once with `npx -y playwright@1.63.0 install chromium webkit`. MIT, and not affiliated with Excalidraw. The fallback fonts in [fonts/](https://github.com/yasinmiran/excalix/tree/main/fonts) keep their own licences: DejaVu Sans the Bitstream Vera and Arev ones, Twemoji the SIL OFL 1.1 for the font and CC BY 4.0 for the art. The icons in [icons/](https://github.com/yasinmiran/excalix/tree/main/icons) are Lucide's, under the ISC licence.

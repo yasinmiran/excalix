@@ -3,7 +3,7 @@ import { type Browser, type Page, chromium } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sketch } from "../pipeline.js";
 import { measuringOnly, readSpec, specFiles } from "../test-support.js";
-import type { Renderer } from "../types.js";
+import type { Renderer, SceneFiles } from "../types.js";
 import { createBrowserRenderer, openBundlePage } from "./browser.js";
 
 interface ClipboardUtils {
@@ -19,7 +19,7 @@ interface BundleWindow {
  * so the JSON it copies is the restored scene. The page origin is insecure, so navigator.clipboard
  * is absent and the bundle falls back to execCommand("copy") over a textarea it selects.
  */
-async function restoreInPage(elements: unknown[]): Promise<unknown[]> {
+async function restoreInPage({ elements, files }: { elements: unknown[]; files: object }): Promise<{ elements: unknown[]; files: unknown }> {
   const { utils } = (window as unknown as BundleWindow).excalix;
   const execCommand = document.execCommand.bind(document);
   let copied: string | undefined;
@@ -29,12 +29,13 @@ async function restoreInPage(elements: unknown[]): Promise<unknown[]> {
     return true;
   };
   try {
-    await utils.exportToClipboard({ type: "json", data: { elements, appState: {}, files: {} } });
+    await utils.exportToClipboard({ type: "json", data: { elements, appState: {}, files } });
   } finally {
     document.execCommand = execCommand;
   }
   if (copied === undefined) throw new Error("the bundle copied the restored scene somewhere else");
-  return (JSON.parse(copied) as { elements: unknown[] }).elements;
+  const { elements: restored, files: kept } = JSON.parse(copied) as { elements: unknown[]; files: unknown };
+  return { elements: restored, files: kept };
 }
 
 describe("[browser] Excalidraw restore", () => {
@@ -54,12 +55,16 @@ describe("[browser] Excalidraw restore", () => {
   });
 
   for (const file of specFiles) {
-    it(`leaves the elements of ${file} untouched`, async () => {
-      const built = JSON.parse((await sketch(readSpec(file), measuringOnly(renderer.measurer))).excalidraw).elements as ExcalidrawElement[];
+    it(`leaves the elements and files of ${file} untouched`, async () => {
+      const built = JSON.parse((await sketch(readSpec(file), measuringOnly(renderer.measurer))).excalidraw) as {
+        elements: ExcalidrawElement[];
+        files: SceneFiles;
+      };
 
-      const restored = (await page.evaluate(restoreInPage, built as unknown[])) as ExcalidrawElement[];
+      const restored = await page.evaluate(restoreInPage, built);
 
-      expect(restored).toEqual(built);
+      expect(restored.elements).toEqual(built.elements);
+      expect(restored.files).toEqual(built.files);
     });
   }
 });

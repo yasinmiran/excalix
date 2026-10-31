@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { ICON_NAMES } from "./spec.js";
 
 const site = new URL("../site/", import.meta.url);
 const BASE = "https://yasinmiran.github.io/excalix/";
@@ -51,6 +52,13 @@ describe.each(indexed)("site/%s for search", (page) => {
     expect(blocks.length).toBeGreaterThan(0);
     for (const [, json] of blocks) expect(() => JSON.parse(json!)).not.toThrow();
   });
+});
+
+it("lists the icon catalog in the order the schema gives it", () => {
+  const page = read("spec.html");
+  const section = page.slice(page.indexOf('<h2 id="icons">'));
+  const table = section.slice(0, section.indexOf("</table>"));
+  expect([...table.matchAll(/<tr><td><code>([^<]+)<\/code><\/td>/g)].map(([, name]) => name)).toEqual(ICON_NAMES);
 });
 
 it("names the version the package is at", () => {

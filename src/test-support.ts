@@ -39,7 +39,8 @@ export type Invariant =
   | "endsOnOutline"
   | "loopLabelRun"
   | "labelHeadRun"
-  | "insideBounds";
+  | "insideBounds"
+  | "iconsPlaced";
 
 /** Layout defects a suite still has, keyed by spec file. An entry turns its cell into an it.fails. */
 export type KnownDefects = Record<string, Partial<Record<Invariant, string>>>;
@@ -59,6 +60,7 @@ const TITLES: Record<Invariant, string> = {
   loopLabelRun: `a self loop's outer segment runs ${LOOP_LABEL_RUN}px past its label at both ends`,
   labelHeadRun: `${LABEL_HEAD_RUN}px of line show between an edge label and either arrowhead on its arrow`,
   insideBounds: "every box but the title starts inside the layout bounds",
+  iconsPlaced: "every icon sits inside its node, inside the inner box of an ellipse, and clear of the label",
 };
 
 // ELK rounds its coordinates, so a distance counts as met when it misses by less than half a pixel.
@@ -96,8 +98,17 @@ interface Arrow {
   label?: Box;
 }
 
+/** A node's icon, its node and its label, as drawn. */
+interface PlacedIcon {
+  name: string;
+  icon: Box;
+  node: SceneElement;
+  label: Box;
+}
+
 interface Scene {
   nodes: NamedNode[];
+  icons: PlacedIcon[];
   groupLabels: Named[];
   edgeLabels: Named[];
   arrows: Arrow[];
@@ -113,7 +124,7 @@ interface SceneElement extends Box {
   points?: [number, number][];
 }
 
-/** Registers the fourteen layout invariants for every committed spec, measured however the caller measures. */
+/** Registers the fifteen layout invariants for every committed spec, measured however the caller measures. */
 export function describeGeometry(title: string, measurer: () => TextMeasurer, known: KnownDefects = {}): void {
   for (const file of specFiles) {
     describe(`${title} ${file}`, () => {
@@ -153,6 +164,7 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       check("insideBounds", (scene) =>
         scene.bounded.filter(({ box }) => box.x < 0 || box.y < 0).map((item) => `${boxAt(item)} starts left of x=0 or above y=0`),
       );
+      check("iconsPlaced", (scene) => scene.icons.flatMap(misplacedIcon));
     });
   }
 }
@@ -175,6 +187,7 @@ export interface EmbeddedScene {
   source: string;
   elements: unknown[];
   appState: Record<string, unknown>;
+  files: Record<string, unknown>;
 }
 
 const SCENE_MIME = "application/vnd.excalidraw+json";
@@ -223,6 +236,11 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
     return { id: node.id, name: `node ${node.id}`, box: shape, outline: drawnOutline(shape) };
   });
   const nodeLabels = spec.nodes.map((node) => named(`node ${node.id} label`, `node:${node.id}:label`));
+  const icons = spec.nodes.flatMap((node) =>
+    node.icon === undefined
+      ? []
+      : [{ name: `node ${node.id} icon`, icon: element(`node:${node.id}:icon`), node: element(`node:${node.id}`), label: element(`node:${node.id}:label`) }],
+  );
   const groups = spec.groups.map(({ id }) => group(id));
   const groupLabels = spec.groups.map(({ id }) => named(`group ${id} label`, `group:${id}:label`));
   const edgeLabels = spec.edges.flatMap((edge, index) =>
@@ -243,6 +261,7 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
 
   return {
     nodes,
+    icons,
     groupLabels,
     edgeLabels,
     arrows,
@@ -250,8 +269,24 @@ async function sceneOf(file: string, measurer: TextMeasurer): Promise<Scene> {
       ...spec.nodes.flatMap((node, index) => (node.group === undefined ? [] : [{ inner: nodes[index]!, outer: group(node.group) }])),
       ...spec.groups.flatMap((child) => (child.parent === undefined ? [] : [{ inner: group(child.id), outer: group(child.parent) }])),
     ],
-    bounded: [...nodes, ...nodeLabels, ...groups, ...groupLabels, ...edgeLabels, ...arrows.map(polylineBox)],
+    bounded: [...nodes, ...nodeLabels, ...icons.map(({ name, icon }) => ({ name, box: icon })), ...groups, ...groupLabels, ...edgeLabels, ...arrows.map(polylineBox)],
   };
+}
+
+// An ellipse's curve cuts the corners of its box, so an icon there has to keep to the box inscribed in the curve,
+// the one the editor lays bound text out in.
+function misplacedIcon({ name, icon, node, label }: PlacedIcon): string[] {
+  const share = node.type === "ellipse" ? Math.SQRT1_2 : 1;
+  const room = {
+    x: node.x + (node.width * (1 - share)) / 2,
+    y: node.y + (node.height * (1 - share)) / 2,
+    width: node.width * share,
+    height: node.height * share,
+  };
+  const problems: string[] = [];
+  if (!contains(room, icon)) problems.push(`${boxAt({ name, box: icon })} is not inside ${boxAt({ name: `the room of its ${node.type}`, box: room })}`);
+  if (overlaps(icon, label)) problems.push(`${boxAt({ name, box: icon })} overlaps its label ${boxAt({ name: "label", box: label })}`);
+  return problems;
 }
 
 // Excalidraw draws an arrowhead min(25, segment / 2) long from the segment it ends on, so a short one

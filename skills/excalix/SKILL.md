@@ -7,8 +7,9 @@ description: 'Use when someone asks to "draw the architecture", "sketch a diagra
 
 Reach for this when the ask is a picture of a system: services and what calls
 what, a request path, a deployment boundary. You write the topology, excalix
-picks every shape, colour, size and route. There is nothing visual to configure,
-so do not try; if the diagram reads wrong, the fix is in the spec.
+picks every shape, colour, size and route. A node's `kind` and its optional
+`icon` say what the node is, never how it looks, so there is nothing visual to
+configure; do not try. If the diagram reads wrong, the fix is in the spec.
 
 Not for flowcharts, sequence diagrams, ER diagrams or state machines.
 
@@ -23,7 +24,7 @@ JSON with `nodes` and `edges`, optional `title`, `direction` (`lr` default, or
   "groups": [{ "id": "aws", "label": "AWS eu-north-1" }],
   "nodes": [
     { "id": "web", "label": "Web app", "kind": "client" },
-    { "id": "api", "label": "Order API", "kind": "service", "group": "aws" }
+    { "id": "api", "label": "Order API", "kind": "service", "icon": "server", "group": "aws" }
   ],
   "edges": [{ "from": "web", "to": "api", "label": "POST /orders" }]
 }
@@ -37,6 +38,19 @@ that you configure is a `service`, load balancers, CDNs, API gateways and DNS
 included.
 `external` means another company runs it and you only call it: a payment API, a
 hosted identity provider, an email sender.
+
+`icon` is optional, one name per node from a fixed catalog, and excalix draws it
+as a small line icon left of the label: `user`, `users`, `browser`, `phone`,
+`desktop`, `terminal`, `bot`, `globe`, `cloud`, `gateway`, `server`,
+`container`, `function`, `database`, `cache`, `queue`, `storage`, `search`,
+`file`, `mail`, `chat`, `bell`, `webhook`, `payment`, `lock`, `key`, `shield`,
+`chart`, `logs`, `clock`, `settings`, `git`. Give the one that names the thing:
+`database` for Postgres, `gateway` for an API gateway or a load balancer, `lock`
+for an auth service, `key` for a secrets store, `bell` for notifications. Leave
+it out when nothing fits, since an icon widens its node and a near miss misleads
+more than no icon does. A name that is not in the catalog is rejected, with the
+closest one suggested when it is a letter or two off, `"email"` getting
+`did you mean "mail"?`.
 
 `edge.style` is `sync` (solid, default) or `async` (dashed). `edge.arrows` is
 `forward` (default), `both` or `none`. Run `excalix schema` for the whole shape,

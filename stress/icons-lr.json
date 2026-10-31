@@ -1,0 +1,52 @@
+{
+  "title": "icons, left to right",
+  "direction": "lr",
+  "groups": [
+    { "id": "edge", "label": "Edge" },
+    { "id": "aws", "label": "AWS eu-west-1" },
+    { "id": "vpc", "label": "VPC", "parent": "aws" },
+    { "id": "k8s", "label": "EKS cluster", "parent": "vpc" }
+  ],
+  "nodes": [
+    { "id": "people", "label": "Customers", "kind": "client", "icon": "users" },
+    { "id": "web", "label": "Web app", "kind": "client", "icon": "browser" },
+    { "id": "mobile", "label": "iOS and Android\napps", "kind": "client", "icon": "phone" },
+    { "id": "office", "label": "Back office", "kind": "client", "icon": "desktop" },
+    { "id": "cli", "label": "Ops CLI", "kind": "client", "icon": "terminal" },
+    { "id": "agent", "label": "Support agent", "kind": "client", "icon": "bot" },
+    { "id": "cdn", "label": "CloudFront", "kind": "service", "icon": "globe", "group": "edge" },
+    { "id": "gw", "label": "API gateway", "kind": "service", "icon": "gateway", "group": "vpc" },
+    { "id": "api", "label": "Order API", "kind": "service", "icon": "server", "group": "k8s" },
+    { "id": "sidecar", "label": "Envoy sidecar", "kind": "service", "icon": "container", "group": "k8s" },
+    { "id": "legacy", "label": "Legacy monolith", "kind": "service", "group": "k8s" },
+    { "id": "thumbs", "label": "thumbnail-generator-for-every-uploaded-product-photo", "kind": "service", "icon": "function", "group": "aws" },
+    { "id": "pg", "label": "Postgres", "kind": "datastore", "icon": "database", "group": "vpc" },
+    { "id": "redis", "label": "Redis", "kind": "cache", "icon": "cache", "group": "vpc" },
+    { "id": "orders", "label": "orders.created", "kind": "queue", "icon": "queue", "group": "aws" },
+    { "id": "bucket", "label": "Product\nphotos", "kind": "datastore", "icon": "storage", "group": "aws" },
+    { "id": "find", "label": "OpenSearch", "kind": "datastore", "icon": "search", "group": "vpc" },
+    { "id": "stripe", "label": "Stripe", "kind": "external", "icon": "payment" }
+  ],
+  "edges": [
+    { "from": "people", "to": "cdn" },
+    { "from": "web", "to": "cdn", "label": "HTTPS" },
+    { "from": "mobile", "to": "gw" },
+    { "from": "office", "to": "gw" },
+    { "from": "cli", "to": "api" },
+    { "from": "agent", "to": "gw", "label": "tool calls" },
+    { "from": "cdn", "to": "gw" },
+    { "from": "gw", "to": "api", "label": "routes" },
+    { "from": "api", "to": "api", "label": "retry", "style": "async" },
+    { "from": "api", "to": "sidecar", "arrows": "both" },
+    { "from": "api", "to": "legacy" },
+    { "from": "legacy", "to": "legacy" },
+    { "from": "api", "to": "pg" },
+    { "from": "api", "to": "redis", "arrows": "both" },
+    { "from": "api", "to": "orders", "style": "async" },
+    { "from": "api", "to": "find" },
+    { "from": "orders", "to": "thumbs", "style": "async" },
+    { "from": "thumbs", "to": "bucket" },
+    { "from": "thumbs", "to": "thumbs" },
+    { "from": "api", "to": "stripe", "label": "charge" }
+  ]
+}

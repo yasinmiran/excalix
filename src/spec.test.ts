@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseSpec, specSchema, SpecError } from "./spec.js";
+import { ICON_NAMES, parseSpec, specSchema, SpecError } from "./spec.js";
+import { ICON_GLYPHS } from "./style.js";
 import type { Spec } from "./types.js";
 
 type Json = Record<string, any>;
@@ -114,6 +115,16 @@ describe("parseSpec", () => {
     expect(spec.edges[0]).toMatchObject({ style: "async", arrows: "none" });
   });
 
+  it("keeps every icon, and draws each from a glyph in the catalog", () => {
+    const spec = parseSpec({ nodes: ICON_NAMES.map((icon, index) => ({ id: `n${index}`, label: icon, kind: "service", icon })) });
+    expect(spec.nodes.map((node) => node.icon)).toEqual([...ICON_NAMES]);
+    expect(Object.keys(ICON_GLYPHS)).toEqual([...ICON_NAMES]);
+  });
+
+  it("leaves a node without an icon without the key", () => {
+    expect(parseSpec(minimal).nodes[0]).not.toHaveProperty("icon");
+  });
+
   it("accepts a forest of groups", () => {
     const spec = parseSpec(
       withGroups([
@@ -127,6 +138,10 @@ describe("parseSpec", () => {
 });
 
 const KINDS = '"client", "service", "datastore", "queue", "cache", "external"';
+const ICONS =
+  '"user", "users", "browser", "phone", "desktop", "terminal", "bot", "globe", "cloud", "gateway", "server", "container", ' +
+  '"function", "database", "cache", "queue", "storage", "search", "file", "mail", "chat", "bell", "webhook", "payment", ' +
+  '"lock", "key", "shield", "chart", "logs", "clock", "settings", "git"';
 const ONE_GROUP =
   "expected one group id: a node sits in exactly one group, so name the one it runs in and let an edge across the boundary carry the other relationship";
 
@@ -148,7 +163,7 @@ const failures: [name: string, input: unknown, problems: string[]][] = [
   [
     "an unknown key in a node",
     withNodes([{ id: "a", label: "A", kind: "service", shape: "hex" }]),
-    ['nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "group"'],
+    ['nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "icon", "group"'],
   ],
   [
     "an unknown key in an edge",
@@ -167,7 +182,7 @@ const failures: [name: string, input: unknown, problems: string[]][] = [
       nodes: [{ id: "a", label: "A", kind: "service", group: "awz", shape: "hex" }],
     },
     [
-      'nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "group"',
+      'nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "icon", "group"',
       'nodes[0].group: unknown group "awz", did you mean "aws"?',
     ],
   ],
@@ -175,7 +190,7 @@ const failures: [name: string, input: unknown, problems: string[]][] = [
     "an unknown key in a node next to a blank label",
     withNodes([{ id: "a", label: " ", kind: "service", shape: "hex" }]),
     [
-      'nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "group"',
+      'nodes[0]: unknown key "shape", expected one of "id", "label", "kind", "icon", "group"',
       'nodes[0].label: got " ", expected text',
     ],
   ],
@@ -205,6 +220,41 @@ const failures: [name: string, input: unknown, problems: string[]][] = [
     "a kind that does not exist",
     withNodes([{ id: "a", label: "A", kind: "db" }]),
     [`nodes[0].kind: got "db", expected one of ${KINDS}`],
+  ],
+  [
+    "an icon that is not in the catalog",
+    withNodes([{ id: "a", label: "A", kind: "datastore", icon: "postgres" }]),
+    [`nodes[0].icon: got "postgres", expected one of ${ICONS}`],
+  ],
+  [
+    "an icon one edit from a catalog name",
+    withNodes([{ id: "a", label: "A", kind: "datastore", icon: "databse" }]),
+    [`nodes[0].icon: got "databse", expected one of ${ICONS}, did you mean "database"?`],
+  ],
+  [
+    "an icon two edits from a catalog name",
+    withNodes([{ id: "a", label: "A", kind: "external", icon: "email" }]),
+    [`nodes[0].icon: got "email", expected one of ${ICONS}, did you mean "mail"?`],
+  ],
+  [
+    "an icon in the wrong case",
+    withNodes([{ id: "a", label: "A", kind: "service", icon: "Server" }]),
+    [`nodes[0].icon: got "Server", expected one of ${ICONS}, did you mean "server"?`],
+  ],
+  [
+    "an icon that is not a string",
+    withNodes([{ id: "a", label: "A", kind: "service", icon: 3 }]),
+    [`nodes[0].icon: got 3, expected one of ${ICONS}`],
+  ],
+  [
+    "an icon given as a list",
+    withNodes([{ id: "a", label: "A", kind: "service", icon: ["lock", "key"] }]),
+    [`nodes[0].icon: got an array, expected one of ${ICONS}`],
+  ],
+  [
+    "a bad icon next to a dangling edge, in one round trip",
+    { nodes: [{ id: "api", label: "API", kind: "service", icon: "lambda" }], edges: [{ from: "api", to: "apy" }] },
+    [`nodes[0].icon: got "lambda", expected one of ${ICONS}`, 'edges[0].to: unknown node "apy", did you mean "api"?'],
   ],
   [
     "a direction that does not exist",
@@ -411,7 +461,7 @@ describe("problems", () => {
     ).toEqual([
       'nodes[0].id: got "a b", expected letters, digits, "_" and "-" only',
       `nodes[0].kind: got "db", expected one of ${KINDS}`,
-      'nodes[0]: unknown key "extra", expected one of "id", "label", "kind", "group"',
+      'nodes[0]: unknown key "extra", expected one of "id", "label", "kind", "icon", "group"',
       'edges[0].from: got "a b", expected letters, digits, "_" and "-" only',
       'spec: unknown key "junk", expected one of "title", "direction", "groups", "nodes", "edges"',
       'edges[0].to: unknown node "pgg"',
@@ -442,7 +492,7 @@ describe("JSON Schema", () => {
     for (const key of ["title", "direction", "groups", "nodes", "edges"]) {
       expect(props[key].description, key).toBeTruthy();
     }
-    for (const key of ["id", "label", "kind", "group"]) {
+    for (const key of ["id", "label", "kind", "icon", "group"]) {
       expect(nodeProps[key].description, key).toBeTruthy();
     }
     for (const key of ["from", "to", "label", "style", "arrows"]) {

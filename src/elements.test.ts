@@ -1,15 +1,21 @@
+import { createHash } from "node:crypto";
 import type {
   ExcalidrawArrowElement,
   ExcalidrawElement,
+  ExcalidrawImageElement,
   ExcalidrawTextElement,
 } from "excalidraw-types/element/src/types";
 import { describe, expect, it } from "vitest";
 import { EXCALIX_EPOCH, buildElements, toDocument } from "./elements.js";
 import { fractionalIndex } from "./fractional-index.js";
+import { iconSvg } from "./icons.js";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
+import { sketch } from "./pipeline.js";
 import { estimateMeasurer } from "./render/estimate.js";
-import { FONT, nodeSize } from "./style.js";
-import type { LayoutResult, Measured, Point, Spec } from "./types.js";
+import { parseSpec } from "./spec.js";
+import { FONT, ICON, nodeSize } from "./style.js";
+import { measuringOnly } from "./test-support.js";
+import type { LayoutResult, Measured, Point, SceneFiles, Spec } from "./types.js";
 
 const spec: Spec = {
   title: "order pipeline",
@@ -111,8 +117,9 @@ const TEXT_KEYS = [
   "originalText", "text", "textAlign", "verticalAlign",
 ];
 const ARROW_KEYS = ["elbowed", "endArrowhead", "endBinding", "points", "startArrowhead", "startBinding"];
+const IMAGE_KEYS = ["crop", "fileId", "scale", "status"];
 
-const elements = buildElements(spec, layout, measured);
+const { elements } = buildElements(spec, layout, measured);
 const byId = new Map(elements.map((element) => [element.id, element]));
 const isText = (e: ExcalidrawElement): e is ExcalidrawTextElement => e.type === "text";
 const isArrow = (e: ExcalidrawElement): e is ExcalidrawArrowElement => e.type === "arrow";
@@ -308,14 +315,14 @@ describe("buildElements", () => {
   });
 
   it("is deterministic and reseeds everything when the spec changes", () => {
-    expect(buildElements(spec, layout, measured)).toEqual(elements);
-    const retitled = buildElements({ ...spec, title: "other" }, layout, measured);
+    expect(buildElements(spec, layout, measured)).toEqual({ elements, files: {} });
+    const retitled = buildElements({ ...spec, title: "other" }, layout, measured).elements;
     const ids = new Set(elements.map((e) => e.id));
     for (const element of retitled) expect(ids.has(element.id)).toBe(false);
   });
 
   it("skips the title when the spec has none", () => {
-    const untitled = buildElements({ ...spec, title: undefined }, layout, { ...measured, title: undefined });
+    const untitled = buildElements({ ...spec, title: undefined }, layout, { ...measured, title: undefined }).elements;
     expect(untitled).toHaveLength(elements.length - 1);
     expect(untitled.some((e) => isText(e) && e.text === "order pipeline")).toBe(false);
   });
@@ -323,13 +330,13 @@ describe("buildElements", () => {
 
 describe("toDocument", () => {
   it("wraps elements in the documented envelope", () => {
-    const parsed = JSON.parse(toDocument(elements));
+    const parsed = JSON.parse(toDocument({ elements, files: {} }));
     expect(parsed).toMatchObject({
       type: "excalidraw", version: 2, source: "excalix",
       appState: { viewBackgroundColor: "#ffffff", gridSize: 20 }, files: {},
     });
     expect(parsed.elements).toEqual(JSON.parse(JSON.stringify(elements)));
-    expect(toDocument(elements)).toBe(toDocument(buildElements(spec, layout, measured)));
+    expect(toDocument({ elements, files: {} })).toBe(toDocument(buildElements(spec, layout, measured)));
   });
 });
 
@@ -347,3 +354,118 @@ function pointAt(points: Point[], t: number): Point {
   }
   return points[points.length - 1]!;
 }
+
+const ICON_SPEC = {
+  groups: [{ id: "aws", label: "AWS" }],
+  nodes: [
+    { id: "web", label: "Web app", kind: "client", icon: "browser" },
+    { id: "api", label: "Order API", kind: "service", icon: "server", group: "aws" },
+    { id: "worker", label: "Worker", kind: "service", icon: "server", group: "aws" },
+    { id: "pg", label: "Postgres", kind: "datastore", group: "aws" },
+  ],
+  edges: [
+    { from: "web", to: "api" },
+    { from: "api", to: "api", label: "retry" },
+    { from: "api", to: "pg" },
+    { from: "pg", to: "pg" },
+    { from: "api", to: "worker" },
+  ],
+};
+
+describe("buildElements with icons", async () => {
+  const document = JSON.parse((await sketch(ICON_SPEC, measuringOnly(estimateMeasurer))).excalidraw) as {
+    elements: ExcalidrawElement[];
+    files: SceneFiles;
+  };
+  const { elements: drawn, files } = document;
+  const keys = createIdSource(hashSpec(parseSpec(ICON_SPEC)));
+  const at = (key: string) => drawn.find((element) => element.id === keys.id(key))!;
+  const position = (key: string) => drawn.indexOf(at(key));
+  const sha1 = (text: string) => createHash("sha1").update(text).digest("hex");
+
+  it("draws an icon node as its shape, its label and its image, then its self loops", () => {
+    const first = position("node:api");
+    expect(drawn.slice(first, first + 5).map((element) => element.id)).toEqual(
+      ["node:api", "node:api:label", "node:api:icon", "edge:1", "edge:1:label"].map((key) => keys.id(key)),
+    );
+    expect(drawn.filter((element) => element.type === "image").map((element) => element.id).sort()).toEqual(
+      ["node:web:icon", "node:api:icon", "node:worker:icon"].map((key) => keys.id(key)).sort(),
+    );
+  });
+
+  it("groups an icon node's shape, label, image and self loops on their own, inside the node's groups", () => {
+    const aws = keys.id("group:aws:groupId");
+    const api = keys.id("node:api:groupId");
+    for (const key of ["node:api", "node:api:label", "node:api:icon", "edge:1", "edge:1:label"]) expect(at(key).groupIds, key).toEqual([api, aws]);
+    for (const key of ["node:web", "node:web:label", "node:web:icon"]) expect(at(key).groupIds, key).toEqual([keys.id("node:web:groupId")]);
+    expect(at("node:pg").groupIds).toEqual([aws]);
+    expect(at("edge:3").groupIds).toEqual([aws]);
+    expect(at("edge:4").groupIds).toEqual([aws]);
+    expect(at("edge:0").groupIds).toEqual([]);
+    expect(drawn.some((element) => element.id === api)).toBe(false);
+  });
+
+  it("keeps every group contiguous in the array", () => {
+    const groupIds = new Set(drawn.flatMap((element) => element.groupIds));
+    for (const group of groupIds) {
+      const members = drawn.flatMap((element, index) => (element.groupIds.includes(group) ? [index] : []));
+      expect(members, group).toEqual(members.map((_, i) => members[0]! + i));
+    }
+  });
+
+  it("fills an image the way restore and the editor leave it", () => {
+    const image = at("node:api:icon") as ExcalidrawImageElement;
+    expect(Object.keys(image).sort()).toEqual([...BASE_KEYS, ...IMAGE_KEYS].sort());
+    expect(image).toMatchObject({
+      type: "image",
+      status: "saved",
+      scale: [1, 1],
+      crop: null,
+      roundness: null,
+      strokeColor: "transparent",
+      backgroundColor: "transparent",
+      boundElements: [],
+      fileId: sha1(iconSvg("server")),
+      width: ICON.size,
+      height: ICON.size,
+    });
+    for (const value of [image.x, image.y, image.width, image.height]) expect(Number.isInteger(value), String(value)).toBe(true);
+    expect(image.seed).toBe(keys.seed("node:api:icon"));
+  });
+
+  it("writes one file per glyph drawn, keyed by the sha1 of its bytes", () => {
+    expect(Object.keys(files).sort()).toEqual([sha1(iconSvg("browser")), sha1(iconSvg("server"))].sort());
+    for (const [id, file] of Object.entries(files)) {
+      expect(Object.keys(file)).toEqual(["mimeType", "id", "dataURL", "created"]);
+      expect(file).toMatchObject({ mimeType: "image/svg+xml", id, created: EXCALIX_EPOCH });
+      const svg = Buffer.from(file.dataURL.replace(/^data:image\/svg\+xml;base64,/, ""), "base64").toString("utf8");
+      expect(sha1(svg)).toBe(id);
+      expect(svg).toContain(`stroke="${ICON.color}"`);
+    }
+  });
+
+  it("reserves the icon's room on both sides of a label centred where the editor puts it", () => {
+    for (const id of ["web", "api", "worker"]) {
+      const node = at(`node:${id}`);
+      const label = at(`node:${id}:label`);
+      const icon = at(`node:${id}:icon`);
+      expect(label.x + label.width / 2, id).toBeCloseTo(node.x + node.width / 2, 6);
+      expect(label.y + label.height / 2, id).toBeCloseTo(node.y + node.height / 2, 6);
+      expect(Math.abs(label.x - ICON.gap - (icon.x + icon.width)), id).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(icon.y + icon.height / 2 - (node.y + node.height / 2)), id).toBeLessThanOrEqual(0.5);
+    }
+    const label = { width: at("node:api:label").width, height: at("node:api:label").height };
+    expect(nodeSize("service", label, true).width - nodeSize("service", label).width).toBe(2 * (ICON.size + ICON.gap));
+    expect(nodeSize("service", label, true).height).toBe(Math.max(label.height, ICON.size) + 32);
+  });
+
+  it("writes the files map into the document, and an empty one for a spec without icons", async () => {
+    expect(document.files).toEqual(files);
+    const plain = { ...ICON_SPEC, nodes: ICON_SPEC.nodes.map(({ icon: _, ...node }) => node) };
+    const parsed = JSON.parse((await sketch(plain, measuringOnly(estimateMeasurer))).excalidraw) as { elements: ExcalidrawElement[]; files: object };
+    expect(parsed.files).toEqual({});
+    expect(parsed.elements.some((element) => element.type === "image")).toBe(false);
+    const aws = createIdSource(hashSpec(parseSpec(plain))).id("group:aws:groupId");
+    expect(new Set(parsed.elements.flatMap((element) => element.groupIds))).toEqual(new Set([aws]));
+  });
+});

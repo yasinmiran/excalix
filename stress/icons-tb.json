@@ -1,0 +1,45 @@
+{
+  "title": "icons, top to bottom",
+  "direction": "tb",
+  "groups": [
+    { "id": "corp", "label": "Corp network" },
+    { "id": "platform", "label": "Platform", "parent": "corp" },
+    { "id": "k8s", "label": "Kubernetes", "parent": "platform" }
+  ],
+  "nodes": [
+    { "id": "admin", "label": "Admin", "kind": "client", "icon": "user" },
+    { "id": "waf", "label": "WAF", "kind": "service", "icon": "shield", "group": "corp" },
+    { "id": "auth", "label": "Auth service", "kind": "service", "icon": "lock", "group": "k8s" },
+    { "id": "vault", "label": "Secrets\nvault", "kind": "datastore", "icon": "key", "group": "platform" },
+    { "id": "flags", "label": "Feature flags", "kind": "cache", "icon": "settings", "group": "platform" },
+    { "id": "notify", "label": "Notification service", "kind": "service", "icon": "bell", "group": "k8s" },
+    { "id": "hooks", "label": "Webhook dispatcher", "kind": "service", "icon": "webhook", "group": "k8s" },
+    { "id": "cron", "label": "Nightly scheduler", "kind": "service", "icon": "clock", "group": "k8s" },
+    { "id": "logs", "label": "application, audit and access logs from every service", "kind": "queue", "icon": "logs", "group": "platform" },
+    { "id": "metrics", "label": "Prometheus", "kind": "datastore", "icon": "chart", "group": "platform" },
+    { "id": "reports", "label": "Reports\narchive", "kind": "datastore", "icon": "file", "group": "corp" },
+    { "id": "mailer", "label": "SendGrid", "kind": "external", "icon": "mail" },
+    { "id": "slack", "label": "Slack", "kind": "external", "icon": "chat" },
+    { "id": "pager", "label": "PagerDuty", "kind": "external", "icon": "bell" },
+    { "id": "github", "label": "GitHub", "kind": "external", "icon": "git" },
+    { "id": "partner", "label": "Partner cloud", "kind": "external", "icon": "cloud" }
+  ],
+  "edges": [
+    { "from": "admin", "to": "waf" },
+    { "from": "waf", "to": "auth", "label": "login" },
+    { "from": "auth", "to": "auth", "label": "refresh" },
+    { "from": "auth", "to": "vault" },
+    { "from": "auth", "to": "flags", "arrows": "both" },
+    { "from": "auth", "to": "notify", "style": "async" },
+    { "from": "notify", "to": "notify" },
+    { "from": "notify", "to": "mailer", "label": "email" },
+    { "from": "notify", "to": "slack" },
+    { "from": "notify", "to": "pager", "label": "page" },
+    { "from": "cron", "to": "reports" },
+    { "from": "cron", "to": "hooks", "style": "async" },
+    { "from": "hooks", "to": "partner" },
+    { "from": "github", "to": "hooks", "label": "push events" },
+    { "from": "auth", "to": "logs", "style": "async" },
+    { "from": "logs", "to": "metrics", "style": "async" }
+  ]
+}

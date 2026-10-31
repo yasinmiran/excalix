@@ -28,6 +28,7 @@
   "files": [
     "dist",
     "fonts",
+    "icons",
     "README.md"
   ],
   "scripts": {

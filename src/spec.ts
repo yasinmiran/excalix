@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Spec } from "./types.js";
+import type { IconName, Spec } from "./types.js";
 
 /** Thrown by parseSpec with every problem found, not only the first. */
 export class SpecError extends Error {
@@ -87,6 +87,52 @@ const kind = z
   )
   .describe("what the node is; fixes its shape and colour");
 
+/** Every icon name, in the order the problem message and the tool description list them. */
+export const ICON_NAMES = [
+  "user",
+  "users",
+  "browser",
+  "phone",
+  "desktop",
+  "terminal",
+  "bot",
+  "globe",
+  "cloud",
+  "gateway",
+  "server",
+  "container",
+  "function",
+  "database",
+  "cache",
+  "queue",
+  "storage",
+  "search",
+  "file",
+  "mail",
+  "chat",
+  "bell",
+  "webhook",
+  "payment",
+  "lock",
+  "key",
+  "shield",
+  "chart",
+  "logs",
+  "clock",
+  "settings",
+  "git",
+] as const satisfies readonly IconName[];
+
+// A name one or two edits off a real one, such as "databse" or "email", comes back with the one it was near.
+const icon = z
+  .enum(ICON_NAMES, {
+    error: (issue) => {
+      const near = typeof issue.input === "string" ? nearest(issue.input, ICON_NAMES) : undefined;
+      return `${problem(oneOf(ICON_NAMES))(issue)}${near === undefined ? "" : `, did you mean "${near}"?`}`;
+    },
+  })
+  .describe("what the node is, drawn as a small line icon beside its label; leave it out when no name fits");
+
 const direction = z
   .union([z.literal("lr").describe("left to right"), z.literal("tb").describe("top to bottom")], {
     error: problem(oneOf(["lr", "tb"])),
@@ -131,6 +177,7 @@ const node = strict(
     id: id("unique id, referenced by edge.from, edge.to and group membership"),
     label: text("text drawn inside the box; a \\n starts a new line"),
     kind,
+    icon: icon.optional(),
     group: id(
       "id of the group this node sits inside, exactly one: name the group it runs in and let an edge across the boundary carry any other relationship",
       groupRef,
@@ -293,7 +340,7 @@ function reference(
 }
 
 // A typo comes back with the id the caller probably meant. One edit for a short id, two for a longer one.
-function nearest(target: string, candidates: string[]): string | undefined {
+function nearest(target: string, candidates: readonly string[]): string | undefined {
   let best: string | undefined;
   let shortest = target.length <= 4 ? 2 : 3;
   for (const candidate of candidates) {

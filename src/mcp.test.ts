@@ -368,7 +368,7 @@ describe("sketch tool", () => {
     expect(textOf(result)).toBe(
       [
         `nodes[0].kind: got "browser", expected one of ${KINDS}`,
-        'nodes[0]: unknown key "colour", expected one of "id", "label", "kind", "group"',
+        'nodes[0]: unknown key "colour", expected one of "id", "label", "kind", "icon", "group"',
         'edges[0].to: unknown node "api"',
       ].join("\n"),
     );

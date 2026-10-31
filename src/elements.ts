@@ -1,17 +1,35 @@
+import { createHash } from "node:crypto";
 import type {
   BoundElement,
   ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawEllipseElement,
+  ExcalidrawImageElement,
   ExcalidrawRectangleElement,
   ExcalidrawTextElement,
+  FileId,
   FixedPoint,
 } from "excalidraw-types/element/src/types";
 import type { LocalPoint, Radians } from "excalidraw-types/math/src/types";
 import { fractionalIndex } from "./fractional-index.js";
+import { iconSvg } from "./icons.js";
 import { createIdSource, edgeKey, hashSpec, type IdSource } from "./ids.js";
-import { EDGE, EDGE_STYLES, FONT, GROUP_STYLE, NODE, NODE_STYLES, STROKE, TITLE_GAP, arrowheads } from "./style.js";
-import type { Box, EdgeSpec, GroupSpec, LayoutResult, Measured, NodeSpec, Point, Spec, TextSize, WrappedLabel } from "./types.js";
+import { EDGE, EDGE_STYLES, FONT, GROUP_STYLE, ICON, NODE, NODE_STYLES, STROKE, TITLE_GAP, arrowheads } from "./style.js";
+import type {
+  Box,
+  Drawing,
+  EdgeSpec,
+  GroupSpec,
+  LayoutResult,
+  Measured,
+  NodeSpec,
+  Point,
+  SceneFile,
+  SceneFiles,
+  Spec,
+  TextSize,
+  WrappedLabel,
+} from "./types.js";
 
 export const EXCALIX_EPOCH = 1_700_000_000_000;
 
@@ -28,6 +46,7 @@ type ShapeElement = ExcalidrawRectangleElement | ExcalidrawEllipseElement;
 export const radians = (value: number) => value as Radians;
 export const localPoint = (x: number, y: number) => [x, y] as LocalPoint;
 export const lineHeight = (value: number) => value as ExcalidrawTextElement["lineHeight"];
+export const fileId = (value: string) => value as FileId;
 
 interface Stroke {
   strokeColor: string;
@@ -61,8 +80,8 @@ const TEXT_STROKE: Omit<Stroke, "strokeColor"> = {
   roundness: null,
 };
 
-/** Turns a laid-out spec into Excalidraw elements. Pure and deterministic. */
-export function buildElements(spec: Spec, layout: LayoutResult, measured: Measured): ExcalidrawElement[] {
+/** Turns a laid-out spec into Excalidraw elements and the files their images draw. Pure and deterministic. */
+export function buildElements(spec: Spec, layout: LayoutResult, measured: Measured): Drawing {
   const ids = createIdSource(hashSpec(spec));
   const parents = new Map(spec.groups.map((group) => [group.id, group.parent]));
   const groupChains = groupChainsOf(spec.groups, parents, ids);
@@ -79,10 +98,15 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
   });
 
   // An arrow joining two members of a group belongs to it, so dragging the group in the editor carries the
-  // arrow whole instead of re-projecting its ends and leaving its bends behind.
+  // arrow whole instead of re-projecting its ends and leaving its bends behind. A node with an icon is a group of
+  // its own, so its self loops go with it, emitted beside it to keep that group contiguous.
   const groupOfNode = new Map(spec.nodes.map((node) => [node.id, node.group]));
+  const iconNodes = new Set(spec.nodes.flatMap((node) => (node.icon === undefined ? [] : [node.id])));
+  const indexed = spec.edges.map((edge, index) => ({ edge, index }));
+  const ownsLoop = ({ edge }: { edge: EdgeSpec }) => edge.from === edge.to && iconNodes.has(edge.from);
+  const loopsOf = groupBy(indexed.filter(ownsLoop), ({ edge }) => edge.from);
   const edgesIn = groupBy(
-    spec.edges.map((edge, index) => ({ edge, index })),
+    indexed.filter((entry) => !ownsLoop(entry)),
     ({ edge }) => sharedGroup(groupOfNode.get(edge.from), groupOfNode.get(edge.to), parents),
   );
 
@@ -92,16 +116,24 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
   const nodesIn = groupBy(spec.nodes, (node) => node.group);
   const groupsIn = groupBy(spec.groups, (group) => group.parent);
   const elements: ExcalidrawElement[] = [];
-  const pushNode = (node: NodeSpec) =>
+  const files: SceneFiles = {};
+  const pushEdge = ({ edge, index }: { edge: EdgeSpec; index: number }, groupIds: string[]) => {
+    const routed = layout.edges[edgeKey(index)];
+    if (!routed) throw new Error(`layout has no route for ${edgeKey(index)}`);
+    elements.push(...edgeElements(edge, index, ids, routed, measured.edgeLabels[edgeKey(index)], groupIds, nodeIds, layout.nodes));
+  };
+  const pushNode = (node: NodeSpec) => {
+    const chain = chainOf(node.group);
+    const groupIds = node.icon === undefined ? chain : [ids.id(`node:${node.id}:groupId`), ...chain];
+    const file = node.icon === undefined ? undefined : sceneFile(iconSvg(node.icon));
+    if (file) files[file.id] = file;
     elements.push(
-      ...nodeElements(node, ids, box(layout.nodes, node.id), measured.nodeLabels[node.id], chainOf(node.group), arrowsByNode.get(node.id) ?? []),
+      ...nodeElements(node, ids, box(layout.nodes, node.id), measured.nodeLabels[node.id], groupIds, arrowsByNode.get(node.id) ?? [], file?.id),
     );
+    for (const loop of loopsOf.get(node.id) ?? []) pushEdge(loop, groupIds);
+  };
   const pushEdges = (group: string | undefined) => {
-    for (const { edge, index } of edgesIn.get(group) ?? []) {
-      const routed = layout.edges[edgeKey(index)];
-      if (!routed) throw new Error(`layout has no route for ${edgeKey(index)}`);
-      elements.push(...edgeElements(edge, index, ids, routed, measured.edgeLabels[edgeKey(index)], chainOf(group), nodeIds, layout.nodes));
-    }
+    for (const entry of edgesIn.get(group) ?? []) pushEdge(entry, chainOf(group));
   };
   const pushGroup = (group: GroupSpec): void => {
     const at = layout.groupLabels[group.id];
@@ -129,11 +161,11 @@ export function buildElements(spec: Spec, layout: LayoutResult, measured: Measur
   }
   // Restore rewrites an element whose index is not a valid order key ascending with its neighbours,
   // and that rewrite mutates the element, so version, versionNonce and updated move with it.
-  return elements.map((element, position) => ({ ...element, index: fractionalIndex(position) }));
+  return { elements: elements.map((element, position) => ({ ...element, index: fractionalIndex(position) })), files };
 }
 
-/** Wraps elements in a .excalidraw document. */
-export function toDocument(elements: ExcalidrawElement[]): string {
+/** Wraps a drawing in a .excalidraw document. */
+export function toDocument({ elements, files }: Drawing): string {
   return JSON.stringify(
     {
       type: "excalidraw",
@@ -141,11 +173,25 @@ export function toDocument(elements: ExcalidrawElement[]): string {
       source: "excalix",
       elements,
       appState: { viewBackgroundColor: "#ffffff", gridSize: 20 },
-      files: {},
+      files,
     },
     null,
     2,
   );
+}
+
+/**
+ * An SVG as the files map holds it. Its id is the sha1 hex of its bytes, what the editor gives the same SVG pasted
+ * in, so the two share one entry. The dataURL is spelled the way the editor's getDataURL_sync spells it, base64 of
+ * the UTF-8 bytes, because the editor rewrites and version-bumps an SVG file whose dataURL it would spell otherwise.
+ */
+function sceneFile(svg: string): SceneFile {
+  return {
+    mimeType: "image/svg+xml",
+    id: createHash("sha1").update(svg).digest("hex"),
+    dataURL: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
+    created: EXCALIX_EPOCH,
+  };
 }
 
 function groupElements(
@@ -190,6 +236,7 @@ function nodeElements(
   label: TextSize | undefined,
   groupIds: string[],
   arrows: BoundElement[],
+  icon: string | undefined,
 ): ExcalidrawElement[] {
   const key = `node:${node.id}`;
   const style = NODE_STYLES[node.kind];
@@ -208,20 +255,48 @@ function nodeElements(
     type: style.shape,
     boundElements: [{ type: "text", id: labelId }, ...arrows],
   };
-  return [
-    shape,
-    textElement(ids, {
-      key: `${key}:label`,
-      text: node.label,
-      fontSize: FONT.node,
-      color: STROKE,
-      position: { x: box.x + (box.width - size.width) / 2, y: box.y + (box.height - size.height) / 2 },
-      size,
-      groupIds,
-      containerId: shape.id,
-      align: { textAlign: "center", verticalAlign: "middle" },
+  const text = textElement(ids, {
+    key: `${key}:label`,
+    text: node.label,
+    fontSize: FONT.node,
+    color: STROKE,
+    position: { x: box.x + (box.width - size.width) / 2, y: box.y + (box.height - size.height) / 2 },
+    size,
+    groupIds,
+    containerId: shape.id,
+    align: { textAlign: "center", verticalAlign: "middle" },
+  });
+  if (icon === undefined) return [shape, text];
+  return [shape, text, iconElement(ids, `${key}:icon`, iconBox(box, size), groupIds, icon)];
+}
+
+/** Where a node's icon goes: left of its centred label, in the room nodeSize reserved for it, on whole pixels. */
+function iconBox(box: Box, label: TextSize): Box {
+  const { size, gap } = ICON;
+  const x = box.x + (box.width - label.width) / 2 - gap - size;
+  const y = box.y + (box.height - size) / 2;
+  return { x: Math.round(x), y: Math.round(y), width: size, height: size };
+}
+
+// status "saved" because the editor only ever moves "pending" on, to "saved" once a host has stored the file, and
+// that move would rewrite the element the first time the file is opened there.
+function iconElement(ids: IdSource, key: string, box: Box, groupIds: string[], file: string): ExcalidrawImageElement {
+  return {
+    ...base(ids, key, box, groupIds, {
+      strokeColor: TRANSPARENT,
+      backgroundColor: TRANSPARENT,
+      fillStyle: "solid",
+      strokeWidth: NODE.strokeWidth,
+      strokeStyle: "solid",
+      roughness: NODE.roughness,
+      roundness: null,
     }),
-  ];
+    type: "image",
+    fileId: fileId(file),
+    status: "saved",
+    scale: [1, 1],
+    crop: null,
+  };
 }
 
 function edgeElements(

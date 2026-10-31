@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, extname, resolve, sep } from "node:path";
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { FONT } from "../style.js";
-import type { Renderer, TextSize } from "../types.js";
+import type { Renderer, SceneFiles, TextSize } from "../types.js";
 import { fontsDir, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
 const ORIGIN = "http://excalix.local";
@@ -37,10 +37,23 @@ const PAGE = `<!doctype html>
   }
 </script>`;
 
+// A dark export wraps each SVG file in a <g> whose filter attribute holds the CSS filter function in `from`. WebKit
+// ignores a filter function there, so Safari would draw every icon in the light stroke colour on the dark fills. The
+// same transform as an SVG filter draws alike in every browser: the table is invert(93%) as the Filter Effects spec
+// expands it, and sRGB because filter functions work in sRGB while SVG filters default to linearRGB.
+const DARK_IMAGE_FILTER = {
+  from: "invert(93%) hue-rotate(180deg)",
+  url: "url(#excalix-dark-image)",
+  markup:
+    '<filter id="excalix-dark-image" color-interpolation-filters="sRGB"><feComponentTransfer>' +
+    '<feFuncR type="table" tableValues="0.93 0.07"/><feFuncG type="table" tableValues="0.93 0.07"/>' +
+    '<feFuncB type="table" tableValues="0.93 0.07"/></feComponentTransfer><feColorMatrix type="hueRotate" values="180"/></filter>',
+};
+
 interface ExportData {
   elements: unknown[];
   appState: { exportBackground: boolean; viewBackgroundColor: string; exportEmbedScene: boolean; exportWithDarkMode: boolean };
-  files: Record<string, never>;
+  files: SceneFiles;
 }
 
 /** The slice of @excalidraw/utils this renderer calls; it runs inside the page against the global the bundle assigns, not against an import. */
@@ -71,12 +84,14 @@ const playwrightVersion = (require("playwright-core/package.json") as { version:
 // The scene goes into the SVG and the PNG too, so either opens in Excalidraw as an editable drawing. Dark mode is
 // not part of that scene, so a dark export reopens as the light drawing. What goes in is the scene after restore,
 // which stamps a time and a random nonce on any element it changes, so the files stay byte-stable only while
-// restore leaves a sketch's elements as they are, which restore.test.ts holds it to.
-function exportData(elements: unknown[], dark = false): ExportData {
+// restore leaves a sketch's elements as they are, which restore.test.ts holds it to. The files go into the scene as
+// they are, in either theme: a dark export draws an SVG file through the filter that darkens every other colour
+// (see DARK_IMAGE_FILTER).
+function exportData(elements: unknown[], files: SceneFiles, dark = false): ExportData {
   return {
     elements,
     appState: { exportBackground: true, viewBackgroundColor: "#ffffff", exportEmbedScene: true, exportWithDarkMode: dark },
-    files: {},
+    files,
   };
 }
 
@@ -137,7 +152,7 @@ export async function openRenderPage(browser: Browser): Promise<Page> {
     unicodeRange: sequenceRange ? `${unicodeRange},${sequenceRange}` : unicodeRange,
   }));
   await page.evaluate(registerFonts, {
-    probe: exportData([fontProbe()]),
+    probe: exportData([fontProbe()], {}),
     family: "Excalifont",
     pinned: { family: PINNED_FAMILY, faces },
   });
@@ -182,13 +197,18 @@ export async function createBrowserRenderer(): Promise<Renderer> {
           ),
       },
       // The SVG export takes dark mode from the appState alone and the PNG export from its config alone.
-      async svg(elements, { dark }) {
+      async svg(elements, { dark, files }) {
         const fontFaces = await pinnedFontFaceRules(drawnTexts(elements));
-        return page.evaluate(svgInPage, { data: exportData(elements, dark), padding: PADDING, fontFaces });
+        return page.evaluate(svgInPage, {
+          data: exportData(elements, files, dark),
+          padding: PADDING,
+          fontFaces,
+          darkImageFilter: DARK_IMAGE_FILTER,
+        });
       },
-      async png(elements, { dark, scale }) {
+      async png(elements, { dark, scale, files }) {
         const theme: "light" | "dark" = dark ? "dark" : "light";
-        const base64 = await page.evaluate(pngInPage, { data: exportData(elements, dark), padding: PADDING, scale, theme });
+        const base64 = await page.evaluate(pngInPage, { data: exportData(elements, files, dark), padding: PADDING, scale, theme });
         return new Uint8Array(Buffer.from(base64, "base64"));
       },
       close,
@@ -266,13 +286,30 @@ async function measureInPage({
   });
 }
 
-async function svgInPage({ data, padding, fontFaces }: { data: ExportData; padding: number; fontFaces: string[] }): Promise<string> {
+async function svgInPage({
+  data,
+  padding,
+  fontFaces,
+  darkImageFilter,
+}: {
+  data: ExportData;
+  padding: number;
+  fontFaces: string[];
+  darkImageFilter: typeof DARK_IMAGE_FILTER;
+}): Promise<string> {
   const { utils } = (window as unknown as ExcalixWindow).excalix;
   const svg = await utils.exportToSvg({ data, config: { padding } });
   if (fontFaces.length > 0) {
     const style = svg.querySelector("style.style-fonts");
     if (!style) throw new Error("the exported SVG has no style-fonts element for the pinned faces");
     style.append(fontFaces.map((face) => `\n      ${face}`).join(""));
+  }
+  const filtered = svg.querySelectorAll(`g[filter="${darkImageFilter.from}"]`);
+  if (filtered.length > 0) {
+    const defs = svg.querySelector("defs");
+    if (!defs) throw new Error("the exported SVG has no defs element for the dark image filter");
+    for (const g of filtered) g.setAttribute("filter", darkImageFilter.url);
+    defs.insertAdjacentHTML("beforeend", darkImageFilter.markup);
   }
   return svg.outerHTML;
 }

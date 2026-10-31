@@ -6,10 +6,12 @@ import { build } from "esbuild";
 import type { ExcalidrawElement, ExcalidrawTextElement } from "excalidraw-types/element/src/types";
 import { type Browser, type Page, chromium } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createIdSource, hashSpec } from "../ids.js";
 import { sketch } from "../pipeline.js";
+import { ICON_NAMES, parseSpec } from "../spec.js";
 import { EDGE_LABEL_WIDTH, FONT } from "../style.js";
 import { embeddedScene, measuringOnly, readSpec, specFiles } from "../test-support.js";
-import type { Point, Renderer } from "../types.js";
+import type { Point, Renderer, SceneFile, SceneFiles } from "../types.js";
 import { wrapTexts } from "../wrap.js";
 import { createBrowserRenderer, launchBrowser, openRenderPage, wholePixels } from "./browser.js";
 import { estimateMeasurer } from "./estimate.js";
@@ -29,9 +31,15 @@ const PAGE = `<!doctype html>
 
 interface EditorWindow {
   excalix: {
-    editor: { loadFromBlob(blob: Blob, localAppState: null, localElements: null): Promise<{ elements: unknown[] }> };
+    editor: { loadFromBlob(blob: Blob, localAppState: null, localElements: null): Promise<Loaded> };
     error?: string;
   };
+}
+
+/** What the editor holds once it has opened a file. */
+interface Loaded {
+  elements: unknown[];
+  files: unknown;
 }
 
 interface Scene {
@@ -53,6 +61,7 @@ interface ElementWindow {
     ): void;
     getBoundTextMaxWidth(container: ExcalidrawElement, text: ExcalidrawTextElement): number;
     getFontString(text: ExcalidrawTextElement): string;
+    normalizeSVG(svg: string): string;
     setCustomTextMetricsProvider(provider: { getLineWidth(text: string, font: string): number }): void;
     wrapText(text: string, font: string, maxWidth: number): string;
   };
@@ -82,8 +91,9 @@ interface SourceMap {
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 const DATA_SOURCE = /^(?!.*node_modules).*\bdata\/(restore|blob)\.ts$/;
-// The element code restore calls into: binding repair, fractional indices, bound text, version bumps.
-const ELEMENT_FILES = "binding|fractionalIndex|mutateElement|textElement";
+// The element code restore calls into: binding repair, fractional indices, bound text, version bumps, and the
+// normalizeSVG the editor runs over every SVG file it opens.
+const ELEMENT_FILES = "binding|fractionalIndex|image|mutateElement|textElement";
 const BUNDLED_ELEMENT_SOURCE = new RegExp(`^(?!.*node_modules).*\\belement/src/(${ELEMENT_FILES})\\.ts$`);
 const ELEMENT_SOURCE = new RegExp(`^(?:\\.\\./)+src/(${ELEMENT_FILES})\\.ts$`);
 
@@ -108,7 +118,7 @@ async function bundleElement(): Promise<string> {
   const result = await build({
     stdin: {
       contents: [
-        `export { Scene, dragSelectedElements, getBoundTextMaxWidth, setCustomTextMetricsProvider, wrapText } from "@excalidraw/element";`,
+        `export { Scene, dragSelectedElements, getBoundTextMaxWidth, normalizeSVG, setCustomTextMetricsProvider, wrapText } from "@excalidraw/element";`,
         `export { getFontString } from "@excalidraw/common";`,
       ].join("\n"),
       // pnpm links the editor's own packages beside it and nowhere a test file could resolve them from.
@@ -221,17 +231,47 @@ async function openEditorPage(browser: Browser): Promise<Page> {
   return page;
 }
 
-/** What opening the file does to its elements: loadFromBlob restores them with repairBindings and deleteInvisibleElements. */
-async function loadInPage({ json, type }: { json: string; type: string }): Promise<unknown[]> {
+/** What opening the file does to it: loadFromBlob restores the elements with repairBindings and deleteInvisibleElements. */
+async function loadInPage({ json, type }: { json: string; type: string }): Promise<Loaded> {
   const { editor } = (window as unknown as EditorWindow).excalix;
-  return (await editor.loadFromBlob(new Blob([json], { type }), null, null)).elements;
+  const { elements, files } = await editor.loadFromBlob(new Blob([json], { type }), null, null);
+  return { elements, files };
 }
 
 /** What dropping an exported image on the editor does: loadFromBlob finds the scene inside it and restores that. */
-async function loadImageInPage({ base64, type }: { base64: string; type: string }): Promise<unknown[]> {
+async function loadImageInPage({ base64, type }: { base64: string; type: string }): Promise<Loaded> {
   const { editor } = (window as unknown as EditorWindow).excalix;
   const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-  return (await editor.loadFromBlob(new Blob([bytes], { type }), null, null)).elements;
+  const { elements, files } = await editor.loadFromBlob(new Blob([bytes], { type }), null, null);
+  return { elements, files };
+}
+
+/**
+ * The dataURL the editor gives each SVG file as it adds it to a scene, App.addMissingFiles: normalizeSVG over the
+ * decoded text, then getDataURL_sync. Any file whose dataURL changes is replaced and version-bumped on open.
+ */
+function addedInPage(files: SceneFile[]): string[] {
+  const { normalizeSVG } = (window as unknown as ElementWindow).excalidrawElement;
+  return files.map(({ dataURL }) => {
+    const text = new TextDecoder().decode(Uint8Array.from(atob(dataURL.slice(dataURL.indexOf(",") + 1)), (char) => char.charCodeAt(0)));
+    let bytes = "";
+    for (const byte of new TextEncoder().encode(normalizeSVG(text))) bytes += String.fromCharCode(byte);
+    return `data:image/svg+xml;base64,${btoa(bytes)}`;
+  });
+}
+
+/** Where each element of a group is after the editor drags the whole group by offset: position, and points for an arrow. */
+function dragGroupInPage({ json, group, offset }: { json: string; group: string; offset: Point }): { id: string; x: number; y: number; points?: unknown }[] {
+  const { Scene, dragSelectedElements } = (window as unknown as ElementWindow).excalidrawElement;
+  const elements = (JSON.parse(json) as { elements: ExcalidrawElement[] }).elements;
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const scene = new Scene((JSON.parse(json) as { elements: ExcalidrawElement[] }).elements);
+  const selected = scene.getNonDeletedElements().filter((element) => element.groupIds.includes(group));
+  dragSelectedElements({ originalElements: byId }, [...selected], offset, scene, { x: 0, y: 0 }, null);
+  return scene
+    .getNonDeletedElements()
+    .filter((element) => element.groupIds.includes(group))
+    .map((element) => ({ id: element.id, x: element.x, y: element.y, ...("points" in element ? { points: element.points } : {}) }));
 }
 
 /** The sources matching pattern in the development sourcemaps of the package at entry, keyed prefix/name. */
@@ -271,6 +311,7 @@ describe("Excalidraw editor build", () => {
       "data/restore",
       "element/binding",
       "element/fractionalIndex",
+      "element/image",
       "element/mutateElement",
       "element/textElement",
     ]);
@@ -295,15 +336,17 @@ describe("[browser] Excalidraw file load", () => {
   });
 
   for (const file of specFiles) {
-    it(`opens ${file} with every element as written`, async () => {
+    it(`opens ${file} with every element and file as written`, async () => {
       const { excalidraw } = await sketch(readSpec(file), measuringOnly(renderer.measurer));
-      const written = JSON.parse(excalidraw).elements as ExcalidrawElement[];
+      const written = JSON.parse(excalidraw) as { elements: ExcalidrawElement[]; files: SceneFiles };
 
-      const loaded = (await page.evaluate(loadInPage, { json: excalidraw, type: EXCALIDRAW_MIME })) as ExcalidrawElement[];
+      const loaded = await page.evaluate(loadInPage, { json: excalidraw, type: EXCALIDRAW_MIME });
 
-      expect(loaded).toEqual(written);
+      expect(loaded.elements).toEqual(written.elements);
+      expect(loaded.files).toEqual(written.files);
       // Key order too: the editor saves what it loaded, so an open-then-save should leave the file byte-identical.
-      expect(JSON.stringify(loaded)).toBe(JSON.stringify(written));
+      expect(JSON.stringify(loaded.elements)).toBe(JSON.stringify(written.elements));
+      expect(JSON.stringify(loaded.files)).toBe(JSON.stringify(written.files));
     });
   }
 });
@@ -329,7 +372,8 @@ describe("[browser] Excalidraw image load", () => {
   for (const file of specFiles.filter((file) => file.startsWith("examples/"))) {
     it(`reopens the SVG and the PNG of ${file}, light and dark, as the elements of its .excalidraw`, async () => {
       const { excalidraw, svg, png, dark } = await sketch(readSpec(file), renderer, { theme: "both" });
-      const written = JSON.stringify(JSON.parse(excalidraw).elements);
+      const document = JSON.parse(excalidraw) as { elements: unknown[]; files: SceneFiles };
+      const written = JSON.stringify(document.elements);
       const images = [
         { image: svg, type: "image/svg+xml" },
         { image: png, type: "image/png" },
@@ -339,9 +383,69 @@ describe("[browser] Excalidraw image load", () => {
 
       for (const { image, type } of images) {
         const loaded = await page.evaluate(loadImageInPage, { base64: Buffer.from(image).toString("base64"), type });
-        expect(JSON.stringify(loaded), type).toBe(written);
+        expect(JSON.stringify(loaded.elements), type).toBe(written);
+        expect(JSON.stringify(loaded.files), type).toBe(JSON.stringify(document.files));
         expect(embeddedScene(image)).toMatchObject({ source: "excalix", appState: { viewBackgroundColor: "#ffffff" } });
         expect(embeddedScene(image)?.appState).not.toHaveProperty("exportWithDarkMode");
+      }
+    });
+  }
+});
+
+// The editor rewrites an SVG file it would have spelled differently, in App.addMissingFiles, after loadFromBlob has
+// returned, so the file load above cannot see it. Every glyph excalix draws has to be a fixed point of that rewrite.
+describe("[browser] Excalidraw editor on icon files", () => {
+  let browser: Browser;
+  let page: Page;
+
+  beforeAll(async () => {
+    const element = await bundleElement();
+    browser = await chromium.launch();
+    page = await browser.newPage();
+    await page.addScriptTag({ content: element });
+  });
+
+  afterAll(async () => {
+    await browser?.close();
+  });
+
+  it("keeps the file of every icon in the catalog as excalix writes it", async () => {
+    const every = { nodes: ICON_NAMES.map((icon, index) => ({ id: `n${index}`, label: icon, kind: "service", icon })) };
+    const files = Object.values((JSON.parse((await sketch(every, measuringOnly(estimateMeasurer))).excalidraw) as { files: SceneFiles }).files);
+
+    const added = await page.evaluate(addedInPage, files);
+
+    expect(files).toHaveLength(ICON_NAMES.length);
+    expect(added).toEqual(files.map((file) => file.dataURL));
+  });
+
+  // A node with an icon is a group of its own, which is what a click selects: dragging it moves the shape, the label,
+  // the icon and the node's self loops by the drag and nothing else, so the loops keep their bends.
+  for (const file of specFiles) {
+    const spec = parseSpec(readSpec(file));
+    const iconNodes = spec.nodes.filter((node) => node.icon !== undefined);
+    if (iconNodes.length === 0) continue;
+    it(`moves every icon node of ${file} whole, with its self loops`, async () => {
+      const { excalidraw } = await sketch(readSpec(file), measuringOnly(estimateMeasurer));
+      const written = new Map((JSON.parse(excalidraw).elements as ExcalidrawElement[]).map((element) => [element.id, element]));
+      const ids = createIdSource(hashSpec(spec));
+      const offset = { x: 400, y: -120 };
+
+      for (const node of iconNodes) {
+        const moved = await page.evaluate(dragGroupInPage, { json: excalidraw, group: ids.id(`node:${node.id}:groupId`), offset });
+
+        const loops = spec.edges.flatMap((edge, index) => (edge.from === node.id && edge.to === node.id ? [ids.id(`edge:${index}`)] : []));
+        const members = moved.map(({ id }) => id);
+        expect(members.slice(0, 3), node.id).toEqual(["", ":label", ":icon"].map((suffix) => ids.id(`node:${node.id}${suffix}`)));
+        expect(members.filter((id) => written.get(id)?.type === "arrow"), node.id).toEqual(loops);
+        for (const { id, x, y, points } of moved) {
+          const before = written.get(id)!;
+          expect({ x, y, points }, `${node.id} ${before.type}`).toEqual({
+            x: before.x + offset.x,
+            y: before.y + offset.y,
+            points: "points" in before ? before.points : undefined,
+          });
+        }
       }
     });
   }

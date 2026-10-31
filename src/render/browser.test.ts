@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import type { ExcalidrawElement, ExcalidrawTextElement } from "excalidraw-types/element/src/types";
-import { type Browser, chromium, type Page } from "playwright-core";
+import { type Browser, chromium, type Page, webkit } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lineHeight, localPoint, radians } from "../elements.js";
+import { iconSvg } from "../icons.js";
+import { ICON_NAMES } from "../spec.js";
 import { fractionalIndex } from "../fractional-index.js";
 import { pngSize, sketch, writeSketch } from "../pipeline.js";
 import { embeddedScene, pngChunks, readSpec, specFiles } from "../test-support.js";
@@ -14,8 +16,8 @@ import { createBrowserRenderer, launchBrowser, openRenderPage, wholePixels } fro
 import { codePointRanges, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
 const OUT_DIR = "out/render-check";
-const LIGHT = { dark: false };
-const DARK = { dark: true };
+const LIGHT = { dark: false, files: {} };
+const DARK = { dark: true, files: {} };
 const EXCALIFONT_STACK = "Excalifont, Xiaolai, sans-serif, Segoe UI Emoji";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -256,8 +258,8 @@ describe("[browser] preview", () => {
   });
 
   for (const file of specFiles) {
-    it(`fits the preview of ${file} into 2000 pixels a side, filling them when it has to shrink`, async () => {
-      const { png, preview } = await sketch(readSpec(file), renderer, { preview: true });
+    it(`fits the preview of ${file} into 2000 pixels a side, filling them when it has to shrink, with the scene and its files`, async () => {
+      const { excalidraw, png, preview } = await sketch(readSpec(file), renderer, { preview: true });
 
       const full = pngSize(png);
       const shown = pngSize(preview!.png);
@@ -269,13 +271,14 @@ describe("[browser] preview", () => {
         expect(Math.max(shown.width, shown.height)).toBeGreaterThanOrEqual(1999);
         expect(preview!.scale).toBeLessThan(2);
       }
+      expect(embeddedScene(preview!.png)?.files).toEqual(JSON.parse(excalidraw).files);
     });
   }
 
   // The embedded scene is the one thing in these files that restore could stamp with a clock, so a real sketch, not
-  // a hand-made scene, has to come out the same twice.
-  it("renders a sketch's SVG and PNG, light and dark, byte for byte the same twice", async () => {
-    const spec = readSpec("examples/order-pipeline.json");
+  // a hand-made scene, has to come out the same twice. Images are drawn once each has loaded, so one with icons too.
+  it.each(["examples/order-pipeline.json", "examples/icons.json"])("renders the SVG and PNG of %s, light and dark, byte for byte the same twice", async (file) => {
+    const spec = readSpec(file);
 
     const [first, second] = [await sketch(spec, renderer, { theme: "both" }), await sketch(spec, renderer, { theme: "both" })];
 
@@ -487,5 +490,124 @@ describe("[browser] pinned fallback fonts", () => {
     expect(loaded.slice(-pinned.length).map((face) => face.family)).toEqual(pinned.map(() => PINNED_FAMILY));
     expect(bundledRanges("Excalifont").length).toBeGreaterThan(0);
     expect(clashes).toEqual([]);
+  });
+});
+
+/** Whether each file decodes as an image in the page: both exports draw nothing, or a grey placeholder, for one that does not. */
+async function decodeInPage(dataURLs: string[]): Promise<{ width: number; height: number }[]> {
+  return Promise.all(
+    dataURLs.map(
+      (src) =>
+        new Promise<{ width: number; height: number }>((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+          image.onerror = () => resolve({ width: 0, height: 0 });
+          image.src = src;
+        }),
+    ),
+  );
+}
+
+/** The darkest and the lightest pixel in each box of a PNG, as grey levels, the mean of the three channels. */
+async function extremesInPage({ base64, boxes }: { base64: string; boxes: { x: number; y: number; width: number; height: number }[] }) {
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const context = canvas.getContext("2d")!;
+  context.drawImage(bitmap, 0, 0);
+  return boxes.map(({ x, y, width, height }) => {
+    const { data } = context.getImageData(x, y, width, height);
+    let darkest = 255;
+    let lightest = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const grey = (data[i]! + data[i + 1]! + data[i + 2]!) / 3;
+      darkest = Math.min(darkest, grey);
+      lightest = Math.max(lightest, grey);
+    }
+    return { darkest, lightest };
+  });
+}
+
+describe("[browser] icons", () => {
+  let renderer: Renderer;
+  let browser: Browser;
+  let page: Page;
+
+  beforeAll(async () => {
+    renderer = await createBrowserRenderer();
+    browser = await chromium.launch();
+    page = await browser.newPage();
+  });
+
+  afterAll(async () => {
+    await browser?.close();
+    await renderer?.close();
+  });
+
+  it("decodes every icon in the catalog at its 24px size", async () => {
+    const dataURLs = ICON_NAMES.map((name) => `data:image/svg+xml;base64,${Buffer.from(iconSvg(name)).toString("base64")}`);
+
+    const sizes = await page.evaluate(decodeInPage, dataURLs);
+
+    expect(Object.fromEntries(sizes.map((size, i) => [ICON_NAMES[i], size]))).toEqual(
+      Object.fromEntries(ICON_NAMES.map((name) => [name, { width: 24, height: 24 }])),
+    );
+  });
+
+  // A dark export darkens every colour in the scene but an image's own, except that it draws an SVG file through the
+  // same transform, so an icon in the label colour stays in the label colour on #121212.
+  it("draws an icon in the colour of its label, light and dark", async () => {
+    const spec = { nodes: [{ id: "db", label: "Users DB", kind: "external", icon: "database" }] };
+    const { excalidraw, png, svg, dark } = await sketch(spec, renderer, { theme: "both" });
+    const elements = JSON.parse(excalidraw).elements as ExcalidrawElement[];
+    const [, label, icon] = elements;
+    // The layout puts the scene at the origin and the export pads it 24px, at 2 PNG pixels a scene pixel.
+    const inPng = ({ x, y, width, height }: ExcalidrawElement) => ({ x: (x + 24) * 2, y: (y + 24) * 2, width: width * 2, height: height * 2 });
+    const boxes = [inPng(label!), inPng(icon!)];
+
+    const [lightLabel, lightIcon] = await page.evaluate(extremesInPage, { base64: Buffer.from(png).toString("base64"), boxes });
+    const [darkLabel, darkIcon] = await page.evaluate(extremesInPage, { base64: Buffer.from(dark!.png).toString("base64"), boxes });
+
+    expect(Math.abs(lightIcon!.darkest - lightLabel!.darkest)).toBeLessThanOrEqual(4);
+    expect(lightIcon!.darkest).toBeLessThan(40);
+    expect(Math.abs(darkIcon!.lightest - darkLabel!.lightest)).toBeLessThanOrEqual(4);
+    expect(darkIcon!.lightest).toBeGreaterThan(190);
+    expect(svg).toContain('<use href="#image-');
+    expect(svg).not.toContain("filter=");
+    expect(dark!.svg).toMatch(/<g filter="url\(#excalix-dark-image\)" transform="[^"]+"><use href="#image-/);
+    expect(dark!.svg.match(/<filter id="excalix-dark-image"/g)).toHaveLength(1);
+    expect(dark!.svg).not.toContain("invert(");
+  });
+
+  // The SVGs are read as images too, a dark one through the <picture> the markdown writes. WebKit ignores a CSS filter
+  // function in an SVG filter attribute, which is what the export puts on each image.
+  it("draws an icon in the colour of its label in an SVG shown in WebKit, light and dark", async () => {
+    const spec = { nodes: [{ id: "db", label: "Users DB", kind: "external", icon: "database" }] };
+    const { excalidraw, svg, dark } = await sketch(spec, renderer, { theme: "both" });
+    const [, label, icon] = JSON.parse(excalidraw).elements as ExcalidrawElement[];
+    const inSvg = ({ x, y, width, height }: ExcalidrawElement) => ({ x: x + 24, y: y + 24, width, height });
+    const boxes = [inSvg(label!), inSvg(icon!)];
+    const safari = await webkit.launch();
+    try {
+      const shown = async (markup: string) => {
+        const [, width, height] = markup.match(/width="(\d+)" height="(\d+)"/)!.map(Number);
+        const tab = await safari.newPage({ viewport: { width: width!, height: height! } });
+        await tab.setContent(`<body style="margin:0"><img src="data:image/svg+xml;base64,${Buffer.from(markup).toString("base64")}"></body>`);
+        await tab.locator("img").evaluate((image: HTMLImageElement) => image.decode());
+        return (await tab.screenshot()).toString("base64");
+      };
+
+      const [lightLabel, lightIcon] = await page.evaluate(extremesInPage, { base64: await shown(svg), boxes });
+      const [darkLabel, darkIcon] = await page.evaluate(extremesInPage, { base64: await shown(dark!.svg), boxes });
+
+      // WebKit draws a filtered icon a few levels lighter than its label, by how many depends on the platform (6 on
+      // macOS, 2 on Linux); an icon the filter misses is about 180 off.
+      expect(Math.abs(lightIcon!.darkest - lightLabel!.darkest)).toBeLessThanOrEqual(12);
+      expect(lightIcon!.darkest).toBeLessThan(40);
+      expect(Math.abs(darkIcon!.lightest - darkLabel!.lightest)).toBeLessThanOrEqual(12);
+      expect(darkIcon!.lightest).toBeGreaterThan(190);
+    } finally {
+      await safari.close();
+    }
   });
 });

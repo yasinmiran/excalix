@@ -70,15 +70,16 @@ describe("size note", () => {
 describe("the scene inside the committed renders", () => {
   const examples = specFiles.filter((file) => file.startsWith("examples/")).map((file) => file.replace(/\.json$/, ""));
 
-  it.each(examples.flatMap((example) => [`${example}.svg`, `${example}.png`]))("%s carries the elements of its .excalidraw", (file) => {
+  it.each(examples.flatMap((example) => [`${example}.svg`, `${example}.png`]))("%s carries the elements and files of its .excalidraw", (file) => {
     const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url));
-    const written = JSON.parse(read(file.replace(/\.(svg|png)$/, ".excalidraw")).toString("utf8")) as { elements: unknown[] };
+    const written = JSON.parse(read(file.replace(/\.(svg|png)$/, ".excalidraw")).toString("utf8")) as { elements: unknown[]; files: object };
     const image = file.endsWith(".svg") ? read(file).toString("utf8") : new Uint8Array(read(file));
 
     const scene = embeddedScene(image);
 
     expect(scene).toMatchObject({ type: "excalidraw", source: "excalix" });
     expect(JSON.stringify(scene!.elements)).toBe(JSON.stringify(written.elements));
+    expect(JSON.stringify(scene!.files)).toBe(JSON.stringify(written.files));
   });
 });
 

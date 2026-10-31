@@ -20,7 +20,7 @@ import { PNG_SCALE } from "./style.js";
 import type { Renderer } from "./types.js";
 import { version } from "./version.js";
 
-const DESCRIPTION = `Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.
+const DESCRIPTION = `Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route. A node's kind and its optional icon both name what the node is, and excalix decides how either is drawn, so there is nothing visual to configure.
 
 Node kinds:
 client: people, browsers, mobile apps, anything that initiates requests.
@@ -29,6 +29,8 @@ datastore: database or durable storage.
 queue: message queue, topic, or stream.
 cache: cache or in-memory store.
 external: a system another company operates and you only call, such as a payment API or a hosted identity provider.
+
+Icons, optional, one per node, drawn left of its label: user, users, browser, phone, desktop, terminal, bot (an AI agent or model), globe (the internet, DNS, a CDN), cloud, gateway (API gateway, load balancer, ingress), server, container, function (serverless), database, cache, queue, storage (object or block storage), search, file, mail, chat, bell (notifications), webhook, payment, lock (auth), key (secrets, API keys), shield (security, WAF), chart (metrics, analytics), logs, clock (scheduler, cron), settings (configuration), git (source control, CI). Give the one that says what the node is, or leave it out: an icon widens its node, and a near miss misleads more than no icon does.
 
 Edge styles:
 sync: request/response, solid arrow.
