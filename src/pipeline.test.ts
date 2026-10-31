@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { sizeNote, sketch, viewScale } from "./pipeline.js";
 import { estimateMeasurer } from "./render/estimate.js";
-import { measuringOnly, readSpec, specFiles } from "./test-support.js";
+import { embeddedScene, measuringOnly, readSpec, specFiles } from "./test-support.js";
 
 const renderer = measuringOnly(estimateMeasurer);
 
@@ -58,5 +59,21 @@ describe("size note", () => {
     ["one wide enough to be scaled, with labels that still read", { width: 5344, height: 1138 }],
   ])("stays quiet for %s", (_case, full) => {
     expect(sizeNote(full)).toBeUndefined();
+  });
+});
+
+// Each committed render is also the scene, so dropping it on excalidraw.com reopens the drawing it shows.
+describe("the scene inside the committed renders", () => {
+  const examples = specFiles.filter((file) => file.startsWith("examples/")).map((file) => file.replace(/\.json$/, ""));
+
+  it.each(examples.flatMap((example) => [`${example}.svg`, `${example}.png`]))("%s carries the elements of its .excalidraw", (file) => {
+    const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url));
+    const written = JSON.parse(read(file.replace(/\.(svg|png)$/, ".excalidraw")).toString("utf8")) as { elements: unknown[] };
+    const image = file.endsWith(".svg") ? read(file).toString("utf8") : new Uint8Array(read(file));
+
+    const scene = embeddedScene(image);
+
+    expect(scene).toMatchObject({ type: "excalidraw", source: "excalix" });
+    expect(JSON.stringify(scene!.elements)).toBe(JSON.stringify(written.elements));
   });
 });

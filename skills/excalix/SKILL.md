@@ -125,7 +125,10 @@ group nodes that belong together, shorten a label, drop an edge that carries no
 information. Re-render and look again.
 
 Commit the spec JSON beside its outputs, so the next person regenerates the
-diagram instead of redrawing it.
+diagram instead of redrawing it. The `.svg` and `.png` carry the scene too, so
+either one dropped on excalidraw.com opens as the drawing, but an image
+optimiser such as SVGO or a PNG crusher strips it: the `.excalidraw` stays the
+source of truth.
 
 When the excalix MCP server is registered, the `sketch` tool does all of this in
 one call and hands back the picture inline, which saves the read. That copy fits

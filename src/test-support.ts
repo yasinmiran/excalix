@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
 import { ARROWHEAD_ROOM, END_SPACING, LABEL_HEAD_RUN, LANE_SPACING, LOOP_LABEL_RUN, MIN_SEGMENT } from "./layout.js";
@@ -154,6 +155,48 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       );
     });
   }
+}
+
+/** The chunks of a PNG in file order. */
+export function pngChunks(png: Uint8Array): { type: string; data: Buffer }[] {
+  const bytes = Buffer.from(png.buffer, png.byteOffset, png.byteLength);
+  const chunks: { type: string; data: Buffer }[] = [];
+  for (let at = 8; at < bytes.length; ) {
+    const length = bytes.readUInt32BE(at);
+    chunks.push({ type: bytes.toString("latin1", at + 4, at + 8), data: bytes.subarray(at + 8, at + 8 + length) });
+    at += 12 + length;
+  }
+  return chunks;
+}
+
+/** A scene as Excalidraw embeds it in an exported image. */
+export interface EmbeddedScene {
+  type: string;
+  source: string;
+  elements: unknown[];
+  appState: Record<string, unknown>;
+}
+
+const SCENE_MIME = "application/vnd.excalidraw+json";
+
+/**
+ * The scene an SVG or PNG export carries, decoded without the editor: an SVG holds it base64 in a comment inside
+ * its metadata, a PNG in a tEXt chunk, and either way it is JSON wrapping the deflated scene as a byte string.
+ */
+export function embeddedScene(image: string | Uint8Array): EmbeddedScene | undefined {
+  let wrapped: string | undefined;
+  if (typeof image === "string") {
+    const payload = /<!-- payload-type:application\/vnd\.excalidraw\+json -->.*?<!-- payload-start -->(.+?)<!-- payload-end -->/s.exec(image);
+    wrapped = payload ? Buffer.from(payload[1]!.trim(), "base64").toString("latin1") : undefined;
+  } else {
+    const keyword = `${SCENE_MIME}\0`;
+    const text = pngChunks(image).find(({ type, data }) => type === "tEXt" && data.toString("latin1").startsWith(keyword));
+    wrapped = text?.data.toString("latin1").slice(keyword.length);
+  }
+  if (!wrapped) return undefined;
+  const { encoded, compressed } = JSON.parse(wrapped) as { encoded: string; compressed: boolean };
+  const bytes = Buffer.from(encoded, "latin1");
+  return JSON.parse((compressed ? inflateSync(bytes) : bytes).toString("utf8")) as EmbeddedScene;
 }
 
 /** A renderer for tests that read elements only: it measures, and its svg and png are stubs. */

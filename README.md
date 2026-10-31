@@ -34,7 +34,7 @@ Architecture diagrams from a topology spec, in Excalidraw's hand-drawn style. Yo
 }
 ```
 
-Out come an `.excalidraw`, an SVG and a PNG. The `.excalidraw` opens on excalidraw.com with every label and arrow binding intact, so you can keep editing by hand.
+Out come an `.excalidraw`, an SVG and a PNG. The `.excalidraw` opens on excalidraw.com with every label and arrow binding intact, so you can keep editing by hand. The SVG and PNG carry the same scene, so either one dropped on excalidraw.com opens as the drawing too. An image optimiser such as SVGO or a PNG crusher strips that scene, so the `.excalidraw` stays the source of truth.
 
 ## Install
 

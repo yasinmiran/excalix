@@ -5,10 +5,11 @@ import type { ExcalidrawElement, ExcalidrawTextElement } from "excalidraw-types/
 import { type Browser, chromium, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lineHeight, localPoint, radians } from "../elements.js";
+import { fractionalIndex } from "../fractional-index.js";
 import { pngSize, sketch, writeSketch } from "../pipeline.js";
-import { readSpec, specFiles } from "../test-support.js";
+import { embeddedScene, pngChunks, readSpec, specFiles } from "../test-support.js";
 import type { Renderer } from "../types.js";
-import { createBrowserRenderer, openRenderPage } from "./browser.js";
+import { createBrowserRenderer, launchBrowser, openRenderPage } from "./browser.js";
 import { codePointRanges, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
 const OUT_DIR = "out/render-check";
@@ -63,9 +64,11 @@ function label(id: string, containerId: string, text: string, box: { x: number; 
   };
 }
 
+// Each element gets the fractional index restore would give it, since restore runs on the scene an export embeds
+// and stamps a time and a random nonce on any element it has to change.
 function scene(labelText: string, labelSize: { width: number; height: number }): ExcalidrawElement[] {
   const api = { x: 0, y: 0, width: 160, height: 64 };
-  return [
+  const elements: ExcalidrawElement[] = [
     {
       ...base("api", api.x, api.y, api.width, api.height),
       type: "rectangle",
@@ -86,6 +89,17 @@ function scene(labelText: string, labelSize: { width: number; height: number }):
       elbowed: false,
     },
   ];
+  return elements.map((element, position) => ({ ...element, index: fractionalIndex(position) }));
+}
+
+/** The same 2x PNG export the renderer makes, with no scene in it. */
+async function plainPngInPage(elements: unknown[]): Promise<number[]> {
+  const { utils } = (window as unknown as { excalix: { utils: { exportToBlob(args: object): Promise<Blob> } } }).excalix;
+  const blob = await utils.exportToBlob({
+    data: { elements, appState: { exportBackground: true, viewBackgroundColor: "#ffffff" }, files: {} },
+    config: { padding: 24, scale: 2, mimeType: "image/png" },
+  });
+  return Array.from(new Uint8Array(await blob.arrayBuffer()));
 }
 
 function pngDimensions(png: Uint8Array): { width: number; height: number } {
@@ -151,6 +165,26 @@ describe("[browser] createBrowserRenderer", () => {
     const second = await renderer.svg(mixed);
     expect(first.match(/@font-face/g)).toHaveLength(2);
     expect(second).toBe(first);
+  });
+
+  it("embeds the scene without changing a pixel", async () => {
+    // The renderer's own launch flags: without them Linux hints glyphs differently and no pixel comparison holds.
+    const browser = await launchBrowser();
+    try {
+      const page = await openRenderPage(browser);
+      const plain = new Uint8Array(await page.evaluate(plainPngInPage, elements));
+      const embedded = await renderer.png(elements, { scale: 2 });
+
+      const idat = (png: Uint8Array) => Buffer.concat(pngChunks(png).flatMap(({ type, data }) => (type === "IDAT" ? [data] : [])));
+      expect(pngChunks(embedded).map(({ type }) => type)).toEqual([...pngChunks(plain).map(({ type }) => type).slice(0, -1), "tEXt", "IEND"]);
+      expect(idat(embedded).equals(idat(plain))).toBe(true);
+      // Restore fills in a field or two these hand-made elements leave out; file-load.test.ts holds a sketch's to the byte.
+      const ids = (scene: { elements: unknown[] } | undefined) => scene?.elements.map((element) => (element as { id: string }).id);
+      expect(ids(embeddedScene(embedded))).toEqual(elements.map((element) => element.id));
+      expect(ids(embeddedScene(await renderer.svg(elements)))).toEqual(elements.map((element) => element.id));
+    } finally {
+      await browser.close();
+    }
   });
 
   it("exports a PNG at 2x the SVG size", async () => {

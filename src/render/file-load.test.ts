@@ -8,7 +8,7 @@ import { type Browser, type Page, chromium } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sketch } from "../pipeline.js";
 import { EDGE_LABEL_WIDTH, FONT } from "../style.js";
-import { measuringOnly, readSpec, specFiles } from "../test-support.js";
+import { embeddedScene, measuringOnly, readSpec, specFiles } from "../test-support.js";
 import type { Point, Renderer } from "../types.js";
 import { wrapTexts } from "../wrap.js";
 import { createBrowserRenderer, launchBrowser, openRenderPage } from "./browser.js";
@@ -227,6 +227,13 @@ async function loadInPage({ json, type }: { json: string; type: string }): Promi
   return (await editor.loadFromBlob(new Blob([json], { type }), null, null)).elements;
 }
 
+/** What dropping an exported image on the editor does: loadFromBlob finds the scene inside it and restores that. */
+async function loadImageInPage({ base64, type }: { base64: string; type: string }): Promise<unknown[]> {
+  const { editor } = (window as unknown as EditorWindow).excalix;
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  return (await editor.loadFromBlob(new Blob([bytes], { type }), null, null)).elements;
+}
+
 /** The sources matching pattern in the development sourcemaps of the package at entry, keyed prefix/name. */
 async function sourcesOf(entry: string, pattern: RegExp, prefix: string): Promise<Record<string, string>> {
   const dir = join(dirname(entry), "../dev");
@@ -297,6 +304,39 @@ describe("[browser] Excalidraw file load", () => {
       expect(loaded).toEqual(written);
       // Key order too: the editor saves what it loaded, so an open-then-save should leave the file byte-identical.
       expect(JSON.stringify(loaded)).toBe(JSON.stringify(written));
+    });
+  }
+});
+
+describe("[browser] Excalidraw image load", () => {
+  let renderer: Renderer;
+  let browser: Browser;
+  let page: Page;
+
+  beforeAll(async () => {
+    renderer = await createBrowserRenderer();
+    browser = await chromium.launch();
+    page = await openEditorPage(browser);
+  });
+
+  afterAll(async () => {
+    await browser?.close();
+    await renderer?.close();
+  });
+
+  // The two formats embed different appState, so the elements are what has to come back as written.
+  for (const file of specFiles.filter((file) => file.startsWith("examples/"))) {
+    it(`reopens the SVG and the PNG of ${file} as the elements of its .excalidraw`, async () => {
+      const { excalidraw, svg, png } = await sketch(readSpec(file), renderer);
+      const written = JSON.stringify(JSON.parse(excalidraw).elements);
+
+      const fromSvg = await page.evaluate(loadImageInPage, { base64: Buffer.from(svg).toString("base64"), type: "image/svg+xml" });
+      const fromPng = await page.evaluate(loadImageInPage, { base64: Buffer.from(png).toString("base64"), type: "image/png" });
+
+      expect(JSON.stringify(fromSvg)).toBe(written);
+      expect(JSON.stringify(fromPng)).toBe(written);
+      expect(embeddedScene(svg)?.source).toBe("excalix");
+      expect(embeddedScene(png)?.source).toBe("excalix");
     });
   }
 });

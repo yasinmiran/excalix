@@ -22,9 +22,13 @@ const CONTENT_TYPES: Record<string, string> = {
   ".wasm": "application/wasm",
 };
 
+// The embedded scene names the app that wrote it, which is the page's fake origin unless the page says otherwise.
 const PAGE = `<!doctype html>
 <meta charset="utf-8">
-<script>window.EXCALIDRAW_ASSET_PATH = "${VENDOR_PATH}assets/";</script>
+<script>
+  window.EXCALIDRAW_ASSET_PATH = "${VENDOR_PATH}assets/";
+  window.EXCALIDRAW_EXPORT_SOURCE = "excalix";
+</script>
 <script type="module">
   try {
     window.excalix = { utils: await import("${VENDOR_PATH}index.js") };
@@ -35,7 +39,7 @@ const PAGE = `<!doctype html>
 
 interface ExportData {
   elements: unknown[];
-  appState: { exportBackground: boolean; viewBackgroundColor: string };
+  appState: { exportBackground: boolean; viewBackgroundColor: string; exportEmbedScene: boolean };
   files: Record<string, never>;
 }
 
@@ -64,8 +68,9 @@ const servedDirs: ReadonlyArray<readonly [string, string]> = [
 ];
 const playwrightVersion = (require("playwright-core/package.json") as { version: string }).version;
 
+// The scene goes into the SVG and the PNG too, so either opens in Excalidraw as an editable drawing.
 function exportData(elements: unknown[]): ExportData {
-  return { elements, appState: { exportBackground: true, viewBackgroundColor: "#ffffff" }, files: {} };
+  return { elements, appState: { exportBackground: true, viewBackgroundColor: "#ffffff", exportEmbedScene: true }, files: {} };
 }
 
 function fontString(fontSize: number): string {
