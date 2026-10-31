@@ -260,6 +260,19 @@ describe("[browser] preview", () => {
     });
   }
 
+  // The embedded scene is the one thing in these files that restore could stamp with a clock, so a real sketch, not
+  // a hand-made scene, has to come out the same twice.
+  it("renders a sketch's SVG and PNG, light and dark, byte for byte the same twice", async () => {
+    const spec = readSpec("examples/order-pipeline.json");
+
+    const [first, second] = [await sketch(spec, renderer, { theme: "both" }), await sketch(spec, renderer, { theme: "both" })];
+
+    expect(second.svg).toBe(first.svg);
+    expect(second.dark!.svg).toBe(first.dark!.svg);
+    expect(Buffer.from(second.png).equals(Buffer.from(first.png))).toBe(true);
+    expect(Buffer.from(second.dark!.png).equals(Buffer.from(first.dark!.png))).toBe(true);
+  });
+
   it("leaves the PNG it writes to disk as it is without a preview", async () => {
     const spec = readSpec("stress/multi-region-lr.json");
     const out = join(await mkdtemp(join(tmpdir(), "excalix-preview-")), "diagram");

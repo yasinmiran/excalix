@@ -69,7 +69,9 @@ const servedDirs: ReadonlyArray<readonly [string, string]> = [
 const playwrightVersion = (require("playwright-core/package.json") as { version: string }).version;
 
 // The scene goes into the SVG and the PNG too, so either opens in Excalidraw as an editable drawing. Dark mode is
-// not part of that scene, so a dark export reopens as the light drawing.
+// not part of that scene, so a dark export reopens as the light drawing. What goes in is the scene after restore,
+// which stamps a time and a random nonce on any element it changes, so the files stay byte-stable only while
+// restore leaves a sketch's elements as they are, which restore.test.ts holds it to.
 function exportData(elements: unknown[], dark = false): ExportData {
   return {
     elements,
