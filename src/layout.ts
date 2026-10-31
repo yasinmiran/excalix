@@ -69,11 +69,24 @@ const SPACING: LayoutOptions = {
 
 const elk = new ELK();
 
+/**
+ * ELK passes a layout may take: the first, then one more each time a group label is still left under an arrow.
+ * Widening one group's gutter moves the arrows near another group's label, so the count is capped rather than
+ * run to a fixed point; it depends only on the geometry, which keeps the output byte-identical.
+ */
+const MAX_PASSES = 3;
+
 /** Lays out nodes, groups and edges with ELK. Absolute coordinates, bounds at (0, 0). */
 export async function layout(input: LayoutInput): Promise<LayoutResult> {
-  const first = await layoutWith(input, {});
-  const gutters = labelGutters(input, first);
-  return normalise(Object.keys(gutters).length === 0 ? first : await layoutWith(input, gutters));
+  const gutters: Record<string, number> = {};
+  let result = await layoutWith(input, gutters);
+  for (let pass = 1; pass < MAX_PASSES; pass++) {
+    const more = labelGutters(input, result);
+    if (Object.keys(more).length === 0) break;
+    for (const [id, extra] of Object.entries(more)) gutters[id] = (gutters[id] ?? 0) + extra;
+    result = await layoutWith(input, gutters);
+  }
+  return normalise(result);
 }
 
 // One ELK pass. Each gutter entry widens that group's left padding by its value.
@@ -91,8 +104,11 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
 
   const laidEdges = new Map((laid.edges ?? []).map((edge) => [edge.id, edge]));
   const shaped = new Map(input.nodes.map((node) => [node.id, { box: boxes.get(node.id)!, outline: node.outline }]));
-  const edges: Record<string, RoutedEdge> = {};
-  for (const edge of input.edges) edges[edge.id] = routeEdge(laidEdges.get(edge.id)!, edge, reversed.has(edge.id), exact, shaped);
+  const routes = input.edges.map((edge) => routeOf(laidEdges.get(edge.id)!, edge, reversed.has(edge.id), exact));
+  const obstacles = Object.values(nodes);
+  spaceLanes(routes, obstacles);
+  removeJogs(routes, obstacles, shaped);
+  const edges = Object.fromEntries(routes.map((route) => [route.edge.id, finish(route, shaped)]));
 
   const routed = Object.values(edges);
   const groupLabels = Object.fromEntries(input.groups.map((g) => [g.id, placeGroupLabel(groups[g.id]!, g.label, routed)]));
@@ -121,6 +137,10 @@ function toElkGraph(input: LayoutInput, gutters: Record<string, number>, reverse
       // fanning out sits level with its first target and every other edge steps down past it. Network simplex
       // places a node to shorten its edges as a whole, which puts the hub mid-fan again.
       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+      // Crossing minimisation tries this many orderings, against ELK's default of 7: at 60 the crossings over
+      // examples/ and stress/ fall from 47 to 26. ELK draws them from a fixed seed, so the output stays
+      // deterministic, and reads the option from the root, so the groups need not repeat it.
+      "elk.layered.thoroughness": "60",
       ...loops,
     },
     children: childrenOf(undefined),
@@ -286,26 +306,269 @@ interface Shaped {
   outline: Outline;
 }
 
+// A route in whole pixels with its ends still on the boxes ELK ended them on, and the box ELK reserved for its label.
+interface Route {
+  edge: LayoutEdge;
+  points: Point[];
+  label?: { reserved: Point; laid: ElkLabel };
+}
+
 // `exact` holds ELK's own boxes: a route is offset by its container's exact position and only then rounded, the
 // same way the boxes were, so an end ELK put on a side stays on it.
-function routeEdge(
-  edge: ElkExtendedEdge,
-  ends: LayoutEdge,
-  reversed: boolean,
-  exact: Map<string, Box>,
-  shaped: Map<string, Shaped>,
-): RoutedEdge {
+function routeOf(edge: ElkExtendedEdge, ends: LayoutEdge, reversed: boolean, exact: Map<string, Box>): Route {
   const container = edge.container && edge.container !== ROOT ? exact.get(edge.container) : undefined;
   const offset = container ?? { x: 0, y: 0 };
   const shift = (p: Point): Point => wholePoint({ x: offset.x + p.x, y: offset.y + p.y });
   const laid = straight(dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift)));
-  const routed = reversed ? laid.reverse() : laid;
-  const points =
-    routed.length >= 2
-      ? onOutlines(routed, shaped.get(ends.from)!, shaped.get(ends.to)!)
-      : [center(shaped.get(ends.from)!.box), center(shaped.get(ends.to)!.box)];
   const label = edge.labels?.[0];
-  return { points, ...(label ? { label: labelOnPath(points, shift({ x: label.x ?? 0, y: label.y ?? 0 }), label) } : {}) };
+  return {
+    edge: ends,
+    points: reversed ? laid.reverse() : laid,
+    ...(label ? { label: { reserved: shift({ x: label.x ?? 0, y: label.y ?? 0 }), laid: label } } : {}),
+  };
+}
+
+// Puts the ends on the outlines Excalidraw draws and the label on the path.
+function finish(route: Route, shaped: Map<string, Shaped>): RoutedEdge {
+  const from = shaped.get(route.edge.from)!;
+  const to = shaped.get(route.edge.to)!;
+  const points = route.points.length >= 2 ? onOutlines(route.points, from, to) : [center(from.box), center(to.box)];
+  const { label } = route;
+  return { points, ...(label ? { label: labelOnPath(points, label.reserved, label.laid) } : {}) };
+}
+
+/**
+ * Shortest segment a route keeps. Where ELK cannot line up two ends that face each other it steps the route
+ * between them by a pixel or two, which renders as a straight line while the file holds a stair the editor shows
+ * once the arrow is selected.
+ */
+export const MIN_SEGMENT = 3;
+
+// ELK spaces the runs of a channel and the runs of a layer, but not a run that crosses a channel against one that
+// enters it from the next layer: two arrows that swap sides there can interleave whichever way the channel orders
+// them, at whatever gap their ports leave. Each crowded pair is pushed apart by moving one of its two runs
+// sideways, bends and all, when both of that run's ends are bends. ELK spaced every pair exactly, and rounding each
+// route to whole pixels on its own can bring a pair a pixel closer, so only a pair closer than that is crowded.
+function spaceLanes(routes: Route[], boxes: Box[]): void {
+  for (let a = 0; a < routes.length; a++) {
+    for (let b = a + 1; b < routes.length; b++) {
+      const push = ([i, j]: [number, number]): boolean =>
+        pushAway(routes, a, i, routes[b]!.points, j, boxes) || pushAway(routes, b, j, routes[a]!.points, i, boxes);
+      // Each push leaves fewer crowded pairs, so this ends.
+      let pushed = true;
+      while (pushed) pushed = crowdedPairs(routes[a]!, routes[b]!).some(push);
+    }
+  }
+}
+
+// Pairs of runs, one from each route, that share a stretch closer than a pixel under LANE_SPACING.
+function crowdedPairs(a: Route, b: Route): [number, number][] {
+  const runsB = runsOf(b.points);
+  return runsOf(a.points).flatMap((run, i) =>
+    runsB.flatMap((other, j): [number, number][] => (gapBeside(run, other) < LANE_SPACING - 1 ? [[i, j]] : [])),
+  );
+}
+
+// Moves run `index` of routes[at] to LANE_SPACING from run `from` of `other`, if it can go without a fault.
+function pushAway(routes: Route[], at: number, index: number, other: Point[], from: number, boxes: Box[]): boolean {
+  const route = routes[at]!;
+  const { points } = route;
+  if (route.edge.from === route.edge.to || !isInner(points, index)) return false;
+  const run = runsOf(points)[index]!;
+  const away = runsOf(other)[from]!;
+  const to = away.at + (run.at >= away.at ? LANE_SPACING : -LANE_SPACING);
+  if (Math.abs(to - run.at) > LABEL_MARGIN && carriesLabel(route, index)) return false;
+  return tryRoute(routes, at, moveRun(points, index, to), boxes, "crowded");
+}
+
+// Folds each step under MIN_SEGMENT into the runs either side of it by moving one of them onto the other: a run
+// between two bends first, then a run that ends the route, which slides that end along its side, only as far as
+// its neighbours on that side and the side's corners allow.
+function removeJogs(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>): void {
+  for (const [at, route] of routes.entries()) {
+    if (route.edge.from === route.edge.to) continue;
+    // A fold renumbers the points, so the scan starts over after one.
+    for (let jog = 1; jog < route.points.length - 2; jog++) {
+      const { points } = route;
+      if (!isJog(points, jog)) continue;
+      const before = runsOf(points)[jog - 1]!;
+      const after = runsOf(points)[jog + 1]!;
+      const options: [number, number][] = [
+        [jog + 1, before.at],
+        [jog - 1, after.at],
+      ];
+      const inner = options.filter(([index]) => isInner(points, index));
+      const ends = options.filter(([index, to]) => !isInner(points, index) && endCanSlide(routes, at, index, to, shaped));
+      if ([...inner, ...ends].some(([index, to]) => tryRoute(routes, at, moveRun(points, index, to), boxes, "short"))) jog = 0;
+    }
+  }
+}
+
+// A segment under MIN_SEGMENT between two runs that carry on the same way.
+function isJog(points: Point[], index: number): boolean {
+  const [a, b, c, d] = [points[index - 1]!, points[index]!, points[index + 1]!, points[index + 2]!];
+  if (Math.hypot(c.x - b.x, c.y - b.y) >= MIN_SEGMENT) return false;
+  const vertical = a.x === b.x && c.x === d.x;
+  const horizontal = a.y === b.y && c.y === d.y;
+  if (vertical) return Math.sign(b.y - a.y) === Math.sign(d.y - c.y);
+  if (horizontal) return Math.sign(b.x - a.x) === Math.sign(d.x - c.x);
+  return false;
+}
+
+// Sliding the run that ends a route moves that end along its side. The end keeps END_SPACING from every other end on
+// that side, and room from both corners: CORNER_ROOM on a side holding other ends, while a lone end sits mid-side and
+// only has to stay off a rounded corner's curve. An end that had less than either to begin with loses none of it.
+function endCanSlide(routes: Route[], at: number, index: number, to: number, shaped: Map<string, Shaped>): boolean {
+  const route = routes[at]!;
+  const start = index === 0;
+  const { box, outline } = shaped.get(start ? route.edge.from : route.edge.to)!;
+  const end = start ? route.points[0]! : route.points.at(-1)!;
+  const next = start ? route.points[1]! : route.points.at(-2)!;
+  const neighbours = sideEnds(routes, at, start, end, next);
+  const vertical = end.x === next.x;
+  // An end on a top or bottom side slides along x, on a left or right side along y.
+  const along = (p: Point): number => (vertical ? p.x : p.y);
+  const [low, high] = vertical ? [box.x, box.x + box.width] : [box.y, box.y + box.height];
+  const corner = neighbours.length > 0 ? CORNER_ROOM : outline === "rounded" ? cornerRadius(box.width, box.height) : 0;
+  const keeps = (now: number, after: number, room: number): boolean => after >= Math.min(room, now);
+  if (!keeps(along(end) - low, to - low, corner) || !keeps(high - along(end), high - to, corner)) return false;
+  return neighbours.every((other) => keeps(Math.abs(along(end) - other), Math.abs(to - other), END_SPACING));
+}
+
+// Where along the same side of the same node every other route ends.
+function sideEnds(routes: Route[], at: number, start: boolean, end: Point, next: Point): number[] {
+  const route = routes[at]!;
+  const node = start ? route.edge.from : route.edge.to;
+  const side = arrival(end, next);
+  return routes.flatMap((other, i) => {
+    if (i === at || other.points.length < 2) return [];
+    const found: Point[] = [];
+    if (other.edge.from === node && arrival(other.points[0]!, other.points[1]!) === side) found.push(other.points[0]!);
+    if (other.edge.to === node && arrival(other.points.at(-1)!, other.points.at(-2)!) === side) found.push(other.points.at(-1)!);
+    return found.map((p) => (side === "left" || side === "right" ? p.y : p.x));
+  });
+}
+
+function arrival(end: Point, next: Point): "left" | "right" | "top" | "bottom" {
+  if (end.y === next.y) return end.x > next.x ? "left" : "right";
+  return end.y > next.y ? "top" : "bottom";
+}
+
+// Replaces routes[at] with the candidate when that lowers the fault it is for and raises none.
+function tryRoute(routes: Route[], at: number, candidate: Point[], boxes: Box[], fixing: "crowded" | "short"): boolean {
+  const others = routes.filter((_, i) => i !== at).map((route) => route.points);
+  const now = faults(routes[at]!.points, others, boxes);
+  const next = faults(candidate, others, boxes);
+  const fixed = next[fixing] < now[fixing];
+  const worse =
+    next.crowded > now.crowded ||
+    next.close > now.close ||
+    next.crossings > now.crossings ||
+    next.entered > now.entered ||
+    next.short > now.short ||
+    next.endRun < now.endRun;
+  if (!fixed || worse) return false;
+  routes[at]!.points = candidate;
+  return true;
+}
+
+interface Faults {
+  /** Pairs of runs, own against another route's, sharing a stretch more than a pixel under LANE_SPACING apart. */
+  crowded: number;
+  /** The same, under LANE_SPACING at all. */
+  close: number;
+  crossings: number;
+  /** Segments that pass through a node box. */
+  entered: number;
+  short: number;
+  /** The shorter of the two end segments, up to ARROWHEAD_ROOM. */
+  endRun: number;
+}
+
+function faults(points: Point[], others: Point[][], boxes: Box[]): Faults {
+  const own = runsOf(points);
+  const theirs = others.flatMap(runsOf);
+  let crowded = 0;
+  let close = 0;
+  let crossings = 0;
+  for (const run of own) {
+    for (const other of theirs) {
+      const gap = gapBeside(run, other);
+      if (gap < LANE_SPACING - 1) crowded++;
+      if (gap < LANE_SPACING) close++;
+      if (crosses(run, other)) crossings++;
+    }
+  }
+  const segments = points.slice(1).map((to, i) => [points[i]!, to] as const);
+  const lengths = segments.map(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y));
+  return {
+    crowded,
+    close,
+    crossings,
+    entered: segments.filter(([a, b]) => boxes.some((box) => passesThrough(a, b, box))).length,
+    short: lengths.filter((length) => length < MIN_SEGMENT).length,
+    endRun: Math.min(ARROWHEAD_ROOM, lengths[0] ?? 0, lengths.at(-1) ?? 0),
+  };
+}
+
+// One axis-parallel segment: `at` across it, `low` to `high` along it.
+interface Run {
+  vertical: boolean;
+  at: number;
+  low: number;
+  high: number;
+}
+
+function runsOf(points: Point[]): Run[] {
+  return points.slice(1).map((b, i) => {
+    const a = points[i]!;
+    const vertical = a.x === b.x;
+    const [along, across] = vertical ? (["y", "x"] as const) : (["x", "y"] as const);
+    return { vertical, at: a[across], low: Math.min(a[along], b[along]), high: Math.max(a[along], b[along]) };
+  });
+}
+
+// How far apart two parallel runs sit where they share a stretch, or Infinity when they do not.
+function gapBeside(a: Run, b: Run): number {
+  if (a.vertical !== b.vertical || Math.min(a.high, b.high) <= Math.max(a.low, b.low)) return Infinity;
+  return Math.abs(a.at - b.at);
+}
+
+// A crossing in the middle of both runs, not where one ends on the other.
+function crosses(a: Run, b: Run): boolean {
+  if (a.vertical === b.vertical) return false;
+  return b.low < a.at && a.at < b.high && a.low < b.at && b.at < a.high;
+}
+
+// Strictly inside the box, so an end on its side does not count.
+function passesThrough(a: Point, b: Point, box: Box): boolean {
+  const [left, right] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
+  const [top, bottom] = [Math.min(a.y, b.y), Math.max(a.y, b.y)];
+  return left < box.x + box.width && right > box.x && top < box.y + box.height && bottom > box.y;
+}
+
+// Run `index` lies between two bends, so moving it moves no end.
+function isInner(points: Point[], index: number): boolean {
+  return index >= 1 && index + 2 <= points.length - 1;
+}
+
+// The label goes where the path passes nearest the box ELK reserved for it, and only that box was kept clear:
+// moving the run under it by up to LABEL_MARGIN keeps the text inside it.
+function carriesLabel(route: Route, index: number): boolean {
+  const { label } = route;
+  if (!label) return false;
+  const centre = { x: label.reserved.x + (label.laid.width ?? 0) / 2, y: label.reserved.y + (label.laid.height ?? 0) / 2 };
+  const { point } = nearestOnPolyline(route.points, centre);
+  const run = runsOf(route.points)[index]!;
+  const [across, along] = run.vertical ? [point.x, point.y] : [point.y, point.x];
+  return across === run.at && run.low <= along && along <= run.high;
+}
+
+// Sets run `index` to `to` across its length, which moves the two points it joins, and drops what that folds away.
+function moveRun(points: Point[], index: number, to: number): Point[] {
+  const vertical = points[index]!.x === points[index + 1]!.x;
+  const moved = points.map((p, i) => (i === index || i === index + 1 ? (vertical ? { x: to, y: p.y } : { x: p.x, y: to }) : p));
+  return straight(dedupe(moved));
 }
 
 // ELK ends an arrow on its node's box, and Excalidraw draws the box only for a sharp rectangle: an ellipse leaves

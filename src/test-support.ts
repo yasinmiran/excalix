@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
-import { ARROWHEAD_ROOM, END_SPACING, LANE_SPACING, LOOP_LABEL_RUN } from "./layout.js";
+import { ARROWHEAD_ROOM, END_SPACING, LANE_SPACING, LOOP_LABEL_RUN, MIN_SEGMENT } from "./layout.js";
 import { sketch } from "./pipeline.js";
 import { parseSpec } from "./spec.js";
 import { NODE, arrowheads, cornerRadius } from "./style.js";
@@ -34,6 +34,7 @@ export type Invariant =
   | "headRoom"
   | "endsApart"
   | "lanesApart"
+  | "noJogs"
   | "endsOnOutline"
   | "loopLabelRun"
   | "insideBounds";
@@ -51,6 +52,7 @@ const TITLES: Record<Invariant, string> = {
   headRoom: `every arrowhead sits on a segment of at least ${ARROWHEAD_ROOM}px`,
   endsApart: `arrow ends on one side of a node stay ${END_SPACING}px apart`,
   lanesApart: `two arrows running side by side stay ${LANE_SPACING}px apart`,
+  noJogs: `no arrow segment is shorter than ${MIN_SEGMENT}px`,
   endsOnOutline: "every arrow end touches the outline Excalidraw draws for its node",
   loopLabelRun: `a self loop's outer segment runs ${LOOP_LABEL_RUN}px past its label at both ends`,
   insideBounds: "every box but the title starts inside the layout bounds",
@@ -105,7 +107,7 @@ interface SceneElement extends Box {
   points?: [number, number][];
 }
 
-/** Registers the twelve layout invariants for every committed spec, measured however the caller measures. */
+/** Registers the thirteen layout invariants for every committed spec, measured however the caller measures. */
 export function describeGeometry(title: string, measurer: () => TextMeasurer, known: KnownDefects = {}): void {
   for (const file of specFiles) {
     describe(`${title} ${file}`, () => {
@@ -138,6 +140,7 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       check("headRoom", (scene) => scene.arrows.flatMap(shortHeadSegments));
       check("endsApart", crowdedSides);
       check("lanesApart", closeLanes);
+      check("noJogs", (scene) => scene.arrows.flatMap(jogs));
       check("endsOnOutline", (scene) => scene.arrows.flatMap((arrow) => offOutline(scene, arrow)));
       check("loopLabelRun", (scene) => scene.arrows.flatMap(buriedLoopSegment));
       check("insideBounds", (scene) =>
@@ -262,6 +265,16 @@ function closeLanes(scene: Scene): string[] {
       return [`${run.arrow} and ${other.arrow} run ${round(gap)}px apart for ${round(shared)}px at ${run.vertical ? "x" : "y"}=${round(run.at)}`];
     }),
   );
+}
+
+// A step this short draws as part of a straight line, so the arrow looks straight in the render and shows a stair
+// once it is selected in the editor.
+function jogs(arrow: Arrow): string[] {
+  return arrow.points.slice(1).flatMap((to, index) => {
+    const from = arrow.points[index]!;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    return length >= MIN_SEGMENT ? [] : [`${arrow.name} steps ${round(length)}px at ${pointAt(from)}-${pointAt(to)}`];
+  });
 }
 
 // The side an end comes in through, read off the segment it closes: an end on a curved outline sits inside

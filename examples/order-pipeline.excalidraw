@@ -662,7 +662,7 @@
       "x": 565,
       "y": 171,
       "width": 96,
-      "height": 1,
+      "height": 0,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -693,16 +693,8 @@
           0
         ],
         [
-          60,
-          0
-        ],
-        [
-          60,
-          -1
-        ],
-        [
           96,
-          -1
+          0
         ]
       ],
       "startBinding": {
@@ -718,7 +710,7 @@
         "mode": "orbit",
         "fixedPoint": [
           0,
-          0.5087719298245614
+          0.5263157894736842
         ]
       },
       "startArrowhead": "arrow",
