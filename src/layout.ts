@@ -178,9 +178,7 @@ async function layoutWith(input: LayoutInput, gutters: Record<string, number>): 
   const laidEdges = new Map((laid.edges ?? []).map((edge) => [edge.id, edge]));
   const shaped = new Map(input.nodes.map((node) => [node.id, { box: boxes.get(node.id)!, outline: node.outline }]));
   const routes = input.edges.map((edge) => routeOf(laidEdges.get(edge.id)!, edge, reversed.has(edge.id), exact));
-  const obstacles = Object.values(nodes);
-  spaceLanes(routes, obstacles);
-  removeJogs(routes, obstacles, shaped);
+  tidyRoutes(routes, shaped);
   const edges = Object.fromEntries(routes.map((route) => [route.edge.id, finish(route, shaped)]));
 
   const routed = Object.values(edges);
@@ -373,13 +371,13 @@ function collectBoxes(node: ElkNode, offset: Point, out: Map<string, Box>): void
   }
 }
 
-interface Shaped {
+export interface Shaped {
   box: Box;
   outline: Outline;
 }
 
-// A route in whole pixels with its ends still on the boxes ELK ended them on, and the box ELK reserved for its label.
-interface Route {
+/** A route in whole pixels with its ends still on the boxes ELK ended them on, and the box ELK reserved for its label. */
+export interface Route {
   edge: LayoutEdge;
   points: Point[];
   label?: { reserved: Point; laid: ElkLabel };
@@ -408,6 +406,16 @@ function finish(route: Route, shaped: Map<string, Shaped>): RoutedEdge {
   const { label } = route;
   const text = route.edge.label;
   return { points, ...(label && text ? { label: labelOnPath(points, label.reserved, label.laid, text) } : {}) };
+}
+
+/**
+ * Spaces the crowded lanes of routes ELK laid out, then folds their jogs. `shaped` holds every node, keyed by id; its
+ * boxes are the obstacles no move may take a route through.
+ */
+export function tidyRoutes(routes: Route[], shaped: Map<string, Shaped>): void {
+  const obstacles = [...shaped.values()].map(({ box }) => box);
+  spaceLanes(routes, obstacles);
+  removeJogs(routes, obstacles, shaped);
 }
 
 /**
@@ -527,7 +535,8 @@ function arrival(end: Point, next: Point): "left" | "right" | "top" | "bottom" {
   return end.y > next.y ? "top" : "bottom";
 }
 
-// Replaces routes[at] with the candidate when that lowers the fault it is for and raises none.
+// Replaces routes[at] with the candidate when that lowers the fault it is for and raises none. A fold may leave two
+// lanes a pixel under LANE_SPACING, as rounding does, since the step it removes is the worse of the two.
 function tryRoute(routes: Route[], at: number, candidate: Point[], boxes: Box[], fixing: "crowded" | "short"): boolean {
   const others = routes.filter((_, i) => i !== at).map((route) => route.points);
   const now = faults(routes[at]!.points, others, boxes);
@@ -535,7 +544,7 @@ function tryRoute(routes: Route[], at: number, candidate: Point[], boxes: Box[],
   const fixed = next[fixing] < now[fixing];
   const worse =
     next.crowded > now.crowded ||
-    next.close > now.close ||
+    (fixing === "crowded" && next.close > now.close) ||
     next.crossings > now.crossings ||
     next.entered > now.entered ||
     next.short > now.short ||

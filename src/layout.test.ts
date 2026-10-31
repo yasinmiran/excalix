@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ARROWHEAD_ROOM, END_SPACING, LABEL_HEAD_RUN, LABEL_MARGIN, LOOP_LABEL_RUN, layout, placeGroupLabel } from "./layout.js";
+import {
+  ARROWHEAD_ROOM,
+  END_SPACING,
+  LABEL_HEAD_RUN,
+  LABEL_MARGIN,
+  LOOP_LABEL_RUN,
+  type Route,
+  type Shaped,
+  layout,
+  placeGroupLabel,
+  tidyRoutes,
+} from "./layout.js";
 import { ARROWHEAD_LENGTH, FONT, LABEL_MASK, nodeSize, outlineOf } from "./style.js";
 import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedEdge, RoutedLabel, TextSize } from "./types.js";
 
@@ -525,6 +536,30 @@ describe("layout edge cases", () => {
     });
     const label = estimate("empty", FONT.group);
     expect(result.groups.g).toMatchObject({ width: label.width + 32, height: label.height + 32 });
+  });
+});
+
+// Routes and nodes built by hand, each a few pixels from the move a guard is there to refuse or allow.
+describe("tidyRoutes", () => {
+  const at = (x: number, y: number, width = 20, height = 20): Shaped => ({ box: { x, y, width, height }, outline: "sharp" });
+  const route = (id: string, from: string, to: string, points: [number, number][]): Route => ({
+    edge: { id, from, to },
+    points: points.map(([x, y]) => ({ x, y })),
+  });
+  const tidied = (routes: Route[], nodes: Record<string, Shaped>): [number, number][][] => {
+    tidyRoutes(routes, new Map(Object.entries(nodes)));
+    return routes.map(({ points }) => points.map(({ x, y }): [number, number] => [x, y]));
+  };
+
+  it("folds a step even where that leaves a lane a pixel under LANE_SPACING", () => {
+    // Folding onto x=100 leaves the run 15px from b's lane; folding onto x=102 would leave it 14px from c's.
+    const routes = [
+      route("a", "a0", "a1", [[0, 0], [100, 0], [100, 50], [102, 50], [102, 100], [200, 100]]),
+      route("b", "b0", "b1", [[85, 50], [85, 100]]),
+      route("c", "c0", "c1", [[116, 0], [116, 50]]),
+    ];
+    const nodes = { a0: at(-20, -10), a1: at(200, 90), b0: at(75, 30), b1: at(75, 100), c0: at(106, -20), c1: at(106, 50) };
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 100], [200, 100]]);
   });
 });
 
