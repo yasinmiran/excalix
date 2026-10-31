@@ -13,7 +13,7 @@ const read = (page: string) => readFileSync(new URL(page, site), "utf8");
 // copies examples/ in beside the pages, so a render the site names has to exist there.
 describe.each(pages)("site/%s", (page) => {
   const html = read(page);
-  const refs = [...html.matchAll(/(?:href|src)="([^"#]+)"/g)].map((match) => match[1]!);
+  const refs = [...html.matchAll(/(?:href|src|srcset)="([^"#]+)"/g)].map((match) => match[1]!);
 
   it("uses no long dashes", () => {
     expect(html).not.toMatch(/[–—]|&mdash;|&ndash;/);
