@@ -34,11 +34,11 @@ List nodes in reading order, sources first. Where edges form a loop, order decid
 
 Keep edge labels to a few words, because an edge label sits on its arrow and the layout makes room for it: past about twenty characters it wraps onto more lines, and a sentence becomes a block that pushes the nodes apart. A \\n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
 
-Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong. The image is scaled to fit 2000 pixels a side, and the png file holds it at full size for a closer look.
+Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong. The image is scaled to fit 2000 pixels a side, and opening the png file whole usually shows you that same copy; to judge a detail, crop that region from the png file, scaling coordinates by pixels.width / preview.width.
 
 The .svg and .png carry the editable scene, so either one dropped on excalidraw.com opens as the drawing. An image optimiser such as SVGO or a PNG crusher strips it, so the .excalidraw stays the source of truth.
 
-The result's markdown shows the SVG in a README or doc. Its path is relative to the project root, so rewrite it relative to the .md file it goes into.`;
+The result's markdown shows the SVG in a README or doc. Its path is relative to the directory a relative out resolves against, usually the project root, or absolute when the file is outside it; rewrite it relative to the .md file it goes into.`;
 
 // With tool search on, a client loads only tool names and these instructions at session start, so this is what
 // decides whether an agent reaches for sketch at all.
