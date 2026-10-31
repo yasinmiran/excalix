@@ -581,8 +581,8 @@ function arrival(end: Point, next: Point): "left" | "right" | "top" | "bottom" {
   return end.y > next.y ? "top" : "bottom";
 }
 
-// Replaces routes[at] with the candidate when that lowers the fault it is for and raises none. A fold may leave two
-// lanes a pixel under LANE_SPACING, as rounding does, since the step it removes is the worse of the two.
+// Replaces routes[at] with the candidate when that lowers the fault it is for and raises none. A move may leave two
+// lanes a pixel under LANE_SPACING, as rounding does, since the fault it removes is the worse of the two.
 function tryRoute(routes: Route[], at: number, candidate: Point[], boxes: Box[], fixing: "crowded" | "short"): boolean {
   const others = routes.filter((_, i) => i !== at).map((route) => route.points);
   const now = faults(routes[at]!.points, others, boxes);
@@ -590,7 +590,6 @@ function tryRoute(routes: Route[], at: number, candidate: Point[], boxes: Box[],
   const fixed = next[fixing] < now[fixing];
   const worse =
     next.crowded > now.crowded ||
-    (fixing === "crowded" && next.close > now.close) ||
     next.crossings > now.crossings ||
     next.entered > now.entered ||
     next.short > now.short ||
@@ -603,8 +602,6 @@ function tryRoute(routes: Route[], at: number, candidate: Point[], boxes: Box[],
 interface Faults {
   /** Pairs of runs, own against another route's, sharing a stretch more than a pixel under LANE_SPACING apart. */
   crowded: number;
-  /** The same, under LANE_SPACING at all. */
-  close: number;
   crossings: number;
   /** Segments that pass through a node box. */
   entered: number;
@@ -617,13 +614,11 @@ function faults(points: Point[], others: Point[][], boxes: Box[]): Faults {
   const own = runsOf(points);
   const theirs = others.flatMap(runsOf);
   let crowded = 0;
-  let close = 0;
   let crossings = 0;
   for (const run of own) {
     for (const other of theirs) {
       const gap = gapBeside(run, other);
       if (gap < LANE_SPACING - 1) crowded++;
-      if (gap < LANE_SPACING) close++;
       if (crosses(run, other)) crossings++;
     }
   }
@@ -631,7 +626,6 @@ function faults(points: Point[], others: Point[][], boxes: Box[]): Faults {
   const lengths = segments.map(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y));
   return {
     crowded,
-    close,
     crossings,
     entered: segments.filter(([a, b]) => boxes.some((box) => passesThrough(a, b, box))).length,
     short: lengths.filter((length) => length < MIN_SEGMENT).length,

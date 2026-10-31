@@ -587,6 +587,19 @@ describe("tidyRoutes", () => {
     expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [108, 0], [108, 22], [300, 22]]);
   });
 
+  // a's run between two bends lies 10px from b's straight line, and the only way to space them is to push it 6px left.
+  const crowdedByB = (b = 110): [Route[], Record<string, Shaped>] => [
+    [route("a", "a0", "a1", [[0, 0], [100, 0], [100, 200], [300, 200]]), route("b", "b0", "b1", [[b, -50], [b, 250]])],
+    { a0: at(-20, -10), a1: at(300, 190), b0: at(b - 10, -70), b1: at(b - 10, 250) },
+  ];
+
+  it("pushes a crowded run even where that leaves it a pixel under LANE_SPACING from another lane", () => {
+    const [routes, nodes] = crowdedByB();
+    routes.push(route("c", "c0", "m", [[79, -30], [79, 90]]), route("d", "m", "d1", [[79, 110], [79, 230]]));
+    Object.assign(nodes, { c0: at(69, -50), m: at(69, 90), d1: at(69, 230) });
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [94, 0], [94, 200], [300, 200]]);
+  });
+
   // A 2px step between two end runs. Its start cannot move: b leaves s 32px below it. Its end can only slide up c's
   // side, towards the corner, where ELK left it 27px off.
   const stepNearCorner = (top: number): [Route[], Record<string, Shaped>] => [
