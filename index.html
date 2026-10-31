@@ -82,7 +82,7 @@
       </div>
       <figure class="render">
         <div class="sheet">
-          <img src="examples/order-pipeline.svg" width="1189" height="520" fetchpriority="high" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
+          <img src="examples/order-pipeline.svg" width="1165" height="496" fetchpriority="high" alt="Hand-drawn architecture diagram titled order pipeline. A Web app sends POST /orders to the Order API, which sits with a Fulfilment service in an EKS group, inside an AWS eu-north-1 group. The Order API writes to Postgres, talks both ways with Redis, and publishes to the orders.created queue with a dashed arrow. The queue feeds Fulfilment, which calls Stripe, drawn as a dashed external box, with the label charge.">
         </div>
         <figcaption>Every shape, colour and route above came from the spec below, which says nothing about where anything goes. <a href="examples/order-pipeline.svg">Open the SVG at full size</a>.</figcaption>
       </figure>
@@ -145,11 +145,11 @@ npx -y excalix render spec.json -o out/spec</code></pre>
       </div>
       <div>
         <dt>The same spec gives the same bytes</dt>
-        <dd>Output is identical from run to run and between macOS and Linux. CJK and emoji labels are the known exception, tracked in <a href="https://github.com/yasinmiran/excalix/issues/5">issue #5</a>.</dd>
+        <dd>Output is identical from run to run and between macOS and Linux, labels in CJK, emoji, arrows, box drawing, Hebrew or Arabic included: each is measured with a font excalix ships, Excalidraw's own for CJK, Twemoji for emoji and DejaVu Sans for the rest. Scripts none of them covers, such as Devanagari or Thai, fall back to a system font and can measure several pixels differently per label. So do a few emoji: code points added after Unicode 15, and the emoji forms of 〰 〽 ㊗ ㊙.</dd>
       </div>
       <div>
         <dt>It opens on excalidraw.com unchanged</dt>
-        <dd>Labels stay attached to their boxes and arrows stay bound to their ends, so the file is yours to keep editing by hand.</dd>
+        <dd>Labels stay attached to their boxes and arrows stay bound to their ends, so the file is yours to keep editing by hand. The SVG and PNG carry the same scene, so either one dropped on the canvas opens as the drawing too.</dd>
       </div>
       <div>
         <dt>Every problem in one pass</dt>

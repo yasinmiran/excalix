@@ -101,52 +101,58 @@
       <p>The server needs Chromium, like the CLI; see <a href="getting-started.html#chromium">getting started</a>. It opens one browser on the first call and reuses it until the client disconnects. A sketch finishes inside the call, so the tool declares <code>execution.taskSupport</code> as <code>"forbidden"</code>.</p>
 
       <h2 id="description">What the agent reads</h2>
-      <p>The tool description is the whole guide the agent gets unless the <a href="getting-started.html#skill">skill</a> is installed too. It is served verbatim from <code>tools/list</code>:</p>
+      <p>First the server's instructions, which the client receives when it connects. With tool search on, as Claude Code has it by default, they are the only excalix text an agent sees at the start of a session, so they say when to reach for the tool:</p>
+      <blockquote>
+        <p>excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, and the result has markdown to put the diagram in a README.</p>
+      </blockquote>
+      <p>Then the tool description, the whole guide the agent gets unless the <a href="getting-started.html#skill">skill</a> is installed too. It is served verbatim from <code>tools/list</code>:</p>
       <blockquote>
         <p>Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.</p>
         <p>A node sits in exactly one group: name the group it runs in, and let an edge across the boundary carry any other relationship.</p>
         <p>List nodes in reading order, sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, and the layout reorders some of them when that keeps arrows from crossing. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.</p>
-        <p>Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.</p>
+        <p>Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.</p>
       </blockquote>
-      <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles and gives the sizing advice from the <a href="spec.html#writing">spec reference</a>. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, which the test suite keeps in step with the server.</p>
+      <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles, gives the sizing advice from the <a href="spec.html#writing">spec reference</a>, and says the SVG and PNG carry the scene. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, and the instructions in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/server-instructions.md">their own</a>; the test suite keeps both in step with the server.</p>
 
       <h2 id="input">Input</h2>
-      <p>The input schema is the <a href="spec.html">spec</a>, unchanged, plus one optional field:</p>
+      <p>The input schema is the <a href="spec.html">spec</a>, unchanged, plus two optional fields:</p>
       <div class="table-scroll">
         <table>
           <thead><tr><th scope="col">field</th><th scope="col">meaning</th></tr></thead>
           <tbody>
             <tr><td>the spec</td><td><code>title</code>, <code>direction</code>, <code>groups</code>, <code>nodes</code> and <code>edges</code>, as in the <a href="spec.html#shape">spec reference</a>. Only <code>nodes</code> is required.</td></tr>
-            <tr><td><code>out</code></td><td>Output basename without extension; writes <code>&lt;out&gt;.excalidraw</code>, <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code>. Relative paths resolve against the first root the client declares through MCP roots, usually the project directory. When the client declares no roots, or the request fails or takes over two seconds, the server's working directory stands in, which is the project directory when Claude Code launches the server. Absolute paths are used as given. Defaults to <code>diagrams/&lt;title slug&gt;</code>, or <code>diagrams/diagram</code> with no title.</td></tr>
+            <tr><td><code>out</code></td><td>Output basename without extension; writes <code>&lt;out&gt;.excalidraw</code>, <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code>. Relative paths resolve against the first root the client declares through MCP roots, usually the project directory. When the client declares no roots, or the request fails or takes over two seconds, the server's working directory stands in, which is the project directory when Claude Code launches the server. The server asks once per connection and keeps the answer until the client sends <code>notifications/roots/list_changed</code>, so a client that never answers costs the two seconds once. Absolute paths are used as given. Defaults to <code>diagrams/&lt;title slug&gt;</code>, or <code>diagrams/diagram</code> with no title.</td></tr>
+            <tr><td><code>theme</code></td><td><code>"light"</code> by default. <code>"dark"</code> draws <code>&lt;out&gt;.svg</code> and <code>&lt;out&gt;.png</code> in Excalidraw's dark mode, light lines on an opaque <code>#121212</code>. <code>"both"</code> writes the light files and adds <code>&lt;out&gt;.dark.svg</code> and <code>&lt;out&gt;.dark.png</code>, for a page that follows the reader's colour scheme. The <code>.excalidraw</code> is the same either way, and a dark image reopens in Excalidraw as the light scene, since dark mode is how it is shown, not what it holds.</td></tr>
           </tbody>
         </table>
       </div>
       <p>Every object in the schema sets <code>additionalProperties: false</code>, and each field carries a description written for the model reading it.</p>
 
       <h2 id="result">A successful result</h2>
-      <p>A call with the order pipeline spec and no <code>out</code> comes back in three parts. The paths are absolute; here the project lives in <code>/path/to/project</code>.</p>
-      <h3 id="result-text">A text block</h3>
-      <p>The three paths, one per line, in this order:</p>
-      <figure class="frame">
-        <figcaption>content[0], type text</figcaption>
-<pre tabindex="0"><code>/path/to/project/diagrams/order-pipeline.excalidraw
-/path/to/project/diagrams/order-pipeline.svg
-/path/to/project/diagrams/order-pipeline.png</code></pre>
-      </figure>
-      <h3 id="result-image">An image block</h3>
-      <p>The PNG itself, base64 encoded with <code>mimeType</code> <code>image/png</code>. It is the same file as the <code>.png</code> on disk, so the agent can look at the diagram without a separate read and call again if a label collides or the flow reads backwards.</p>
+      <p>A call with the order pipeline spec and no <code>out</code> comes back as structured content and two content blocks. The paths are absolute; here the project lives in <code>/path/to/project</code>.</p>
       <h3 id="result-structured">Structured content</h3>
-      <p>The same paths as fields, plus the PNG's size, matching the tool's output schema:</p>
+      <p>The written paths as fields, plus the PNG's size, matching the tool's output schema:</p>
       <figure class="frame">
         <figcaption>structuredContent</figcaption>
 <pre tabindex="0"><code>{
   "excalidraw": "/path/to/project/diagrams/order-pipeline.excalidraw",
   "svg": "/path/to/project/diagrams/order-pipeline.svg",
   "png": "/path/to/project/diagrams/order-pipeline.png",
-  "pixels": { "width": 2498, "height": 1040 }
+  "pixels": { "width": 2330, "height": 992 },
+  "preview": { "width": 2000, "height": 851 },
+  "markdown": "![order pipeline: Web app, Order API, Fulfilment, orders.created, Postgres, Redis, Stripe](diagrams/order-pipeline.svg)"
 }</code></pre>
       </figure>
-      <p>A very wide <code>pixels.width</code> usually means a long label stretched the layout.</p>
+      <p>With <code>theme</code> set to <code>"both"</code>, a <code>dark</code> field after <code>png</code> names the dark pair: <code>{ "svg": ".../order-pipeline.dark.svg", "png": ".../order-pipeline.dark.png" }</code>. <code>pixels</code> is the size of the PNG on disk, and <code>preview</code> the size of the image block. A very wide <code>pixels.width</code> usually means a long node label stretched the layout. When there is something to act on before the diagram is shown, such as a size too big to read, a <code>notes</code> array holds one line per thing; see <a href="#size">large diagrams</a>. Without anything to say, the field is absent.</p>
+      <p><code>markdown</code> shows the diagram in a README or doc. It points at the SVG, which stays crisp at any size, carries the editable scene and renders on GitHub, and its alt text is the title followed by every node label. The path is relative to the directory a relative <code>out</code> resolves against, usually the project root, with no leading slash, so it is right as it stands for a README there; the tool description asks the agent to rewrite it relative to the <code>.md</code> file it goes into. A file outside that directory gets its absolute path, which GitHub would read from the repository root; the description says the path can be absolute, so the agent knows to rewrite it. With <code>theme</code> set to <code>"both"</code> it is a picture that follows the reader's colour scheme instead, which GitHub renders:</p>
+      <figure class="frame">
+        <figcaption>structuredContent.markdown, theme both</figcaption>
+<pre tabindex="0"><code>&lt;picture&gt;&lt;source media=&quot;(prefers-color-scheme: dark)&quot; srcset=&quot;diagrams/order-pipeline.dark.svg&quot;&gt;&lt;source media=&quot;(prefers-color-scheme: light)&quot; srcset=&quot;diagrams/order-pipeline.svg&quot;&gt;&lt;img alt=&quot;order pipeline: Web app, Order API, Fulfilment, orders.created, Postgres, Redis, Stripe&quot; src=&quot;diagrams/order-pipeline.svg&quot;&gt;&lt;/picture&gt;</code></pre>
+      </figure>
+      <h3 id="result-text">A text block</h3>
+      <p>The structured content again, serialized as JSON on one line. Claude Code shows the model the image and the structured content and drops text blocks, while some clients read only the content, so each carries the whole answer.</p>
+      <h3 id="result-image">An image block</h3>
+      <p>The diagram as a PNG, base64 encoded with <code>mimeType</code> <code>image/png</code>, so the agent can look at it without a separate read and call again if a label collides or the flow reads backwards. It is exported again at whatever scale up to the file's own fits 2000 pixels a side, the most Claude Code passes to a model whole, so the payload stays small and what the model sees is the image the size note judges. A diagram that already fits gets the file itself. The <code>.png</code> on disk stays the full 2x export, for people and for cropping: opening it whole in Claude Code gets the same 2000-pixel copy, so to judge a detail an agent crops that region out of it, scaling coordinates by <code>pixels.width / preview.width</code>. With <code>theme</code> set to <code>"dark"</code> the image is dark too; with <code>"both"</code> it is the light one.</p>
 
       <h2 id="errors">Errors</h2>
       <p>A spec that fails validation does not throw a protocol error. The result has <code>isError: true</code> and one text block with every problem on its own line, the same lines <code>excalix validate</code> prints:</p>
@@ -163,12 +169,12 @@ edges[0].to: unknown node "apy", did you mean "api"?</code></pre>
       <p>After an error of that kind the server closes its browser and opens a fresh one on the next call. A call to any tool name other than <code>sketch</code> gets a protocol error instead.</p>
 
       <h2 id="size">Large diagrams</h2>
-      <p>When the longest side of the PNG passes 6000 pixels, the text block gains a fourth line after the paths:</p>
+      <p>When the copy of the image a model reads would shrink edge labels below about 11 pixels, the result carries a note. That copy is what Claude Code hands over, fitted into 2000 pixels a side, and then what the model's high-resolution tier keeps of it, about 4784 tiles of 28 by 28 pixels; a long strip is shrunk by its edge and a dense square by its area:</p>
       <figure class="frame">
-        <figcaption>content[0], fourth line</figcaption>
-<pre class="output"><code>note: 9292x1948 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.</code></pre>
+        <figcaption>structuredContent.notes[0]</figcaption>
+<pre class="output"><code>note: a model reads this diagram at 2000x383 px, where its edge labels are about 7px tall, too small to read. Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full 9124x1748.</code></pre>
       </figure>
-      <p>Past that size the copy of the image a model sees is scaled down far enough that thin lines and small labels go missing. The usual answer is two diagrams: an overview that collapses each region to one node, and a detail diagram of the part under discussion.</p>
+      <p>Past that point thin lines and small labels go missing from what the model sees, even though the PNG on disk is sharp. The usual answer is two diagrams: an overview that collapses each region to one node, and a detail diagram of the part under discussion.</p>
     </div>
   </div>
 </main>

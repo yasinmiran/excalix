@@ -124,9 +124,9 @@
 npx -y excalix validate spec.json
 npx -y excalix schema</code></pre>
         </figure>
-        <p><code>render</code> writes <code>out/spec.excalidraw</code>, <code>out/spec.svg</code> and <code>out/spec.png</code> and prints their paths. Without <code>-o</code> the basename is the spec path minus its extension. End <code>-o</code> with a slash and it names a directory instead, so <code>-o docs/diagrams/</code> writes <code>spec.excalidraw</code> and its siblings in there.</p>
+        <p><code>render</code> writes <code>out/spec.excalidraw</code>, <code>out/spec.svg</code> and <code>out/spec.png</code> and prints their paths. Without <code>-o</code> the basename is the spec path minus its extension. End <code>-o</code> with a slash and it names a directory instead, so <code>-o docs/diagrams/</code> writes <code>spec.excalidraw</code> and its siblings in there. <code>--theme dark</code> draws the SVG and PNG in Excalidraw's dark mode, and <code>--theme both</code> writes the light pair plus <code>spec.dark.svg</code> and <code>spec.dark.png</code>.</p>
         <p><code>validate</code> checks the spec without opening a browser. It prints the counts, here <code>ok: 2 nodes, 1 edge, 1 group</code>, or every problem at once and a non-zero exit. <code>schema</code> prints the JSON Schema of the spec, useful for editor completion or for handing to a model. The <a href="spec.html">spec reference</a> explains each field.</p>
-        <p>Commit the spec beside its outputs, so the next person regenerates the diagram instead of redrawing it.</p>
+        <p>The SVG and PNG carry the scene as well as the picture, so either one dropped on excalidraw.com opens as an editable drawing. An image optimiser such as SVGO or a PNG crusher strips the scene, so the <code>.excalidraw</code> stays the source of truth. Commit the spec beside its outputs, so the next person regenerates the diagram instead of redrawing it.</p>
       </li>
 
       <li>

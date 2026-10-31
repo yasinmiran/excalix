@@ -124,7 +124,7 @@
       <p>A node has an <code>id</code>, a <code>label</code> drawn inside the box, a <code>kind</code>, and optionally a <code>group</code>. The kind fixes the shape and colour, and there are six of them. Here is every kind in one diagram, with a group and both edge styles:</p>
       <figure class="render scrolls">
         <div class="sheet" tabindex="0" role="group" aria-label="Legend diagram">
-          <img src="examples/legend.svg" width="1039" height="434" loading="lazy" alt="Legend diagram of the six node kinds. A client, drawn as a grey ellipse, sends a solid arrow labelled sync to a service, drawn as a blue rounded box. The service sits inside a grey group box labelled a group: what you run, together with a green datastore, a yellow hatched queue and an orange cache. A dashed arrow labelled async runs from the service to the queue, the arrow between service and cache has a head at both ends, and a solid arrow leaves the group for an external system drawn as a dashed outline with no fill.">
+          <img src="examples/legend.svg" width="1027" height="422" loading="lazy" alt="Legend diagram of the six node kinds. A client, drawn as a grey ellipse, sends a solid arrow labelled sync to a service, drawn as a blue rounded box. The service sits inside a grey group box labelled a group: what you run, together with a green datastore, a yellow hatched queue and an orange cache. A dashed arrow labelled async runs from the service to the queue, the arrow between service and cache has a head at both ends, and a solid arrow leaves the group for an external system drawn as a dashed outline with no fill.">
         </div>
         <figcaption>The legend example.<span class="narrow-only"> It scrolls sideways.</span> <a href="examples/legend.svg">Open it at full size</a>, or get every file from <a href="examples.html#legend">the examples</a>.</figcaption>
       </figure>
@@ -151,7 +151,7 @@
           <tbody>
             <tr><td><code>style</code></td><td><code>sync</code> (default) for request and response, drawn solid. <code>async</code> for a message or event, drawn dashed.</td></tr>
             <tr><td><code>arrows</code></td><td><code>forward</code> (default) puts one head at the target, <code>both</code> one at each end, <code>none</code> draws a plain association.</td></tr>
-            <tr><td><code>label</code></td><td>Text drawn on the arrow, a few words at most.</td></tr>
+            <tr><td><code>label</code></td><td>Text drawn on the arrow, a few words at most. Past about twenty characters it wraps onto more lines.</td></tr>
           </tbody>
         </table>
       </div>
@@ -199,21 +199,22 @@ groups[0].parent: "b" closes the cycle a -> b -> a</code></pre>
       <p>Sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, so the layout reorders some of them when that keeps arrows from crossing, and it will not move an arrow onto a different route. When a route is what you want changed, the levers are the direction of the edge itself, which nodes share a group, and <code>direction</code>.</p>
 
       <h3 id="labels">Keep edge labels short</h3>
-      <p>A label sits on its arrow and reserves that much width, so a sentence on one edge pushes the whole diagram wide. A few words is plenty. When a node name is genuinely long, a <code>\n</code> breaks it.</p>
+      <p>A label sits on its arrow and the layout makes room for it. Past about twenty characters it wraps onto more lines, so a sentence on one edge becomes a block that pushes the nodes apart. A few words is plenty. When a node name is genuinely long, a <code>\n</code> breaks it.</p>
+      <p>The breaks are written into the file where Excalidraw's own wrapping allows one, so a wrapped label keeps its lines when you drag a node in the editor.</p>
 
       <h3 id="size">Stay near twenty nodes</h3>
       <p>Twenty nodes is roughly the ceiling for one picture, and a dozen boxes in a single run reaches it sooner, since a chain stretches one way and stays thin the other. A long chain reads better as <code>lr</code> and a deep hierarchy as <code>tb</code>, so try <code>direction</code> first.</p>
-      <p>When direction is not the problem, make two diagrams: an overview that collapses each region to one node, then a detail diagram of the part under discussion. Once the longest side of the image passes 6000 pixels, rendering says so:</p>
+      <p>When direction is not the problem, make two diagrams: an overview that collapses each region to one node, then a detail diagram of the part under discussion. Once the copy a model reads would shrink edge labels below about 11 pixels, rendering says so. For a long strip that happens past about 5800 pixels on its long side, and for a dense square sooner, since the model's copy is capped by area as well as by edge:</p>
       <figure class="frame">
         <figcaption>Size note</figcaption>
-<pre class="output"><code>note: 9292x1948 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.</code></pre>
+<pre class="output"><code>note: a model reads this diagram at 2000x383 px, where its edge labels are about 7px tall, too small to read. Split it into an overview and a detail diagram, or shorten the longest labels; the PNG on disk keeps the full 9124x1748.</code></pre>
       </figure>
 
       <h3 id="look">Then look at it</h3>
       <p>Open the PNG and check for labels that collide with a box or another label, arrows that cross more than the topology forces them to, and a flow that reads backwards, with sources on the right and sinks on the left. Flip <code>direction</code>, group nodes that belong together, shorten a label or drop an edge that carries no information, then render again.</p>
 
       <h2 id="schema">The JSON Schema</h2>
-      <p><code>npx -y excalix schema</code> prints the full JSON Schema of the spec, with a description on every field. Point an editor at it for completion, or hand it to a model along with this page. The MCP tool's input schema is the same shape plus one field, <code>out</code>, described on the <a href="mcp.html#input">MCP server page</a>.</p>
+      <p><code>npx -y excalix schema</code> prints the full JSON Schema of the spec, with a description on every field. Point an editor at it for completion, or hand it to a model along with this page. The MCP tool's input schema is the same shape plus two output options, <code>out</code> and <code>theme</code>, described on the <a href="mcp.html#input">MCP server page</a>. Neither is part of the spec, because nothing visual is.</p>
     </div>
   </div>
 </main>
