@@ -546,6 +546,12 @@ describe("tidyRoutes", () => {
     edge: { id, from, to },
     points: points.map(([x, y]) => ({ x, y })),
   });
+  // A 40x20 label whose reserved box keeps 6px beside the text left and right, and 12px above and below.
+  const labelled = (r: Route, reserved: Point): Route => ({
+    ...r,
+    edge: { ...r.edge, label: { width: 40, height: 20 } },
+    label: { reserved, laid: { width: 52, height: 44 } },
+  });
   const tidied = (routes: Route[], nodes: Record<string, Shaped>): [number, number][][] => {
     tidyRoutes(routes, new Map(Object.entries(nodes)));
     return routes.map(({ points }) => points.map(({ x, y }): [number, number] => [x, y]));
@@ -561,16 +567,40 @@ describe("tidyRoutes", () => {
     const nodes = { a0: at(-20, -10), a1: at(200, 90), b0: at(75, 30), b1: at(75, 100), c0: at(106, -20), c1: at(106, 50) };
     expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 100], [200, 100]]);
   });
-  it("slides a crowded run that ends its route along its node's side when no run between two bends will go", () => {
-    // a's last run and b's first pass 10px apart. Moving either one's channel clear of the other would leave its
-    // end run under ARROWHEAD_ROOM, so a's end on c moves instead, 6px up c's side.
-    const routes = [
+
+  // a's last run and b's first pass 10px apart. Moving either one's channel clear of the other would leave its end run
+  // under ARROWHEAD_ROOM, and b's end on s cannot slide nearer s's bottom corner, so only a's end on c can move: 6px up
+  // c's side, to y=16.
+  const crowdedEnds = (c: Shaped): [Route[], Record<string, Shaped>] => [
+    [
       route("a", "s", "c", [[0, 0], [50, 0], [50, 22], [128, 22]]),
       route("b", "s", "d", [[0, 32], [92, 32], [92, 74], [320, 74]]),
-    ];
-    const nodes = { s: at(-60, -20, 60, 72), c: at(128, -10, 60, 60), d: at(320, 54, 40, 40) };
-    expect(tidied(routes, nodes)).toEqual([
+    ],
+    { s: at(-60, -20, 60, 72), c, d: at(320, 54, 40, 40) },
+  ];
+
+  it("slides a crowded run that ends its route along its node's side when no run between two bends will go", () => {
+    expect(tidied(...crowdedEnds(at(128, -10, 60, 60)))).toEqual([
       [[0, 0], [50, 0], [50, 16], [128, 16]],
+      [[0, 32], [92, 32], [92, 74], [320, 74]],
+    ]);
+  });
+
+  it("never slides an end within END_SPACING of another end on its side", () => {
+    // g ends on c's side 34px above a's end, and the slide would leave them 28px apart.
+    const [routes, nodes] = crowdedEnds(at(128, -40, 60, 90));
+    routes.push(route("g", "g0", "c", [[90, -12], [128, -12]]));
+    nodes.g0 = at(70, -22);
+    expect(tidied(routes, nodes).slice(0, 2)).toEqual([
+      [[0, 0], [50, 0], [50, 22], [128, 22]],
+      [[0, 32], [92, 32], [92, 74], [320, 74]],
+    ]);
+  });
+
+  it("never slides a lone end onto a rounded corner's curve", () => {
+    // c's corners curve for 15px, and the slide would take a's end from 20px off the top one to 14px.
+    expect(tidied(...crowdedEnds({ ...at(128, 2, 60, 60), outline: "rounded" }))).toEqual([
+      [[0, 0], [50, 0], [50, 22], [128, 22]],
       [[0, 32], [92, 32], [92, 74], [320, 74]],
     ]);
   });
@@ -587,10 +617,42 @@ describe("tidyRoutes", () => {
     expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [108, 0], [108, 22], [300, 22]]);
   });
 
-  // a's run between two bends lies 10px from b's straight line, and the only way to space them is to push it 6px left.
+  // The same two arrows with a's label on its crowded run, then on the run that pulling a back would move: either
+  // way the label would leave its box, so b is pulled back instead.
+  for (const [where, reserved] of [
+    ["the crowded run", { x: 154, y: 0 }],
+    ["the run it would move", { x: 34, y: -11 }],
+  ] as const) {
+    it(`pulls back the other arrow when the label sits on ${where}`, () => {
+      const routes = [
+        route("a", "s", "c", [[0, 0], [60, 0], [60, 22], [300, 22]]),
+        route("b", "s", "d", [[0, 32], [92, 32], [92, 200], [320, 200]]),
+        route("e", "f", "c", [[200, 150], [250, 150], [250, 54], [300, 54]]),
+      ];
+      routes[0] = labelled(routes[0]!, reserved);
+      const nodes = { s: at(-60, -27, 60, 86), c: at(300, -5, 60, 86), d: at(320, 180, 40, 40), f: at(180, 140) };
+      expect(tidied(routes, nodes).slice(0, 2)).toEqual([
+        [[0, 0], [60, 0], [60, 22], [300, 22]],
+        [[0, 32], [44, 32], [44, 200], [320, 200]],
+      ]);
+    });
+  }
+
+  it("pushes a crowded run between two bends sideways before it tries pulling one back", () => {
+    // a's run along y=22 lies 10px from b's first and could be spaced either way: pushed 6px up, or cut short by
+    // pulling its bend at x=60 back to 16px past where b turns down.
+    const routes = [
+      route("a", "s", "c", [[0, 0], [60, 0], [60, 22], [240, 22], [240, 60], [300, 60]]),
+      route("b", "s", "d", [[0, 32], [92, 32], [92, 200], [320, 200]]),
+    ];
+    const nodes = { s: at(-60, -27, 60, 86), c: at(300, 40, 60, 40), d: at(320, 180, 40, 40) };
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [60, 0], [60, 16], [240, 16], [240, 60], [300, 60]]);
+  });
+
+  // a's run between two bends lies 10px from b's straight line, and pushing it 6px away is the only way to space them.
   const crowdedByB = (b = 110): [Route[], Record<string, Shaped>] => [
-    [route("a", "a0", "a1", [[0, 0], [100, 0], [100, 200], [300, 200]]), route("b", "b0", "b1", [[b, -50], [b, 250]])],
-    { a0: at(-20, -10), a1: at(300, 190), b0: at(b - 10, -70), b1: at(b - 10, 250) },
+    [route("a", "a0", "a1", [[0, 0], [100, 0], [100, 200], [300, 200]]), route("b", "b0", "b1", [[b, -50], [b, 150]])],
+    { a0: at(-20, -10), a1: at(300, 190), b0: at(b - 10, -70), b1: at(b - 10, 150) },
   ];
 
   it("pushes a crowded run even where that leaves it a pixel under LANE_SPACING from another lane", () => {
@@ -598,6 +660,86 @@ describe("tidyRoutes", () => {
     routes.push(route("c", "c0", "m", [[79, -30], [79, 90]]), route("d", "m", "d1", [[79, 110], [79, 230]]));
     Object.assign(nodes, { c0: at(69, -50), m: at(69, 90), d1: at(69, 230) });
     expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [94, 0], [94, 200], [300, 200]]);
+  });
+
+  it("leaves two lanes 15px apart alone, as rounding a pair ELK spaced exactly can leave them", () => {
+    const [routes, nodes] = crowdedByB(115);
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 200], [300, 200]]);
+  });
+
+  it("never pushes a run across another arrow", () => {
+    // b is 10px left of a's run and c 3px right of it. Pushing a's run right of c would cross both of c's horizontal
+    // runs, so c moves instead.
+    const [routes, nodes] = crowdedByB(90);
+    routes.push(route("c", "c0", "c1", [[200, -50], [103, -50], [103, 20], [200, 20]]));
+    Object.assign(nodes, { c0: at(200, -60), c1: at(200, 10) });
+    expect(tidied(routes, nodes)).toEqual([
+      [[0, 0], [100, 0], [100, 200], [300, 200]],
+      [[90, -50], [90, 150]],
+      [[200, -50], [116, -50], [116, 20], [200, 20]],
+    ]);
+  });
+
+  it("never pushes a run so far that a segment next to it comes out under MIN_SEGMENT", () => {
+    const [routes, nodes] = crowdedByB();
+    routes[0] = route("a", "a0", "a1", [[0, -100], [0, 0], [96, 0], [96, 10], [100, 10], [100, 200], [300, 200]]);
+    routes[1] = route("b", "b0", "b1", [[110, 20], [110, 150]]);
+    Object.assign(nodes, { a0: at(-10, -120), b0: at(100, 0) });
+    expect(tidied(routes, nodes)[0]).toEqual([[0, -100], [0, 0], [96, 0], [96, 10], [100, 10], [100, 200], [300, 200]]);
+  });
+
+  it("never pushes a run so far that the run under an arrowhead comes out under ARROWHEAD_ROOM", () => {
+    const [routes, nodes] = crowdedByB();
+    routes[0] = route("a", "a0", "a1", [[60, 0], [100, 0], [100, 200], [300, 200]]);
+    nodes.a0 = at(40, -10);
+    expect(tidied(routes, nodes)[0]).toEqual([[60, 0], [100, 0], [100, 200], [300, 200]]);
+  });
+
+  it("never pushes the run under a label further than the box ELK reserved for it leaves room", () => {
+    // The label's box leaves 6px beside the text, and b is 8px off a's run.
+    const [routes, nodes] = crowdedByB(108);
+    routes[0] = labelled(routes[0]!, { x: 74, y: 78 });
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 200], [300, 200]]);
+  });
+
+  it("pushes the run under a label across the flow as far as the 12px its box keeps above and below the text", () => {
+    // b is 8px off a's labelled run, as above, but the run is horizontal, so the push moves it in y.
+    const routes = [
+      labelled(route("a", "a0", "a1", [[0, 0], [0, 100], [200, 100], [200, 300]]), { x: 74, y: 78 }),
+      route("b", "b0", "b1", [[-50, 108], [150, 108]]),
+    ];
+    const nodes = { a0: at(-10, -20), a1: at(190, 300), b0: at(-70, 98), b1: at(150, 98) };
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [0, 92], [200, 92], [200, 300]]);
+  });
+
+  it("never moves a self loop to space it from another arrow", () => {
+    const routes = [route("l", "n", "n", [[20, 0], [20, -40], [80, -40], [80, 0]]), route("x", "x0", "x1", [[90, -60], [90, -10]])];
+    const nodes = { n: at(0, 0, 100, 40), x0: at(80, -80), x1: at(80, -10) };
+    expect(tidied(routes, nodes)[0]).toEqual([[20, 0], [20, -40], [80, -40], [80, 0]]);
+  });
+
+  // A 2px step between two runs, of which only the one between two bends can move: the end of the other would come
+  // within END_SPACING of n's end on b. Folding it moves a's run 2px right, onto x=102.
+  const stepBesideEnd = (): [Route[], Record<string, Shaped>] => [
+    [route("a", "a0", "b", [[0, 0], [100, 0], [100, 50], [102, 50], [102, 100]]), route("n", "n0", "b", [[70, 60], [70, 100]])],
+    { a0: at(-20, -10), b: at(40, 100, 100, 40), n0: at(60, 40) },
+  ];
+
+  it("folds a step by moving the run between two bends beside it", () => {
+    expect(tidied(...stepBesideEnd())[0]).toEqual([[0, 0], [102, 0], [102, 100]]);
+  });
+
+  it("never folds a step into a crowded lane", () => {
+    const [routes, nodes] = stepBesideEnd();
+    routes.push(route("c", "c0", "c1", [[115, 0], [115, 50]]));
+    Object.assign(nodes, { c0: at(105, -20), c1: at(105, 50) });
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 50], [102, 50], [102, 100]]);
+  });
+
+  it("never folds a step through a node", () => {
+    const [routes, nodes] = stepBesideEnd();
+    nodes.o = at(101, 10, 40, 20);
+    expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 50], [102, 50], [102, 100]]);
   });
 
   // A 2px step between two end runs. Its start cannot move: b leaves s 32px below it. Its end can only slide up c's
