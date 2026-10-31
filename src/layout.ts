@@ -46,6 +46,10 @@ export const LANE_SPACING = 16;
 // node grows. A rounded corner's radius stops at 32, and 28 along it the curve is under a seventh of a
 // pixel off the side, so no end lands on a rounded corner.
 const CORNER_ROOM = 28;
+// How near a corner a slide may take an end on a side holding others. ELK puts the nearest end a pixel inside
+// CORNER_ROOM, and folding a step can take it two pixels further. 25 along the largest rounded corner the curve is
+// still under half a pixel off the side, so the end stays on the straight part of the outline.
+const SLIDE_CORNER_ROOM = 25;
 /**
  * Line left showing on each side of a self loop's label, past the label's own clearance. Read off renders
  * at 12, 16 and 20: at 12 an async loop's outer segment is a tick mark, and 20 reads no better than 16.
@@ -514,8 +518,9 @@ function isJog(points: Point[], index: number): boolean {
 }
 
 // Sliding the run that ends a route moves that end along its side. The end keeps END_SPACING from every other end on
-// that side, and room from both corners: CORNER_ROOM on a side holding other ends, while a lone end sits mid-side and
-// only has to stay off a rounded corner's curve. An end that had less than either to begin with loses none of it.
+// that side, and room from both corners: SLIDE_CORNER_ROOM on a side holding other ends, while a lone end sits
+// mid-side and only has to stay off a rounded corner's curve. An end that had less than either to begin with loses
+// none of it.
 function endCanSlide(routes: Route[], at: number, index: number, to: number, shaped: Map<string, Shaped>): boolean {
   const route = routes[at]!;
   const start = index === 0;
@@ -527,7 +532,7 @@ function endCanSlide(routes: Route[], at: number, index: number, to: number, sha
   // An end on a top or bottom side slides along x, on a left or right side along y.
   const along = (p: Point): number => (vertical ? p.x : p.y);
   const [low, high] = vertical ? [box.x, box.x + box.width] : [box.y, box.y + box.height];
-  const corner = neighbours.length > 0 ? CORNER_ROOM : outline === "rounded" ? cornerRadius(box.width, box.height) : 0;
+  const corner = neighbours.length > 0 ? SLIDE_CORNER_ROOM : outline === "rounded" ? cornerRadius(box.width, box.height) : 0;
   const keeps = (now: number, after: number, room: number): boolean => after >= Math.min(room, now);
   if (!keeps(along(end) - low, to - low, corner) || !keeps(high - along(end), high - to, corner)) return false;
   return neighbours.every((other) => keeps(Math.abs(along(end) - other), Math.abs(to - other), END_SPACING));

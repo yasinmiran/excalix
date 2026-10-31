@@ -573,6 +573,25 @@ describe("tidyRoutes", () => {
       [[0, 32], [92, 32], [92, 74], [320, 74]],
     ]);
   });
+
+  // A 2px step between two end runs. Its start cannot move: b leaves s 32px below it. Its end can only slide up c's
+  // side, towards the corner, where ELK left it 27px off.
+  const stepNearCorner = (top: number): [Route[], Record<string, Shaped>] => [
+    [
+      route("a", "s", "c", [[0, 0], [50, 0], [50, 2], [100, 2]]),
+      route("b", "s", "e", [[0, 32], [30, 32], [30, 200], [300, 200]]),
+      route("d", "f", "c", [[70, 160], [70, 34], [100, 34]]),
+    ],
+    { s: at(-60, -27, 60, 86), c: at(100, top, 60, 86), e: at(300, 180, 40, 40), f: at(60, 160) },
+  ];
+
+  it("folds a step by sliding an end 25px from a corner on a side holding other ends", () => {
+    expect(tidied(...stepNearCorner(-25))[0]).toEqual([[0, 0], [100, 0]]);
+  });
+
+  it("leaves a step whose fold would slide an end nearer a corner than 25px", () => {
+    expect(tidied(...stepNearCorner(-24))[0]).toEqual([[0, 0], [50, 0], [50, 2], [100, 2]]);
+  });
 });
 
 describe("placeGroupLabel", () => {
