@@ -11,7 +11,7 @@ import { EDGE_LABEL_WIDTH, FONT } from "../style.js";
 import { embeddedScene, measuringOnly, readSpec, specFiles } from "../test-support.js";
 import type { Point, Renderer } from "../types.js";
 import { wrapTexts } from "../wrap.js";
-import { createBrowserRenderer, launchBrowser, openRenderPage } from "./browser.js";
+import { createBrowserRenderer, launchBrowser, openRenderPage, wholePixels } from "./browser.js";
 import { estimateMeasurer } from "./estimate.js";
 
 const ORIGIN = "http://excalix.local";
@@ -418,10 +418,10 @@ describe("[browser] Excalidraw re-wrap", () => {
       const dragged = await page.evaluate(dragInPage, excalidraw);
 
       expect(dragged.length > 0).toBe(elements.some((element) => element.type === "arrow"));
-      // The editor keeps the width it measures, and the file stores that width rounded up to the whole pixel.
+      // The editor keeps the width it measures, and the file stores that width as a whole pixel.
       const changed = dragged.filter(({ id, text, originalText, width, height }) => {
         const before = written.get(id);
-        return text !== before?.text || originalText !== before.originalText || height !== before.height || Math.ceil(width) !== before.width;
+        return text !== before?.text || originalText !== before.originalText || height !== before.height || wholePixels(width) !== before.width;
       });
       expect(changed).toEqual([]);
     });

@@ -152,6 +152,20 @@ function drawnTexts(elements: unknown[]): string[] {
   });
 }
 
+/**
+ * How far under a measured width the whole pixel above it may start. Linux adds 2^-15px to every glyph advance macOS
+ * measures exactly, so ten 16px CJK glyphs, each the font size wide, measure 160.0003 there and 160 here, and rounding
+ * up alone puts them on different pixels. 1/64 covers a line of 500 glyphs. A box that falls that much short of its
+ * text still holds it: a node pads its label 24px a side where the editor needs 5, and an edge label wraps 16px under
+ * the editor's floor.
+ */
+const WIDTH_SLACK = 1 / 64;
+
+/** The whole-pixel width the layout reserves for a text measured `width` wide, the same on macOS and Linux. */
+export function wholePixels(width: number): number {
+  return Math.ceil(width - WIDTH_SLACK);
+}
+
 /** Starts headless Chromium with @excalidraw/utils loaded. Call close() when done. */
 export async function createBrowserRenderer(): Promise<Renderer> {
   const browser = await launchBrowser();
@@ -162,8 +176,10 @@ export async function createBrowserRenderer(): Promise<Renderer> {
 
     return {
       measurer: {
-        measure: (texts, fontSize) =>
-          page.evaluate(measureInPage, { texts, font: fontString(fontSize), fontSize, lineHeight: FONT.lineHeight }),
+        measure: async (texts, fontSize) =>
+          (await page.evaluate(measureInPage, { texts, font: fontString(fontSize), fontSize, lineHeight: FONT.lineHeight })).map(
+            ({ width, height }) => ({ width: wholePixels(width), height }),
+          ),
       },
       // The SVG export takes dark mode from the appState alone and the PNG export from its config alone.
       async svg(elements, { dark }) {
@@ -245,9 +261,7 @@ async function measureInPage({
       .replace(/\t/g, "        ")
       .split("\n")
       .map((line) => line || " ");
-    // Platforms agree on a width to about the fifth decimal and no further, so the whole pixel above it is what
-    // keeps the same spec byte-identical on macOS and Linux. The box is at most a pixel wider than the text.
-    const width = Math.ceil(Math.max(...lines.map((line) => context.measureText(line).width)));
+    const width = Math.max(...lines.map((line) => context.measureText(line).width));
     return { width, height: lines.length * fontSize * lineHeight };
   });
 }

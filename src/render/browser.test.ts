@@ -10,7 +10,7 @@ import { fractionalIndex } from "../fractional-index.js";
 import { pngSize, sketch, writeSketch } from "../pipeline.js";
 import { embeddedScene, pngChunks, readSpec, specFiles } from "../test-support.js";
 import type { Renderer } from "../types.js";
-import { createBrowserRenderer, launchBrowser, openRenderPage } from "./browser.js";
+import { createBrowserRenderer, launchBrowser, openRenderPage, wholePixels } from "./browser.js";
 import { codePointRanges, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
 const OUT_DIR = "out/render-check";
@@ -150,6 +150,18 @@ describe("[browser] createBrowserRenderer", () => {
     expect(single!.height).toBe(25);
     expect(multi!.width).toBeLessThan(single!.width);
     expect(multi!.height).toBe(50);
+  });
+
+  // Ten CJK glyphs are exactly the line an edge label wraps at, so a width a hair over it would wrap them on Linux only.
+  it("measures a run of CJK glyphs at exactly the font size each", async () => {
+    const [cjk] = await renderer.measurer.measure(["下单后通知库存服务预"], 16);
+    expect(cjk!.width).toBe(160);
+  });
+
+  it("rounds a width up to the same whole pixel whether its glyph advances carry Linux's 2^-15px or not", () => {
+    // macOS and Linux widths of the same texts, as Chromium measured them on each.
+    expect([160, 160.00030518, 102.95991516, 102.96017456].map(wholePixels)).toEqual([160, 160, 103, 103]);
+    expect(wholePixels(160.02)).toBe(161);
   });
 
   it("exports a self-contained SVG with a subsetted Excalifont", async () => {
