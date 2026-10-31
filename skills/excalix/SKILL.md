@@ -164,7 +164,7 @@ copy; to judge a detail too small to see, crop that region from the `png` file,
 scaling coordinates by `pixels.width / preview.width`. The tool's `out` is the
 same basename as `-o`. A relative one resolves against the first root your
 client declares, usually the project, or else against the directory the server
-was started in. The result's `markdown` shows the SVG in a README, with a path
-relative to that same directory, or absolute when the file is outside it;
-rewrite that path relative to the `.md` file it goes into. With `theme` set to
-`both` it is a `<picture>` that follows the reader's colour scheme.
+was started in. The result's `markdown` shows the SVG in a README, with paths
+relative to that same directory, or absolute when a file is outside it; rewrite
+them relative to the `.md` file they go into. With `theme` set to `both` it is a
+`<picture>` that follows the reader's colour scheme.
