@@ -203,7 +203,7 @@ describe("[browser] animated SVG", () => {
         filters: root.querySelectorAll("filter#excalix-dark-image").length,
       };
     }, animated);
-    // Each icon is its own top-level <g>, so it takes its node's class; dark keeps the filter that draws it light.
+    // Each icon is a top-level <g> of its own, which takes its node's class; dark keeps the filter on it that draws it light.
     expect(drawn.icons.map(({ index }) => index)).toEqual(icons);
     expect(drawn.icons.map(({ filter }) => filter)).toEqual(icons.map(() => (dark ? "url(#excalix-dark-image)" : null)));
     expect(drawn.filters).toBe(dark ? 1 : 0);

@@ -311,9 +311,9 @@ async function svgInPage({
     if (!style) throw new Error("the exported SVG has no style-fonts element for the pinned faces");
     style.append(fontFaces.map((face) => `\n      ${face}`).join(""));
   }
+  const defs = svg.querySelector("defs");
   const filtered = svg.querySelectorAll(`g[filter="${darkImageFilter.from}"]`);
   if (filtered.length > 0) {
-    const defs = svg.querySelector("defs");
     if (!defs) throw new Error("the exported SVG has no defs element for the dark image filter");
     for (const g of filtered) g.setAttribute("filter", darkImageFilter.url);
     defs.insertAdjacentHTML("beforeend", darkImageFilter.markup);
@@ -321,12 +321,12 @@ async function svgInPage({
   if (animation === undefined) return svg.outerHTML;
 
   // The export draws each element as one top-level <g>, in element order, and marks none of them, so the position is
-  // the only way back to the element. Anything else at the top, a <mask> beside an arrow, is not a <g>.
+  // the only way back to the element. An image's <g> holds its <use>, and in dark mode also the filter that lightens it.
+  // Anything else at the top is not a <g>: the <defs>, which holds each image's <symbol>, and a <mask> beside an arrow.
   const groups = [...svg.children].filter((child) => child.tagName === "g");
   if (groups.length !== data.elements.length) {
     throw new Error(`the exported SVG has ${groups.length} element groups for ${data.elements.length} elements`);
   }
-  const defs = svg.querySelector("defs");
   if (!defs) throw new Error("the exported SVG has no defs for the animation");
   groups.forEach((group, index) => {
     const { className, draw, march } = animation.elements[index]!;
