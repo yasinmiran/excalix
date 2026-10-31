@@ -561,6 +561,18 @@ describe("tidyRoutes", () => {
     const nodes = { a0: at(-20, -10), a1: at(200, 90), b0: at(75, 30), b1: at(75, 100), c0: at(106, -20), c1: at(106, 50) };
     expect(tidied(routes, nodes)[0]).toEqual([[0, 0], [100, 0], [100, 100], [200, 100]]);
   });
+  it("slides a crowded run that ends its route along its node's side when no run between two bends will go", () => {
+    // a's last run and b's first pass 10px apart; only a's end on c can move, 6px up c's side.
+    const routes = [
+      route("a", "s", "c", [[0, 0], [60, 0], [60, 22], [128, 22]]),
+      route("b", "s", "d", [[0, 32], [92, 32], [92, 74], [320, 74]]),
+    ];
+    const nodes = { s: at(-60, -20, 60, 72), c: at(128, -10, 60, 60), d: at(320, 54, 40, 40) };
+    expect(tidied(routes, nodes)).toEqual([
+      [[0, 0], [60, 0], [60, 16], [128, 16]],
+      [[0, 32], [92, 32], [92, 74], [320, 74]],
+    ]);
+  });
 });
 
 describe("placeGroupLabel", () => {

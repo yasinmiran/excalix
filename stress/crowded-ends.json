@@ -1,0 +1,23 @@
+{
+  "title": "two arrows leaving one side, interleaved at their far ends",
+  "groups": [{ "id": "g0", "label": "Group 0 VPC" }],
+  "nodes": [
+    { "id": "n1", "label": "Postgres", "kind": "cache", "group": "g0" },
+    { "id": "n2", "label": "Auth", "kind": "cache" },
+    { "id": "n3", "label": "Kafka", "kind": "datastore" },
+    { "id": "n4", "label": "API", "kind": "cache" },
+    { "id": "n5", "label": "Mobile", "kind": "external" },
+    { "id": "n8", "label": "Kafka", "kind": "service" },
+    { "id": "n10", "label": "Mobile", "kind": "external", "group": "g0" }
+  ],
+  "edges": [
+    { "from": "n5", "to": "n3" },
+    { "from": "n4", "to": "n10" },
+    { "from": "n5", "to": "n8" },
+    { "from": "n10", "to": "n2" },
+    { "from": "n8", "to": "n4" },
+    { "from": "n2", "to": "n4" },
+    { "from": "n10", "to": "n4" },
+    { "from": "n10", "to": "n3" }
+  ]
+}

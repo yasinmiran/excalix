@@ -414,7 +414,7 @@ function finish(route: Route, shaped: Map<string, Shaped>): RoutedEdge {
  */
 export function tidyRoutes(routes: Route[], shaped: Map<string, Shaped>): void {
   const obstacles = [...shaped.values()].map(({ box }) => box);
-  spaceLanes(routes, obstacles);
+  spaceLanes(routes, obstacles, shaped);
   removeJogs(routes, obstacles, shaped);
 }
 
@@ -428,13 +428,18 @@ export const MIN_SEGMENT = 3;
 // ELK spaces the runs of a channel and the runs of a layer, but not a run that crosses a channel against one that
 // enters it from the next layer: two arrows that swap sides there can interleave whichever way the channel orders
 // them, at whatever gap their ports leave. Each crowded pair is pushed apart by moving one of its two runs
-// sideways, bends and all, when both of that run's ends are bends. ELK spaced every pair exactly, and rounding each
-// route to whole pixels on its own can bring a pair a pixel closer, so only a pair closer than that is crowded.
-function spaceLanes(routes: Route[], boxes: Box[]): void {
+// sideways, bends and all: a run between two bends if either will go, else a run that ends its route, which slides
+// that end along its side as a fold does. ELK spaced every pair exactly, and rounding each route to whole pixels on
+// its own can bring a pair a pixel closer, so only a pair closer than that is crowded.
+function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>): void {
   for (let a = 0; a < routes.length; a++) {
     for (let b = a + 1; b < routes.length; b++) {
       const push = ([i, j]: [number, number]): boolean =>
-        pushAway(routes, a, i, routes[b]!.points, j, boxes) || pushAway(routes, b, j, routes[a]!.points, i, boxes);
+        [false, true].some(
+          (slide) =>
+            pushAway(routes, a, i, routes[b]!.points, j, boxes, shaped, slide) ||
+            pushAway(routes, b, j, routes[a]!.points, i, boxes, shaped, slide),
+        );
       // Each push leaves fewer crowded pairs, so this ends.
       let pushed = true;
       while (pushed) pushed = crowdedPairs(routes[a]!, routes[b]!).some(push);
@@ -450,15 +455,27 @@ function crowdedPairs(a: Route, b: Route): [number, number][] {
   );
 }
 
-// Moves run `index` of routes[at] to LANE_SPACING from run `from` of `other`, if it can go without a fault.
-function pushAway(routes: Route[], at: number, index: number, other: Point[], from: number, boxes: Box[]): boolean {
+// Moves run `index` of routes[at] to LANE_SPACING from run `from` of `other`, if it can go without a fault: a run between
+// two bends, or with `slide` a run that ends the route and has a bend at its other end.
+function pushAway(
+  routes: Route[],
+  at: number,
+  index: number,
+  other: Point[],
+  from: number,
+  boxes: Box[],
+  shaped: Map<string, Shaped>,
+  slide: boolean,
+): boolean {
   const route = routes[at]!;
   const { points } = route;
-  if (route.edge.from === route.edge.to || !isInner(points, index)) return false;
+  if (route.edge.from === route.edge.to) return false;
+  if (slide ? isInner(points, index) || points.length < 3 : !isInner(points, index)) return false;
   const run = runsOf(points)[index]!;
   const away = runsOf(other)[from]!;
   const to = away.at + (run.at >= away.at ? LANE_SPACING : -LANE_SPACING);
   if (Math.abs(to - run.at) > labelRoom(route, index)) return false;
+  if (slide && !endCanSlide(routes, at, index, to, shaped)) return false;
   return tryRoute(routes, at, moveRun(points, index, to), boxes, "crowded");
 }
 
