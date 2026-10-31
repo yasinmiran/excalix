@@ -31,9 +31,10 @@ function urlOf(file: string, base: string): string {
   return encodeURI(path).replace(/[()#?]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
-// A bracket would end the image text early, a backslash would escape what follows it, and a < could open an HTML tag.
+// Image text is parsed as inline markdown: a bracket would end it early, a backslash escape what follows, a < open
+// a tag, an & start an entity, and * _ ` ~ turn into emphasis or code and drop out of the alt text.
 function escapeMarkdown(text: string): string {
-  return text.replace(/[\\[\]<]/g, "\\$&");
+  return text.replace(/[\\`*_~[\]<>&!]/g, "\\$&");
 }
 
 function escapeAttribute(text: string): string {

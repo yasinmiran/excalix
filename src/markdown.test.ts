@@ -21,7 +21,10 @@ describe("markdown snippet", () => {
     ["quotes as they are", 'the "edge": Web app', LIGHT, '![the "edge": Web app](diagrams/arch.svg)'],
     ["brackets escaped, so they cannot end the text", "a [b] c", LIGHT, "![a \\[b\\] c](diagrams/arch.svg)"],
     ["a backslash escaped", "C:\\temp", LIGHT, "![C:\\\\temp](diagrams/arch.svg)"],
-    ["an angle bracket escaped, so it cannot open a tag", "queue <orders>", LIGHT, "![queue \\<orders>](diagrams/arch.svg)"],
+    ["angle brackets escaped, so they cannot open a tag", "queue <orders>", LIGHT, "![queue \\<orders\\>](diagrams/arch.svg)"],
+    ["an asterisk and underscore pair escaped, so neither turns into emphasis", "A*b* _c_", LIGHT, "![A\\*b\\* \\_c\\_](diagrams/arch.svg)"],
+    ["a backtick pair escaped, so it cannot become a code span", "`code` ~~old~~", LIGHT, "![\\`code\\` \\~\\~old\\~\\~](diagrams/arch.svg)"],
+    ["an ampersand escaped, so &name; stays as written", "AT&T &copy; !", LIGHT, "![AT\\&T \\&copy; \\!](diagrams/arch.svg)"],
     [
       "a picture with the dark SVG for a dark scheme, its alt escaped for the attribute",
       'R&D "edge" <api>',
@@ -29,6 +32,14 @@ describe("markdown snippet", () => {
       '<picture><source media="(prefers-color-scheme: dark)" srcset="diagrams/arch.dark.svg">' +
         '<source media="(prefers-color-scheme: light)" srcset="diagrams/arch.svg">' +
         '<img alt="R&amp;D &quot;edge&quot; &lt;api&gt;" src="diagrams/arch.svg"></picture>',
+    ],
+    [
+      "a picture whose alt keeps markdown punctuation as it is, since HTML does not parse it",
+      "A*b* `c` [d]",
+      BOTH,
+      '<picture><source media="(prefers-color-scheme: dark)" srcset="diagrams/arch.dark.svg">' +
+        '<source media="(prefers-color-scheme: light)" srcset="diagrams/arch.svg">' +
+        '<img alt="A*b* `c` [d]" src="diagrams/arch.svg"></picture>',
     ],
   ])("writes %s", (_case, alt, files, expected) => {
     expect(markdownSnippet(alt, files, BASE)).toBe(expected);
