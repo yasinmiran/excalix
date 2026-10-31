@@ -416,6 +416,55 @@ describe("layout edge cases", () => {
     }
   });
 
+  it("gives the nodes of one layer the length of the longest along the flow, and leaves other layers alone", async () => {
+    const tall = { id: "b", outline: "sharp" as const, width: 120, height: 81 };
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [],
+        nodes: [node("hub", "Hub", "service"), node("a", "A", "service"), node("wide", "A much longer name", "service"), tall],
+        edges: [edge(0, "hub", "a"), edge(1, "hub", "wide"), edge(2, "hub", "b")],
+      });
+      const extent = direction === "lr" ? "width" : "height";
+      const layer = ["a", "wide", "b"].map((id) => result.nodes[id]![extent]);
+      expect(new Set(layer).size, `${direction} ${layer}`).toBe(1);
+      expect(result.nodes.hub![extent], direction).toBeLessThan(layer[0]!);
+    }
+  });
+
+  it("evens a layer only among nodes some path of edges joins, in both directions", async () => {
+    for (const direction of ["lr", "tb"] as const) {
+      const nodes = [
+        node("a", "A", "service"),
+        node("b", "B", "service"),
+        { ...node("long", "A much longer name heading another chain", "service"), height: 81 },
+        node("c", "C", "service"),
+        { ...node("note", "Every service here also reports to the shared monitoring stack", "external"), height: 105 },
+      ];
+      const result = await layout({ direction, groups: [], nodes, edges: [edge(0, "a", "b"), edge(1, "long", "c")] });
+      const extent = direction === "lr" ? "width" : "height";
+      for (const id of ["a", "long", "note"]) {
+        expect(result.nodes[id]![extent], `${direction} ${id}`).toBe(nodes.find((n) => n.id === id)![extent]);
+      }
+    }
+  });
+
+  it("evens a layer only among nodes of one group, in both directions", async () => {
+    for (const direction of ["lr", "tb"] as const) {
+      const narrow = node("narrow", "A", "service", "left");
+      const result = await layout({
+        direction,
+        groups: [group("left", "Left"), group("right", "Right")],
+        nodes: [narrow, { ...node("wide", "A much longer name", "service", "right"), height: 81 }, node("sink", "Sink", "service")],
+        edges: [edge(0, "narrow", "sink"), edge(1, "wide", "sink")],
+      });
+      const [start, extent] = direction === "lr" ? (["x", "width"] as const) : (["y", "height"] as const);
+      const [a, b] = [result.nodes.narrow!, result.nodes.wide!];
+      expect(a[start] < b[start] + b[extent] && b[start] < a[start] + a[extent], `${direction} side by side`).toBe(true);
+      expect(a[extent], direction).toBe(narrow[extent]);
+    }
+  });
+
   it("gives an empty group its label size", async () => {
     const result = await layout({
       direction: "lr",

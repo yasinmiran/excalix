@@ -70,23 +70,79 @@ const SPACING: LayoutOptions = {
 const elk = new ELK();
 
 /**
- * ELK passes a layout may take: the first, then one more each time a group label is still left under an arrow.
- * Widening one group's gutter moves the arrows near another group's label, so the count is capped rather than
- * run to a fixed point; it depends only on the geometry, which keeps the output byte-identical.
+ * ELK passes a layout may take once its layers are even: the first, then one more each time a group label is still
+ * left under an arrow. Widening one group's gutter moves the arrows near another group's label, so the count is
+ * capped rather than run to a fixed point; it depends only on the geometry, which keeps the output byte-identical.
  */
 const MAX_PASSES = 3;
 
 /** Lays out nodes, groups and edges with ELK. Absolute coordinates, bounds at (0, 0). */
 export async function layout(input: LayoutInput): Promise<LayoutResult> {
+  const probe = await layoutWith(input, {});
+  const even = evenLayers(input, probe);
   const gutters: Record<string, number> = {};
-  let result = await layoutWith(input, gutters);
+  let result = even === input ? probe : await layoutWith(even, gutters);
   for (let pass = 1; pass < MAX_PASSES; pass++) {
-    const more = labelGutters(input, result);
+    const more = labelGutters(even, result);
     if (Object.keys(more).length === 0) break;
     for (const [id, extra] of Object.entries(more)) gutters[id] = (gutters[id] ?? 0) + extra;
-    result = await layoutWith(input, gutters);
+    result = await layoutWith(even, gutters);
   }
   return normalise(result);
+}
+
+/**
+ * The input with each node as long along the flow as the longest node in its layer, so a column in lr reads as one
+ * width the way a person draws it, and a row in tb as one height. ELK does not report layers, but it keeps the layers
+ * of one graph apart along the flow, so siblings whose probe boxes overlap along it share one. Layering, ordering and
+ * placement across the flow ignore that length, so the next pass keeps the same layers, and a layer already spans its
+ * longest node, so nothing moves apart. A tb stack keeps its ragged widths: widening a row would push its nodes
+ * apart, for 4.1% more area over examples/ and stress/.
+ *
+ * Only nodes joined by some path of edges are evened together. ELK puts every source in the first layer, so an
+ * unconnected note or the head of a separate chain would otherwise take the length of whatever it happens to sit
+ * beside, and a node with no edges but its own loop keeps its own length.
+ */
+function evenLayers(input: LayoutInput, probe: LayoutResult): LayoutInput {
+  const [start, extent] = input.direction === "tb" ? (["y", "height"] as const) : (["x", "width"] as const);
+  const component = components(input);
+  const part = (node: LayoutNode): string => `${component.get(node.id)} ${node.group ?? ""}`;
+  const longest = new Map<string, number>();
+  for (const key of new Set(input.nodes.map(part))) {
+    const boxes = input.nodes
+      .filter((node) => part(node) === key)
+      .map((node) => ({ id: node.id, box: probe.nodes[node.id]! }))
+      .sort((a, b) => a.box[start] - b.box[start]);
+    let layer: typeof boxes = [];
+    let end = -Infinity;
+    const close = (): void => {
+      const length = Math.max(...layer.map(({ box }) => box[extent]));
+      for (const { id } of layer) longest.set(id, length);
+    };
+    for (const item of boxes) {
+      if (layer.length > 0 && item.box[start] >= end) {
+        close();
+        layer = [];
+      }
+      layer.push(item);
+      end = Math.max(end, item.box[start] + item.box[extent]);
+    }
+    if (layer.length > 0) close();
+  }
+  if (input.nodes.every((node) => longest.get(node.id)! <= node[extent])) return input;
+  return { ...input, nodes: input.nodes.map((node) => ({ ...node, [extent]: Math.max(node[extent], longest.get(node.id)!) })) };
+}
+
+// Each node's connected component over every edge, whatever groups lie between, as the index of one of its nodes.
+function components(input: LayoutInput): Map<string, number> {
+  const index = new Map(input.nodes.map((node, i) => [node.id, i]));
+  const root = input.nodes.map((_, i) => i);
+  const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i]!)));
+  for (const edge of input.edges) {
+    const [a, b] = [find(index.get(edge.from)!), find(index.get(edge.to)!)];
+    root[Math.max(a, b)] = Math.min(a, b);
+  }
+  return new Map(input.nodes.map((node, i) => [node.id, find(i)]));
 }
 
 // One ELK pass. Each gutter entry widens that group's left padding by its value.

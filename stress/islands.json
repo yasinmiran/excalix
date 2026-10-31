@@ -1,0 +1,16 @@
+{
+  "title": "two separate chains and an unconnected note",
+  "nodes": [
+    { "id": "web", "label": "Web", "kind": "client" },
+    { "id": "api", "label": "API", "kind": "service" },
+    { "id": "db", "label": "DB", "kind": "datastore" },
+    { "id": "cron", "label": "Nightly billing reconciliation", "kind": "service" },
+    { "id": "ledger", "label": "Ledger", "kind": "datastore" },
+    { "id": "note", "label": "Every service here also reports to the shared monitoring stack", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "web", "to": "api" },
+    { "from": "api", "to": "db" },
+    { "from": "cron", "to": "ledger", "label": "writes" }
+  ]
+}
