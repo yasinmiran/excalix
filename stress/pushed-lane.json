@@ -1,0 +1,48 @@
+{
+  "title": "pushed lane",
+  "direction": "lr",
+  "groups": [
+    { "id": "g0", "label": "Group 0 eu-west-1" }
+  ],
+  "nodes": [
+    { "id": "n0", "label": "Notifier", "kind": "service", "group": "g0" },
+    { "id": "n1", "label": "Scheduler", "kind": "queue" },
+    { "id": "n2", "label": "Redis", "kind": "service", "group": "g0" },
+    { "id": "n3", "label": "Kafka", "kind": "cache" },
+    { "id": "n4", "label": "Mobile", "kind": "service", "group": "g0" },
+    { "id": "n5", "label": "Web", "kind": "cache" },
+    { "id": "n6", "label": "Ledger\nservice", "kind": "cache", "group": "g0" },
+    { "id": "n7", "label": "Billing", "kind": "cache" },
+    { "id": "n8", "label": "Scheduler", "kind": "cache", "group": "g0" },
+    { "id": "n9", "label": "Billing", "kind": "queue", "group": "g0" },
+    { "id": "n10", "label": "Mobile", "kind": "client", "group": "g0" },
+    { "id": "n11", "label": "API", "kind": "cache" },
+    { "id": "n12", "label": "Stripe", "kind": "cache", "group": "g0" },
+    { "id": "n13", "label": "Web", "kind": "service" }
+  ],
+  "edges": [
+    { "from": "n7", "to": "n3", "label": "publish", "style": "async" },
+    { "from": "n0", "to": "n11", "label": "read" },
+    { "from": "n11", "to": "n6" },
+    { "from": "n8", "to": "n0", "label": "read", "style": "async" },
+    { "from": "n7", "to": "n3" },
+    { "from": "n0", "to": "n9" },
+    { "from": "n8", "to": "n1", "label": "token" },
+    { "from": "n13", "to": "n12", "label": "publish" },
+    { "from": "n10", "to": "n8", "label": "auth" },
+    { "from": "n9", "to": "n1" },
+    { "from": "n6", "to": "n4", "label": "write" },
+    { "from": "n9", "to": "n3" },
+    { "from": "n10", "to": "n3", "style": "async", "arrows": "both" },
+    { "from": "n5", "to": "n12", "label": "token" },
+    { "from": "n0", "to": "n4", "label": "stream" },
+    { "from": "n4", "to": "n8", "arrows": "none" },
+    { "from": "n6", "to": "n10", "label": "ack" },
+    { "from": "n11", "to": "n1", "label": "stream" },
+    { "from": "n1", "to": "n5", "arrows": "both" },
+    { "from": "n8", "to": "n8", "arrows": "both" },
+    { "from": "n8", "to": "n3", "style": "async" },
+    { "from": "n5", "to": "n3", "arrows": "both" },
+    { "from": "n12", "to": "n13" }
+  ]
+}

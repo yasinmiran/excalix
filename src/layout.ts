@@ -433,12 +433,14 @@ export const MIN_SEGMENT = 3;
 // enters it from the next layer: two arrows that swap sides there can interleave whichever way the channel orders
 // them, at whatever gap their ports leave. Each crowded pair is spaced by moving one of its two arrows: a run between
 // two bends pushed sideways, bends and all, if either will go; else the run between two bends at one end of a crowded
-// run pulled back along it; else a run that ends its route pushed, sliding that end along its side as a fold does.
+// run pulled back along it; else a run that ends its route pushed, sliding that end along its side as a fold does,
+// and last that slide pushing the ends ahead of it on a packed side.
 function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>): void {
   const moves = [
     (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, false),
     (at: number, index: number, other: Point[], from: number) => pullBack(routes, at, index, other, from, boxes),
     (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, true),
+    (at: number, index: number, other: Point[], from: number) => pushSide(routes, at, index, other, from, boxes, shaped),
   ];
   // A self loop keeps the shape its feet and its label were given room for.
   const movable = (at: number): boolean => routes[at]!.edge.from !== routes[at]!.edge.to;
@@ -484,6 +486,17 @@ function pushAway(
   return tryRoute(routes, at, moveRun(points, index, to), boxes, "crowded");
 }
 
+// Pushes run `index` of routes[at], a run that ends the route, to LANE_SPACING from run `from` of `other` the way
+// slideSide folds a step: its end slides and pushes the ends ahead of it on a side packed to END_SPACING.
+function pushSide(routes: Route[], at: number, index: number, other: Point[], from: number, boxes: Box[], shaped: Map<string, Shaped>): boolean {
+  const { points } = routes[at]!;
+  if (isInner(points, index) || points.length < 3) return false;
+  const run = runsOf(points)[index]!;
+  const away = runsOf(other)[from]!;
+  const to = away.at + (run.at >= away.at ? LANE_SPACING : -LANE_SPACING);
+  return Math.abs(to - run.at) <= labelRoom(routes[at]!, index) && slideSide(routes, at, index, to, shaped, boxes, "crowded");
+}
+
 // Moves the run between two bends at one end of run `index` of routes[at] along that run, so the run stops
 // LANE_SPACING short of where run `from` of `other` ends and no longer shares a stretch with it. Two arrows that swap
 // sides in a channel are spaced this way by swapping their places in it, without moving an end.
@@ -527,7 +540,7 @@ function removeJogs(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>):
       const sides = options.filter(([index]) => !isInner(points, index));
       if (
         [...inner, ...ends].some(([index, to]) => tryRoute(routes, at, moveRun(points, index, to), boxes, "short")) ||
-        sides.some(([index, to]) => slideSide(routes, at, index, to, shaped, boxes))
+        sides.some(([index, to]) => slideSide(routes, at, index, to, shaped, boxes, "short"))
       ) {
         jog = 0;
       }
@@ -540,7 +553,15 @@ function removeJogs(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>):
 // was less. ELK can space two facing sides a pixel or two out of line, or one a pixel wider than the other, and then
 // a route between them steps. A pushed end keeps SLIDE_CORNER_ROOM from the corners, a self loop keeps its feet, and
 // each moved route has a bend to take up the shift.
-function slideSide(routes: Route[], at: number, index: number, to: number, shaped: Map<string, Shaped>, boxes: Box[]): boolean {
+function slideSide(
+  routes: Route[],
+  at: number,
+  index: number,
+  to: number,
+  shaped: Map<string, Shaped>,
+  boxes: Box[],
+  fixing: "crowded" | "short",
+): boolean {
   const route = routes[at]!;
   const start = index === 0;
   const node = start ? route.edge.from : route.edge.to;
@@ -591,19 +612,19 @@ function slideSide(routes: Route[], at: number, index: number, to: number, shape
     const points = moved.get(i) ?? routes[i]!.points;
     moved.set(i, moveRun(points, run, runsOf(points)[run]!.at + shift));
   }
-  return tryRoutes(routes, moved, boxes);
+  return tryRoutes(routes, moved, boxes, fixing);
 }
 
-// Replaces several routes at once when that lowers their short segments and raises no other fault, counted over the
-// moved routes against every route as it would then stand.
-function tryRoutes(routes: Route[], moved: Map<number, Point[]>, boxes: Box[]): boolean {
+// Replaces several routes at once when that lowers the fault it is for and raises no other, counted over the moved
+// routes against every route as it would then stand.
+function tryRoutes(routes: Route[], moved: Map<number, Point[]>, boxes: Box[], fixing: "crowded" | "short"): boolean {
   const after = routes.map((route, i) => moved.get(i) ?? route.points);
   const total = (points: Point[][]): Faults[] =>
     [...moved.keys()].map((i) => faults(points[i]!, points.filter((_, j) => j !== i), boxes));
   const now = total(routes.map((route) => route.points));
   const next = total(after);
   const sum = (list: Faults[], key: keyof Faults): number => list.reduce((acc, f) => acc + f[key], 0);
-  const fixed = sum(next, "short") < sum(now, "short");
+  const fixed = sum(next, fixing) < sum(now, fixing);
   const worse =
     (["crowded", "crossings", "entered", "short"] as const).some((key) => sum(next, key) > sum(now, key)) ||
     next.some((f, k) => f.endRun < now[k]!.endRun);
