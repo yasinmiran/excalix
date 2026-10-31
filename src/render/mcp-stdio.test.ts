@@ -45,9 +45,11 @@ describe("[browser] sketch over stdio", () => {
     await client?.close();
   });
 
-  it("offers one tool", async () => {
+  it("offers one tool, and the instructions in the snapshot", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual(["sketch"]);
+    const snapshot = await readFile(join(root, "src/__snapshots__/server-instructions.md"), "utf8");
+    expect(`# excalix server instructions\n\n${client.getInstructions()}\n`).toBe(snapshot);
   });
 
   it("draws a spec, writes the three files and returns the picture", async () => {

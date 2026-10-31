@@ -101,14 +101,18 @@
       <p>The server needs Chromium, like the CLI; see <a href="getting-started.html#chromium">getting started</a>. It opens one browser on the first call and reuses it until the client disconnects. A sketch finishes inside the call, so the tool declares <code>execution.taskSupport</code> as <code>"forbidden"</code>.</p>
 
       <h2 id="description">What the agent reads</h2>
-      <p>The tool description is the whole guide the agent gets unless the <a href="getting-started.html#skill">skill</a> is installed too. It is served verbatim from <code>tools/list</code>:</p>
+      <p>First the server's instructions, which the client receives when it connects. With tool search on, as Claude Code has it by default, they are the only excalix text an agent sees at the start of a session, so they say when to reach for the tool:</p>
+      <blockquote>
+        <p>excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one.</p>
+      </blockquote>
+      <p>Then the tool description, the whole guide the agent gets unless the <a href="getting-started.html#skill">skill</a> is installed too. It is served verbatim from <code>tools/list</code>:</p>
       <blockquote>
         <p>Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.</p>
         <p>A node sits in exactly one group: name the group it runs in, and let an edge across the boundary carry any other relationship.</p>
         <p>List nodes in reading order, sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, and the layout reorders some of them when that keeps arrows from crossing. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.</p>
         <p>Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.</p>
       </blockquote>
-      <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles and gives the sizing advice from the <a href="spec.html#writing">spec reference</a>. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, which the test suite keeps in step with the server.</p>
+      <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles and gives the sizing advice from the <a href="spec.html#writing">spec reference</a>. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, and the instructions in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/server-instructions.md">their own</a>; the test suite keeps both in step with the server.</p>
 
       <h2 id="input">Input</h2>
       <p>The input schema is the <a href="spec.html">spec</a>, unchanged, plus one optional field:</p>

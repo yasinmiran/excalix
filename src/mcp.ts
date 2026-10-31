@@ -34,6 +34,10 @@ Keep edge labels to a few words, because an edge label sits on its arrow and the
 
 Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.`;
 
+// With tool search on, a client loads only tool names and these instructions at session start, so this is what
+// decides whether an agent reaches for sketch at all.
+const INSTRUCTIONS = `excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one.`;
+
 const inputSchema = specSchemaWith({
   out: stringField
     .optional()
@@ -75,7 +79,7 @@ export interface SketchDeps {
 
 /** Builds the server with its dependencies injected. One renderer per server, opened on first call and released on close. */
 export function createServer(deps: SketchDeps, onClose?: () => void): Server {
-  const server = new Server({ name: "excalix", version }, { capabilities: { tools: {} } });
+  const server = new Server({ name: "excalix", version }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
   let renderer: Promise<Renderer> | undefined;
 
   const renderReady = (): Promise<Renderer> => {

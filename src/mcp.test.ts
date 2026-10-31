@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -113,6 +113,17 @@ async function cliProblems(spec: unknown): Promise<string> {
 describe("sketch tool", () => {
   it("advertises the contract in the snapshot", async () => {
     await expect(page(await sketchTool())).toMatchFileSnapshot("./__snapshots__/sketch-tool.md");
+  });
+
+  it("hands the client its instructions at initialize, as in the snapshot", async () => {
+    const { client } = await harness();
+
+    const instructions = client.getInstructions();
+
+    expect(instructions).toBeDefined();
+    await expect(`# excalix server instructions\n\n${instructions}\n`).toMatchFileSnapshot("./__snapshots__/server-instructions.md");
+    // The MCP page quotes them whole, so a change here is a change there.
+    expect(await readFile(new URL("../site/mcp.html", import.meta.url), "utf8")).toContain(`<p>${instructions}</p>`);
   });
 
   it("advertises the same spec as excalix schema, plus out", async () => {
