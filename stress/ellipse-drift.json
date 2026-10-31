@@ -1,0 +1,24 @@
+{
+  "title": "ellipse drift",
+  "direction": "tb",
+  "groups": [
+    { "id": "g0", "label": "Group 0 cluster" }
+  ],
+  "nodes": [
+    { "id": "n0", "label": "Web", "kind": "client", "group": "g0" },
+    { "id": "n1", "label": "Billing", "kind": "client", "group": "g0" },
+    { "id": "n2", "label": "Scheduler", "kind": "queue" },
+    { "id": "n3", "label": "Gateway", "kind": "datastore" },
+    { "id": "n4", "label": "Mobile", "kind": "service", "group": "g0" },
+    { "id": "n5", "label": "Search", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "n2", "to": "n2", "label": "POST /orders" },
+    { "from": "n3", "to": "n3", "label": "query", "style": "async" },
+    { "from": "n1", "to": "n0", "arrows": "both" },
+    { "from": "n0", "to": "n3", "label": "GET" },
+    { "from": "n1", "to": "n5" },
+    { "from": "n2", "to": "n2", "style": "async" },
+    { "from": "n1", "to": "n1", "label": "sync" }
+  ]
+}

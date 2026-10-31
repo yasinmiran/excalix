@@ -393,13 +393,30 @@ function routeOf(edge: ElkExtendedEdge, ends: LayoutEdge, reversed: boolean, exa
   const container = edge.container && edge.container !== ROOT ? exact.get(edge.container) : undefined;
   const offset = container ?? { x: 0, y: 0 };
   const shift = (p: Point): Point => wholePoint({ x: offset.x + p.x, y: offset.y + p.y });
-  const laid = straight(dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift)));
+  const laid = straight(squareEnds(dedupe((edge.sections ?? []).flatMap(sectionPoints).map(shift))));
   const label = edge.labels?.[0];
   return {
     edge: ends,
     points: reversed ? laid.reverse() : laid,
     ...(label ? { label: { reserved: shift({ x: label.x ?? 0, y: label.y ?? 0 }), laid: label } } : {}),
   };
+}
+
+// ELK can start or end a route a fraction of a pixel off the line of the run beside it, and rounding turns that into
+// a diagonal pixel, which leaves an end on an ellipse or a rounded corner where onOutline cannot run it on to the
+// curve. Such an end moves onto the run's line, a pixel at most along its side.
+function squareEnds(points: Point[]): Point[] {
+  if (points.length < 2) return points;
+  const square = (end: Point, next: Point): Point => {
+    const dx = Math.abs(end.x - next.x);
+    const dy = Math.abs(end.y - next.y);
+    if (dx === 0 || dy === 0 || Math.min(dx, dy) > 1) return end;
+    return dx < dy ? { x: next.x, y: end.y } : { x: end.x, y: next.y };
+  };
+  const squared = [...points];
+  squared[0] = square(squared[0]!, squared[1]!);
+  squared[squared.length - 1] = square(squared.at(-1)!, squared.at(-2)!);
+  return squared;
 }
 
 // Puts the ends on the outlines Excalidraw draws and the label on the path.
