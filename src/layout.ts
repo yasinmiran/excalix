@@ -1,6 +1,6 @@
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkEdgeSection, ElkExtendedEdge, ElkLabel, ElkNode, ElkPort, LayoutOptions } from "elkjs/lib/elk.bundled.js";
-import { GROUP_STYLE, cornerRadius } from "./style.js";
+import { ARROWHEAD_LENGTH, GROUP_STYLE, LABEL_MASK, cornerRadius } from "./style.js";
 import type {
   Box,
   Direction,
@@ -18,7 +18,10 @@ import type {
 
 const ROOT = ":root";
 const PADDING = GROUP_STYLE.padding;
-/** Clearance reserved around an edge label so the text never touches a neighbouring node or label. */
+/**
+ * Clearance reserved either side of an edge label across its edge, and all round a self loop's, so the text never
+ * touches a neighbouring node or label.
+ */
 export const LABEL_MARGIN = 12;
 // Both options are read from the label, not from the graph, so setting them anywhere else does nothing.
 const LABEL_OPTIONS: LayoutOptions = { "elk.edgeLabels.placement": "CENTER", "elk.edgeLabels.inline": "true" };
@@ -48,6 +51,16 @@ const CORNER_ROOM = 28;
  * at 12, 16 and 20: at 12 an async loop's outer segment is a tick mark, and 20 reads no better than 16.
  */
 export const LOOP_LABEL_RUN = 16;
+/**
+ * Line left showing between an edge label and an arrowhead on the same arrow, past the line Excalidraw blanks round
+ * the text. Read off renders at 6, 10, 12 and 18: at 6 the head reads as part of the label, an arrow drawn after the
+ * word; at 12 the line between them reads as line. In the copy of dense-lr an agent reads, scaled to under 0.3, 12
+ * keeps about 7 pixels of line and 6 under 4.
+ */
+export const LABEL_HEAD_RUN = 12;
+// A label's layer sits ARROWHEAD_ROOM from its neighbours along the flow, so this much margin either side leaves
+// LABEL_HEAD_RUN of line before a full head on an arrow that ends in the next layer.
+const LABEL_MARGIN_ALONG = LABEL_HEAD_RUN + ARROWHEAD_LENGTH + LABEL_MASK - ARROWHEAD_ROOM;
 // How far off its node's side an end may sit and still count as on it: the box and the route reach absolute
 // coordinates through different sums of group offsets.
 const ON_SIDE = 0.5;
@@ -55,9 +68,10 @@ const ON_SIDE = 0.5;
 const STRAIGHT = 1e-6;
 
 // ELK reads a spacing from the node that contains what is being spaced, so a group has to repeat
-// every value or its children fall back to the defaults.
+// every value or its children fall back to the defaults. 36 between the nodes of one layer takes 4.0% off the image
+// area of examples/ and stress/ against 48 for 4 more bends; 32 takes 1.5% more for 8 more again.
 const SPACING: LayoutOptions = {
-  "elk.spacing.nodeNode": "48",
+  "elk.spacing.nodeNode": "36",
   "elk.spacing.edgeNode": "24",
   "elk.layered.spacing.nodeNodeBetweenLayers": String(ARROWHEAD_ROOM),
   "elk.layered.spacing.edgeNodeBetweenLayers": String(ARROWHEAD_ROOM),
@@ -200,7 +214,7 @@ function toElkGraph(input: LayoutInput, gutters: Record<string, number>, reverse
       ...loops,
     },
     children: childrenOf(undefined),
-    edges: input.edges.map((edge) => elkEdge(edge, reversed.has(edge.id))),
+    edges: input.edges.map((edge) => elkEdge(edge, reversed.has(edge.id), input.direction)),
   };
 }
 
@@ -326,9 +340,12 @@ function groupNode(group: LayoutGroup, direction: Direction, children: ElkNode[]
   };
 }
 
-// ELK skips labels whose text is empty, so the id stands in for the text; only the size matters here.
-function elkEdge(edge: LayoutEdge, reversed: boolean): ElkExtendedEdge {
+// ELK skips labels whose text is empty, so the id stands in for the text; only the size matters here. Across the
+// flow a label keeps LABEL_MARGIN either side. Along it, the layer ELK gives the label already sits ARROWHEAD_ROOM
+// from either neighbour, so it keeps only LABEL_MARGIN_ALONG.
+function elkEdge(edge: LayoutEdge, reversed: boolean, direction: Direction): ElkExtendedEdge {
   const loop = isLabelledLoop(edge);
+  const [marginX, marginY] = direction === "tb" ? [LABEL_MARGIN, LABEL_MARGIN_ALONG] : [LABEL_MARGIN_ALONG, LABEL_MARGIN];
   const [from, to] = reversed ? [edge.to, edge.from] : [edge.from, edge.to];
   return {
     id: edge.id,
@@ -339,8 +356,8 @@ function elkEdge(edge: LayoutEdge, reversed: boolean): ElkExtendedEdge {
           labels: [
             {
               text: edge.id,
-              width: edge.label.width + LABEL_MARGIN * 2,
-              height: edge.label.height + LABEL_MARGIN * 2,
+              width: edge.label.width + marginX * 2,
+              height: edge.label.height + marginY * 2,
               layoutOptions: LABEL_OPTIONS,
             },
           ],
@@ -390,7 +407,8 @@ function finish(route: Route, shaped: Map<string, Shaped>): RoutedEdge {
   const to = shaped.get(route.edge.to)!;
   const points = route.points.length >= 2 ? onOutlines(route.points, from, to) : [center(from.box), center(to.box)];
   const { label } = route;
-  return { points, ...(label ? { label: labelOnPath(points, label.reserved, label.laid) } : {}) };
+  const text = route.edge.label;
+  return { points, ...(label && text ? { label: labelOnPath(points, label.reserved, label.laid, text) } : {}) };
 }
 
 /**
@@ -433,7 +451,7 @@ function pushAway(routes: Route[], at: number, index: number, other: Point[], fr
   const run = runsOf(points)[index]!;
   const away = runsOf(other)[from]!;
   const to = away.at + (run.at >= away.at ? LANE_SPACING : -LANE_SPACING);
-  if (Math.abs(to - run.at) > LABEL_MARGIN && carriesLabel(route, index)) return false;
+  if (Math.abs(to - run.at) > labelRoom(route, index)) return false;
   return tryRoute(routes, at, moveRun(points, index, to), boxes, "crowded");
 }
 
@@ -608,16 +626,18 @@ function isInner(points: Point[], index: number): boolean {
   return index >= 1 && index + 2 <= points.length - 1;
 }
 
-// The label goes where the path passes nearest the box ELK reserved for it, and only that box was kept clear:
-// moving the run under it by up to LABEL_MARGIN keeps the text inside it.
-function carriesLabel(route: Route, index: number): boolean {
-  const { label } = route;
-  if (!label) return false;
-  const centre = { x: label.reserved.x + (label.laid.width ?? 0) / 2, y: label.reserved.y + (label.laid.height ?? 0) / 2 };
-  const { point } = nearestOnPolyline(route.points, centre);
+// How far run `index` can move and keep the text it carries inside the box ELK reserved for it: the label goes where
+// the path passes nearest that box's centre, and only that box was kept clear. The box keeps less room along the flow
+// than across it, so the room depends on which way the run moves.
+function labelRoom(route: Route, index: number): number {
+  const { label, edge } = route;
+  if (!label || !edge.label) return Infinity;
+  const { width = 0, height = 0 } = label.laid;
+  const { point } = nearestOnPolyline(route.points, { x: label.reserved.x + width / 2, y: label.reserved.y + height / 2 });
   const run = runsOf(route.points)[index]!;
   const [across, along] = run.vertical ? [point.x, point.y] : [point.y, point.x];
-  return across === run.at && run.low <= along && along <= run.high;
+  if (across !== run.at || along < run.low || along > run.high) return Infinity;
+  return run.vertical ? (width - edge.label.width) / 2 : (height - edge.label.height) / 2;
 }
 
 // Sets run `index` to `to` across its length, which moves the two points it joins, and drops what that folds away.
@@ -679,10 +699,9 @@ function inset({ box, outline }: Shaped, across: number, along: number, at: numb
 
 // Excalidraw re-anchors a bound label to labelPosition on the path every time the file is opened, so the text has
 // to sit where the path crosses the box ELK reserved rather than where ELK drew the box.
-function labelOnPath(points: Point[], reserved: Point, label: ElkLabel): RoutedLabel {
-  const half = { x: (label.width ?? 0) / 2, y: (label.height ?? 0) / 2 };
-  const { t, point } = nearestOnPolyline(points, { x: reserved.x + half.x, y: reserved.y + half.y });
-  return { x: point.x - half.x + LABEL_MARGIN, y: point.y - half.y + LABEL_MARGIN, position: t };
+function labelOnPath(points: Point[], reserved: Point, label: ElkLabel, text: TextSize): RoutedLabel {
+  const { t, point } = nearestOnPolyline(points, { x: reserved.x + (label.width ?? 0) / 2, y: reserved.y + (label.height ?? 0) / 2 });
+  return { x: point.x - text.width / 2, y: point.y - text.height / 2, position: t };
 }
 
 /** Closest point on the polyline to target, with its arc-length parameter in 0..1. */

@@ -72,6 +72,11 @@ export const EDGE = {
   roughness: 1,
 };
 
+/** How far past the text Excalidraw blanks the line behind a label bound to an arrow: BOUND_TEXT_PADDING. */
+export const LABEL_MASK = 5;
+/** How long Excalidraw draws an arrowhead, or half its end segment when that is shorter: getArrowheadSize. */
+export const ARROWHEAD_LENGTH = 25;
+
 export const TITLE_GAP = 32;
 
 /**

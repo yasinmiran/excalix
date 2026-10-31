@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ARROWHEAD_ROOM, END_SPACING, LABEL_MARGIN, LOOP_LABEL_RUN, layout, placeGroupLabel } from "./layout.js";
-import { FONT, nodeSize, outlineOf } from "./style.js";
+import { ARROWHEAD_ROOM, END_SPACING, LABEL_HEAD_RUN, LABEL_MARGIN, LOOP_LABEL_RUN, layout, placeGroupLabel } from "./layout.js";
+import { ARROWHEAD_LENGTH, FONT, LABEL_MASK, nodeSize, outlineOf } from "./style.js";
 import type { Box, Kind, LayoutInput, LayoutResult, Point, RoutedEdge, RoutedLabel, TextSize } from "./types.js";
 
 function estimate(text: string, fontSize: number): TextSize {
@@ -413,6 +413,22 @@ describe("layout edge cases", () => {
         edges: [],
       });
       expect(result.groups.g!.width, direction).toBeGreaterThanOrEqual(estimate(wide, FONT.group).width + 32);
+    }
+  });
+
+  it("leaves a label room along its edge for the line before an arrowhead and no more, in both directions", async () => {
+    for (const direction of ["lr", "tb"] as const) {
+      const result = await layout({
+        direction,
+        groups: [],
+        nodes: [node("a", "A", "service"), node("b", "B", "service")],
+        edges: [edge(0, "a", "b", "writes to")],
+      });
+      const label = labelBox(result.edges["edge:0"]!.label!, estimate("writes to", FONT.edge));
+      const [a, b] = [result.nodes.a!, result.nodes.b!];
+      const gaps =
+        direction === "lr" ? [label.x - (a.x + a.width), b.x - (label.x + label.width)] : [label.y - (a.y + a.height), b.y - (label.y + label.height)];
+      for (const gap of gaps) expect(near(gap, LABEL_MASK + LABEL_HEAD_RUN + ARROWHEAD_LENGTH), `${direction} ${gap}`).toBe(true);
     }
   });
 

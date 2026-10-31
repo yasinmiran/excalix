@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createIdSource, edgeKey, hashSpec } from "./ids.js";
-import { ARROWHEAD_ROOM, END_SPACING, LANE_SPACING, LOOP_LABEL_RUN, MIN_SEGMENT } from "./layout.js";
+import { ARROWHEAD_ROOM, END_SPACING, LABEL_HEAD_RUN, LANE_SPACING, LOOP_LABEL_RUN, MIN_SEGMENT } from "./layout.js";
 import { sketch } from "./pipeline.js";
 import { parseSpec } from "./spec.js";
-import { NODE, arrowheads, cornerRadius } from "./style.js";
+import { ARROWHEAD_LENGTH, LABEL_MASK, NODE, arrowheads, cornerRadius } from "./style.js";
 import type { Box, Point, Renderer, TextMeasurer } from "./types.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -37,6 +37,7 @@ export type Invariant =
   | "noJogs"
   | "endsOnOutline"
   | "loopLabelRun"
+  | "labelHeadRun"
   | "insideBounds";
 
 /** Layout defects a suite still has, keyed by spec file. An entry turns its cell into an it.fails. */
@@ -55,6 +56,7 @@ const TITLES: Record<Invariant, string> = {
   noJogs: `no arrow segment is shorter than ${MIN_SEGMENT}px`,
   endsOnOutline: "every arrow end touches the outline Excalidraw draws for its node",
   loopLabelRun: `a self loop's outer segment runs ${LOOP_LABEL_RUN}px past its label at both ends`,
+  labelHeadRun: `${LABEL_HEAD_RUN}px of line show between an edge label and either arrowhead on its arrow`,
   insideBounds: "every box but the title starts inside the layout bounds",
 };
 
@@ -63,6 +65,9 @@ const SLACK = 0.5;
 // The layout rounds each route to whole pixels on its own, moving a run up to half a pixel, so two runs ELK
 // spaced exactly can come out up to a pixel closer.
 const LANE_SLACK = 1;
+// The layout rounds the box ELK reserved for a label and the node past it to whole pixels each on its own, so the
+// line between the label and that node's arrowhead can come out up to a pixel short of what ELK spaced.
+const LABEL_RUN_SLACK = 1;
 // A node's line is NODE.strokeWidth wide, so an end within half of that of the curve touches it. The layout moves
 // an end in whole pixels, which leaves it up to half a pixel either side of the curve.
 const OUTLINE_SLACK = NODE.strokeWidth / 2;
@@ -107,7 +112,7 @@ interface SceneElement extends Box {
   points?: [number, number][];
 }
 
-/** Registers the thirteen layout invariants for every committed spec, measured however the caller measures. */
+/** Registers the fourteen layout invariants for every committed spec, measured however the caller measures. */
 export function describeGeometry(title: string, measurer: () => TextMeasurer, known: KnownDefects = {}): void {
   for (const file of specFiles) {
     describe(`${title} ${file}`, () => {
@@ -143,6 +148,7 @@ export function describeGeometry(title: string, measurer: () => TextMeasurer, kn
       check("noJogs", (scene) => scene.arrows.flatMap(jogs));
       check("endsOnOutline", (scene) => scene.arrows.flatMap((arrow) => offOutline(scene, arrow)));
       check("loopLabelRun", (scene) => scene.arrows.flatMap(buriedLoopSegment));
+      check("labelHeadRun", (scene) => scene.arrows.flatMap(buriedHeads));
       check("insideBounds", (scene) =>
         scene.bounded.filter(({ box }) => box.x < 0 || box.y < 0).map((item) => `${boxAt(item)} starts left of x=0 or above y=0`),
       );
@@ -343,6 +349,35 @@ function buriedLoopSegment(arrow: Arrow): string[] {
   return [`${arrow.name} label sits on a ${round(high - low)}px segment showing ${runs.map(round).join("px and ")}px of line`];
 }
 
+// Excalidraw blanks the line LABEL_MASK round a bound label and draws a head up to ARROWHEAD_LENGTH back from its
+// tip, so a label close to a head leaves no line between them and the head reads as part of the text.
+function buriedHeads(arrow: Arrow): string[] {
+  const { label, points } = arrow;
+  if (!label) return [];
+  const mask = { x: label.x - LABEL_MASK, y: label.y - LABEL_MASK, width: label.width + LABEL_MASK * 2, height: label.height + LABEL_MASK * 2 };
+  const lengths = points.slice(1).map((to, i) => Math.hypot(to.x - points[i]!.x, to.y - points[i]!.y));
+  let enters = Infinity;
+  let leaves = -Infinity;
+  let travelled = 0;
+  for (const [i, length] of lengths.entries()) {
+    const through = stretchThrough(points[i]!, points[i + 1]!, mask);
+    if (through) {
+      enters = Math.min(enters, travelled + through[0] * length);
+      leaves = Math.max(leaves, travelled + through[1] * length);
+    }
+    travelled += length;
+  }
+  if (enters > leaves) return [];
+  const head = (segment: number): number => Math.min(ARROWHEAD_LENGTH, segment / 2);
+  const runs: [boolean, string, number][] = [
+    [arrow.heads.start, "start", enters - head(lengths[0]!)],
+    [arrow.heads.end, "end", travelled - head(lengths.at(-1)!) - leaves],
+  ];
+  return runs.flatMap(([drawn, end, run]) =>
+    !drawn || run + LABEL_RUN_SLACK >= LABEL_HEAD_RUN ? [] : [`${arrow.name} label shows ${round(run)}px of line before its ${end} arrowhead`],
+  );
+}
+
 function nearestSegment(points: Point[], target: Point): [Point, Point] {
   let best: { distance: number; segment: [Point, Point] } = { distance: Infinity, segment: [points[0]!, points[1]!] };
   for (let i = 1; i < points.length; i++) {
@@ -389,6 +424,11 @@ function contains(outer: Box, inner: Box): boolean {
 
 /** True when the segment passes through the interior of the box. Grazing an edge does not count. */
 function crosses(from: Point, to: Point, box: Box): boolean {
+  return stretchThrough(from, to, box) !== undefined;
+}
+
+/** Where the segment runs through the interior of the box, as fractions of its length, or undefined when it does not. */
+function stretchThrough(from: Point, to: Point, box: Box): [number, number] | undefined {
   let enter = 0;
   let exit = 1;
   const clip = (direction: number, room: number): boolean => {
@@ -400,13 +440,13 @@ function crosses(from: Point, to: Point, box: Box): boolean {
   };
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  return (
+  const inside =
     clip(-dx, from.x - box.x) &&
     clip(dx, box.x + box.width - from.x) &&
     clip(-dy, from.y - box.y) &&
     clip(dy, box.y + box.height - from.y) &&
-    enter < exit
-  );
+    enter < exit;
+  return inside ? [enter, exit] : undefined;
 }
 
 function overlapsWithin(items: Named[]): string[] {

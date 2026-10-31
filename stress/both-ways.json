@@ -1,0 +1,14 @@
+{
+  "title": "labelled arrows with a head at each end",
+  "nodes": [
+    { "id": "user", "label": "User", "kind": "client" },
+    { "id": "gw", "label": "Gateway", "kind": "service" },
+    { "id": "orders", "label": "Orders", "kind": "service" },
+    { "id": "db", "label": "Orders DB", "kind": "datastore" }
+  ],
+  "edges": [
+    { "from": "user", "to": "gw", "label": "both ways", "arrows": "both" },
+    { "from": "gw", "to": "orders", "label": "calls" },
+    { "from": "orders", "to": "db", "label": "reads and writes", "arrows": "both" }
+  ]
+}
