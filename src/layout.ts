@@ -464,12 +464,36 @@ function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>):
   for (let a = 0; a < routes.length; a++) {
     for (let b = a + 1; b < routes.length; b++) {
       const push = ([i, j]: [number, number]): boolean =>
-        moves.some((move) => (movable(a) && move(a, i, routes[b]!.points, j)) || (movable(b) && move(b, j, routes[a]!.points, i)));
+        moves.some((move) => (movable(a) && move(a, i, routes[b]!.points, j)) || (movable(b) && move(b, j, routes[a]!.points, i))) ||
+        (movable(a) && movable(b) && splitPair(routes, a, i, b, j, boxes, shaped));
       // Each push leaves fewer crowded pairs, so this ends.
       let pushed = true;
       while (pushed) pushed = crowdedPairs(routes[a]!, routes[b]!).some(push);
     }
   }
+}
+
+// Moves both runs of a crowded pair apart, each by half of what spacing them takes, for when moving either one the
+// whole way crowds a third arrow, crosses one, or cuts an end run short. A run between two bends moves bends and
+// all; a run that ends its route slides that end as far as endCanSlide lets it.
+function splitPair(routes: Route[], a: number, i: number, b: number, j: number, boxes: Box[], shaped: Map<string, Shaped>): boolean {
+  const runA = runsOf(routes[a]!.points)[i]!;
+  const runB = runsOf(routes[b]!.points)[j]!;
+  const need = LANE_SPACING - Math.abs(runA.at - runB.at);
+  const away = runA.at >= runB.at ? 1 : -1;
+  const shifts: [number, number, number][] = [
+    [a, i, away * Math.ceil(need / 2)],
+    [b, j, -away * Math.floor(need / 2)],
+  ];
+  const moved = new Map<number, Point[]>();
+  for (const [at, index, shift] of shifts) {
+    const { points } = routes[at]!;
+    const to = runsOf(points)[index]!.at + shift;
+    if (Math.abs(shift) > labelRoom(routes[at]!, index)) return false;
+    if (!isInner(points, index) && (points.length < 3 || !endCanSlide(routes, at, index, to, shaped))) return false;
+    moved.set(at, moveRun(points, index, to));
+  }
+  return tryRoutes(routes, moved, boxes, "crowded");
 }
 
 // Pairs of runs, one from each route, that share a stretch closer than a pixel under LANE_SPACING.

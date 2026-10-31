@@ -1,0 +1,32 @@
+{
+  "title": "split lanes",
+  "direction": "lr",
+  "groups": [
+    { "id": "g0", "label": "Group 0 eu-west-1" }
+  ],
+  "nodes": [
+    { "id": "n0", "label": "Billing", "kind": "external" },
+    { "id": "n1", "label": "Mobile", "kind": "queue", "group": "g0" },
+    { "id": "n2", "label": "Ledger\nservice", "kind": "external" },
+    { "id": "n3", "label": "Notifier", "kind": "datastore", "group": "g0" },
+    { "id": "n4", "label": "Search", "kind": "cache", "group": "g0" },
+    { "id": "n5", "label": "Redis", "kind": "queue", "group": "g0" },
+    { "id": "n6", "label": "Scheduler", "kind": "external" },
+    { "id": "n7", "label": "Ledger\nservice", "kind": "client", "group": "g0" }
+  ],
+  "edges": [
+    { "from": "n1", "to": "n3" },
+    { "from": "n4", "to": "n0", "style": "async", "arrows": "both" },
+    { "from": "n6", "to": "n6", "style": "async" },
+    { "from": "n6", "to": "n6", "label": "GET", "arrows": "none" },
+    { "from": "n6", "to": "n7" },
+    { "from": "n6", "to": "n3" },
+    { "from": "n6", "to": "n4", "arrows": "both" },
+    { "from": "n7", "to": "n3" },
+    { "from": "n0", "to": "n4" },
+    { "from": "n0", "to": "n3", "style": "async" },
+    { "from": "n1", "to": "n4", "label": "ack", "arrows": "both" },
+    { "from": "n3", "to": "n7", "label": "read", "style": "async" },
+    { "from": "n2", "to": "n2", "label": "auth" }
+  ]
+}
