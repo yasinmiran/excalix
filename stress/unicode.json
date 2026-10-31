@@ -1,0 +1,20 @@
+{
+  "title": "labels past Excalifont: emoji, symbols, scripts",
+  "nodes": [
+    { "id": "team", "label": "👩‍💻 team 👍🏽", "kind": "client" },
+    { "id": "api", "label": "deploy 🚀 api", "kind": "service" },
+    { "id": "store", "label": "☁️ store ✔️", "kind": "datastore" },
+    { "id": "jobs", "label": "1️⃣ jobs 🇳🇴", "kind": "queue" },
+    { "id": "grid", "label": "┌─┐ grid └─┘", "kind": "cache" },
+    { "id": "he", "label": "שלום", "kind": "external" },
+    { "id": "ar", "label": "مرحبا بالعالم", "kind": "external" }
+  ],
+  "edges": [
+    { "from": "team", "to": "api", "label": "⚠️ auth" },
+    { "from": "api", "to": "store", "label": "→ ⇒ ✓" },
+    { "from": "api", "to": "jobs", "label": "≤ 5 ∞" },
+    { "from": "store", "to": "grid", "label": "☁ ↔ ⚙" },
+    { "from": "jobs", "to": "he" },
+    { "from": "jobs", "to": "ar" }
+  ]
+}

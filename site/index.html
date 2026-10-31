@@ -145,7 +145,7 @@ npx -y excalix render spec.json -o out/spec</code></pre>
       </div>
       <div>
         <dt>The same spec gives the same bytes</dt>
-        <dd>Output is identical from run to run and between macOS and Linux. CJK and emoji labels are the known exception, tracked in <a href="https://github.com/yasinmiran/excalix/issues/5">issue #5</a>.</dd>
+        <dd>Output is identical from run to run and between macOS and Linux, labels in CJK, emoji, arrows, box drawing, Hebrew or Arabic included: each is measured with a font excalix ships, Excalidraw's own for CJK, Twemoji for emoji and DejaVu Sans for the rest. Scripts none of them covers, such as Devanagari or Thai, fall back to a system font and can measure several pixels differently per label. So do a few emoji: code points added after Unicode 15, and the emoji forms of 〰 〽 ㊗ ㊙.</dd>
       </div>
       <div>
         <dt>It opens on excalidraw.com unchanged</dt>

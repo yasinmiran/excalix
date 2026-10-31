@@ -91,4 +91,4 @@ nodes[2].kind: got "db", expected one of "client", "service", "datastore", "queu
 
 An `.excalidraw` file is nothing but coordinates, and an agent asked to draw one has to invent all of them. excalix takes the geometry away, so two diagrams made a year apart look like one set, and a change to the spec shows up as a reviewable diff.
 
-The [docs](https://yasinmiran.github.io/excalix/) have the full spec reference, the `sketch` tool's contract and more [examples](https://yasinmiran.github.io/excalix/examples.html). `pnpm test` and `pnpm typecheck` run the checks. MIT, and not affiliated with Excalidraw.
+The [docs](https://yasinmiran.github.io/excalix/) have the full spec reference, the `sketch` tool's contract and more [examples](https://yasinmiran.github.io/excalix/examples.html). `pnpm test` and `pnpm typecheck` run the checks. MIT, and not affiliated with Excalidraw. The fallback fonts in [fonts/](https://github.com/yasinmiran/excalix/tree/main/fonts) keep their own licences: DejaVu Sans the Bitstream Vera and Arev ones, Twemoji the SIL OFL 1.1 for the font and CC BY 4.0 for the art.

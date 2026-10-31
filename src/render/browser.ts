@@ -5,9 +5,11 @@ import { dirname, extname, resolve, sep } from "node:path";
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { FONT } from "../style.js";
 import type { Renderer, TextSize } from "../types.js";
+import { fontsDir, PINNED_FAMILY, pinnedFaces, pinnedFontFaceRules } from "./pinned-fonts.js";
 
 const ORIGIN = "http://excalix.local";
 const VENDOR_PATH = "/vendor/";
+const FONTS_PATH = "/fonts/";
 const PADDING = 24;
 const PNG_SCALE = 2;
 
@@ -49,8 +51,18 @@ interface ExcalixWindow {
   excalix: { utils: Utils; error?: string };
 }
 
+/** A pinned face as the page loads it. */
+interface PageFace {
+  url: string;
+  unicodeRange: string;
+}
+
 const require = createRequire(import.meta.url);
 const vendorDir = dirname(require.resolve("@excalidraw/utils"));
+const servedDirs: ReadonlyArray<readonly [string, string]> = [
+  [VENDOR_PATH, vendorDir],
+  [FONTS_PATH, fontsDir],
+];
 const playwrightVersion = (require("playwright-core/package.json") as { version: string }).version;
 
 function exportData(elements: unknown[]): ExportData {
@@ -65,9 +77,11 @@ async function serve(route: Route): Promise<void> {
   const url = new URL(route.request().url());
   if (url.origin !== ORIGIN) return route.abort();
   if (url.pathname === "/") return route.fulfill({ contentType: "text/html", body: PAGE });
-  if (!url.pathname.startsWith(VENDOR_PATH)) return route.fulfill({ status: 404 });
-  const file = resolve(vendorDir, decodeURIComponent(url.pathname.slice(VENDOR_PATH.length)));
-  if (!file.startsWith(vendorDir + sep)) return route.fulfill({ status: 404 });
+  const served = servedDirs.find(([prefix]) => url.pathname.startsWith(prefix));
+  if (!served) return route.fulfill({ status: 404 });
+  const [prefix, dir] = served;
+  const file = resolve(dir, decodeURIComponent(url.pathname.slice(prefix.length)));
+  if (!file.startsWith(dir + sep)) return route.fulfill({ status: 404 });
   try {
     const body = await readFile(file);
     return route.fulfill({ contentType: CONTENT_TYPES[extname(file)] ?? "application/octet-stream", body });
@@ -104,20 +118,46 @@ export async function launchBrowser(): Promise<Browser> {
   }
 }
 
+/** Opens the bundle page with Excalifont and the pinned fallback faces registered, ready to measure and export. */
+export async function openRenderPage(browser: Browser): Promise<Page> {
+  const page = await openBundlePage(browser);
+  const faces: PageFace[] = (await pinnedFaces()).map(({ file, unicodeRange, sequenceRange }) => ({
+    url: `${FONTS_PATH}${file}`,
+    unicodeRange: sequenceRange ? `${unicodeRange},${sequenceRange}` : unicodeRange,
+  }));
+  await page.evaluate(registerFonts, {
+    probe: exportData([fontProbe()]),
+    family: "Excalifont",
+    pinned: { family: PINNED_FAMILY, faces },
+  });
+  return page;
+}
+
+/** The text of every text element, which is what the bundle's own font embedding subsets by. */
+function drawnTexts(elements: unknown[]): string[] {
+  return elements.flatMap((element) => {
+    const { type, originalText } = element as { type?: unknown; originalText?: unknown };
+    return type === "text" && typeof originalText === "string" ? [originalText] : [];
+  });
+}
+
 /** Starts headless Chromium with @excalidraw/utils loaded. Call close() when done. */
 export async function createBrowserRenderer(): Promise<Renderer> {
   const browser = await launchBrowser();
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => (closing ??= browser.close());
   try {
-    const page = await openMeasuringPage(browser);
+    const page = await openRenderPage(browser);
 
     return {
       measurer: {
         measure: (texts, fontSize) =>
           page.evaluate(measureInPage, { texts, font: fontString(fontSize), fontSize, lineHeight: FONT.lineHeight }),
       },
-      svg: (elements) => page.evaluate(svgInPage, { data: exportData(elements), padding: PADDING }),
+      async svg(elements) {
+        const fontFaces = await pinnedFontFaceRules(drawnTexts(elements));
+        return page.evaluate(svgInPage, { data: exportData(elements), padding: PADDING, fontFaces });
+      },
       async png(elements) {
         const base64 = await page.evaluate(pngInPage, { data: exportData(elements), padding: PADDING, scale: PNG_SCALE });
         return new Uint8Array(Buffer.from(base64, "base64"));
@@ -128,13 +168,6 @@ export async function createBrowserRenderer(): Promise<Renderer> {
     await close();
     throw error;
   }
-}
-
-/** Opens a bundle page with Excalifont registered, so text measured in it measures as it renders. */
-export async function openMeasuringPage(browser: Browser): Promise<Page> {
-  const page = await openBundlePage(browser);
-  await page.evaluate(registerFonts, { probe: exportData([fontProbe()]), family: "Excalifont" });
-  return page;
 }
 
 /** The bundle only adds its font faces to document.fonts on a canvas export, so run one before measuring. */
@@ -154,7 +187,15 @@ function fontProbe(): unknown {
   };
 }
 
-async function registerFonts({ probe, family }: { probe: ExportData; family: string }): Promise<void> {
+async function registerFonts({
+  probe,
+  family,
+  pinned,
+}: {
+  probe: ExportData;
+  family: string;
+  pinned: { family: string; faces: PageFace[] };
+}): Promise<void> {
   const { utils } = (window as unknown as ExcalixWindow).excalix;
   await utils.exportToCanvas({ data: probe });
   let registered = false;
@@ -162,6 +203,12 @@ async function registerFonts({ probe, family }: { probe: ExportData; family: str
     registered ||= face.family === family && face.status === "loaded";
   });
   if (!registered) throw new Error(`${family} did not register in document.fonts`);
+  // Left unloaded: document.fonts.load, in measureInPage and in the bundle's exports, fetches a face only once a text
+  // has a code point in its range. The emoji face's range takes in the digits, # and * that start a keycap, so a label
+  // with any of those fetches it even though Excalifont draws them.
+  for (const { url, unicodeRange } of pinned.faces) {
+    document.fonts.add(new FontFace(pinned.family, `url(${url})`, { unicodeRange }));
+  }
 }
 
 async function measureInPage({
@@ -192,9 +239,14 @@ async function measureInPage({
   });
 }
 
-async function svgInPage({ data, padding }: { data: ExportData; padding: number }): Promise<string> {
+async function svgInPage({ data, padding, fontFaces }: { data: ExportData; padding: number; fontFaces: string[] }): Promise<string> {
   const { utils } = (window as unknown as ExcalixWindow).excalix;
   const svg = await utils.exportToSvg({ data, config: { padding } });
+  if (fontFaces.length > 0) {
+    const style = svg.querySelector("style.style-fonts");
+    if (!style) throw new Error("the exported SVG has no style-fonts element for the pinned faces");
+    style.append(fontFaces.map((face) => `\n      ${face}`).join(""));
+  }
   return svg.outerHTML;
 }
 

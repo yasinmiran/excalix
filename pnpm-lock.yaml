@@ -17,6 +17,9 @@ importers:
       elkjs:
         specifier: 0.12.0
         version: 0.12.0
+      harfbuzzjs:
+        specifier: 1.6.3
+        version: 1.6.3
       playwright-core:
         specifier: 1.63.0
         version: 1.63.0
@@ -1717,6 +1720,9 @@ packages:
 
   hachure-fill@0.5.2:
     resolution: {integrity: sha512-3GKBOn+m2LX9iq+JC1064cSFprJY4jL1jCXTcpnfER5HYE2l/4EfWSGzkPa/ZDBmYI0ZOEj5VHV/eKnPGkHuOg==}
+
+  harfbuzzjs@1.6.3:
+    resolution: {integrity: sha512-R5Mfo1UUvQmZJmtScP7fBLKYKnYu82ZdtFT7WbQYeGb3Ut5PR3xfFCJ5/FjbcW5SAfb9cqCSny/KNjp+NJBx0w==}
 
   has-symbols@1.1.0:
     resolution: {integrity: sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ==}
@@ -4089,6 +4095,8 @@ snapshots:
   gopd@1.2.0: {}
 
   hachure-fill@0.5.2: {}
+
+  harfbuzzjs@1.6.3: {}
 
   has-symbols@1.1.0: {}
 

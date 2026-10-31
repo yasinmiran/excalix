@@ -11,7 +11,7 @@ import { EDGE_LABEL_WIDTH, FONT } from "../style.js";
 import { measuringOnly, readSpec, specFiles } from "../test-support.js";
 import type { Point, Renderer } from "../types.js";
 import { wrapTexts } from "../wrap.js";
-import { createBrowserRenderer, launchBrowser, openMeasuringPage } from "./browser.js";
+import { createBrowserRenderer, launchBrowser, openRenderPage } from "./browser.js";
 import { estimateMeasurer } from "./estimate.js";
 
 const ORIGIN = "http://excalix.local";
@@ -327,7 +327,7 @@ describe("[browser] Excalidraw re-wrap", () => {
     const element = await bundleElement();
     renderer = await createBrowserRenderer();
     browser = await launchBrowser();
-    page = await openMeasuringPage(browser);
+    page = await openRenderPage(browser);
     await page.addScriptTag({ content: element });
     estimating = await browser.newPage();
     await estimating.addScriptTag({ content: element });
