@@ -106,7 +106,7 @@
         <p>Draws an architecture diagram. You give the topology, what exists and what talks to what; excalix picks every shape, colour, size and route, so there is nothing visual to configure.</p>
         <p>A node sits in exactly one group: name the group it runs in, and let an edge across the boundary carry any other relationship.</p>
         <p>List nodes in reading order, sources first. Where edges form a loop, order decides which arrow runs backwards: the one from a node listed later to one listed earlier. Among siblings it is a preference and no more, and the layout reorders some of them when that keeps arrows from crossing. It never steers where an arrow is routed; what moves a layout is the direction of an edge, which nodes share a group, and direction itself.</p>
-        <p>Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.</p>
+        <p>Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.</p>
       </blockquote>
       <p>Those are excerpts. Between them the description defines the six node kinds and two edge styles and gives the sizing advice from the <a href="spec.html#writing">spec reference</a>. The full text and both schemas live in <a href="https://github.com/yasinmiran/excalix/blob/main/src/__snapshots__/sketch-tool.md">the contract snapshot</a>, which the test suite keeps in step with the server.</p>
 
@@ -124,19 +124,9 @@
       <p>Every object in the schema sets <code>additionalProperties: false</code>, and each field carries a description written for the model reading it.</p>
 
       <h2 id="result">A successful result</h2>
-      <p>A call with the order pipeline spec and no <code>out</code> comes back in three parts. The paths are absolute; here the project lives in <code>/path/to/project</code>.</p>
-      <h3 id="result-text">A text block</h3>
-      <p>The three paths, one per line, in this order:</p>
-      <figure class="frame">
-        <figcaption>content[0], type text</figcaption>
-<pre tabindex="0"><code>/path/to/project/diagrams/order-pipeline.excalidraw
-/path/to/project/diagrams/order-pipeline.svg
-/path/to/project/diagrams/order-pipeline.png</code></pre>
-      </figure>
-      <h3 id="result-image">An image block</h3>
-      <p>The PNG itself, base64 encoded with <code>mimeType</code> <code>image/png</code>. It is the same file as the <code>.png</code> on disk, so the agent can look at the diagram without a separate read and call again if a label collides or the flow reads backwards.</p>
+      <p>A call with the order pipeline spec and no <code>out</code> comes back as structured content and two content blocks. The paths are absolute; here the project lives in <code>/path/to/project</code>.</p>
       <h3 id="result-structured">Structured content</h3>
-      <p>The same paths as fields, plus the PNG's size, matching the tool's output schema:</p>
+      <p>The written paths as fields, plus the PNG's size, matching the tool's output schema:</p>
       <figure class="frame">
         <figcaption>structuredContent</figcaption>
 <pre tabindex="0"><code>{
@@ -146,7 +136,11 @@
   "pixels": { "width": 2330, "height": 992 }
 }</code></pre>
       </figure>
-      <p>A very wide <code>pixels.width</code> usually means a long node label stretched the layout.</p>
+      <p>A very wide <code>pixels.width</code> usually means a long node label stretched the layout. When there is something to act on before the diagram is shown, such as a size too big to read, a <code>notes</code> array holds one line per thing; see <a href="#size">large diagrams</a>. Without anything to say, the field is absent.</p>
+      <h3 id="result-text">A text block</h3>
+      <p>The structured content again, serialized as JSON on one line. Claude Code shows the model the image and the structured content and drops text blocks, while some clients read only the content, so each carries the whole answer.</p>
+      <h3 id="result-image">An image block</h3>
+      <p>The PNG itself, base64 encoded with <code>mimeType</code> <code>image/png</code>. It is the same file as the <code>.png</code> on disk, so the agent can look at the diagram without a separate read and call again if a label collides or the flow reads backwards.</p>
 
       <h2 id="errors">Errors</h2>
       <p>A spec that fails validation does not throw a protocol error. The result has <code>isError: true</code> and one text block with every problem on its own line, the same lines <code>excalix validate</code> prints:</p>
@@ -163,9 +157,9 @@ edges[0].to: unknown node "apy", did you mean "api"?</code></pre>
       <p>After an error of that kind the server closes its browser and opens a fresh one on the next call. A call to any tool name other than <code>sketch</code> gets a protocol error instead.</p>
 
       <h2 id="size">Large diagrams</h2>
-      <p>When the longest side of the PNG passes 6000 pixels, the text block gains a fourth line after the paths:</p>
+      <p>When the longest side of the PNG passes 6000 pixels, the result carries a note:</p>
       <figure class="frame">
-        <figcaption>content[0], fourth line</figcaption>
+        <figcaption>structuredContent.notes[0]</figcaption>
 <pre class="output"><code>note: 9124x1748 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.</code></pre>
       </figure>
       <p>Past that size the copy of the image a model sees is scaled down far enough that thin lines and small labels go missing. The usual answer is two diagrams: an overview that collapses each region to one node, and a detail diagram of the part under discussion.</p>

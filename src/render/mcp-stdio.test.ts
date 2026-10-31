@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -57,7 +57,9 @@ describe("[browser] sketch over stdio", () => {
 
     const [text, image] = result.content as Block[];
     expect(result.isError, text?.text).toBeFalsy();
-    expect(text?.text).toBe(`${out}.excalidraw\n${out}.svg\n${out}.png`);
+    expect(JSON.parse(text!.text!)).toEqual(result.structuredContent);
+    expect(result.structuredContent).toMatchObject({ excalidraw: `${out}.excalidraw`, svg: `${out}.svg`, png: `${out}.png` });
+    expect(result.structuredContent).not.toHaveProperty("notes");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
     expect([...Buffer.from(image!.data!, "base64").subarray(0, 8)]).toEqual(PNG_SIGNATURE);
 
@@ -66,6 +68,16 @@ describe("[browser] sketch over stdio", () => {
     expect((await stat(`${out}.svg`)).size).toBeGreaterThan(0);
     expect(await readFile(`${out}.excalidraw`, "utf8")).toBe(await readFile(join(root, "examples/order-pipeline.excalidraw"), "utf8"));
     expect(result.structuredContent).toMatchObject({ png: `${out}.png`, pixels: { width: expect.any(Number), height: expect.any(Number) } });
+  });
+
+  it("hands back the note about a diagram too big to read in the structured content and the text alike", async () => {
+    const chain = join(dirname(out), "chain");
+    const result = await client.callTool({ name: "sketch", arguments: { ...(readSpec("stress/chain.json") as object), out: chain } });
+
+    const [text] = result.content as Block[];
+    expect(result.isError, text?.text).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({ notes: [expect.stringMatching(/^note: /)] });
+    expect(JSON.parse(text!.text!)).toEqual(result.structuredContent);
   });
 
   it("answers a bad spec with every problem and keeps serving", async () => {

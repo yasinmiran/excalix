@@ -32,7 +32,7 @@ List nodes in reading order, sources first. Where edges form a loop, order decid
 
 Keep edge labels to a few words, because an edge label sits on its arrow and the layout makes room for it: past about twenty characters it wraps onto more lines, and a sentence becomes a block that pushes the nodes apart. A \\n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
 
-Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.`;
+Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.`;
 
 const inputSchema = specSchemaWith({
   out: stringField
@@ -49,6 +49,10 @@ const outputSchema = z.object({
   pixels: z
     .object({ width: z.number(), height: z.number() })
     .describe("size of that png; a very wide one usually means a long node label stretched the layout"),
+  notes: z
+    .array(z.string())
+    .optional()
+    .describe("what to do about the diagram before showing it, such as splitting one too big to read; absent when there is nothing"),
 });
 
 // The whole agent-facing contract, served as is by tools/list. A sketch finishes inside the call, so no task.
@@ -101,13 +105,16 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
       const target = out ?? defaultOut(spec.title);
       const basename = isAbsolute(target) ? target : resolve(await baseDirectory(server), target);
       const { files, result } = await deps.writeSketch(spec, basename, await renderReady());
-      const lines = [files.excalidraw, files.svg, files.png, sizeNote(result.png)];
+      const notes = [sizeNote(result.png)].filter((note) => note !== undefined);
+      const structuredContent = { ...files, pixels: pngSize(result.png), ...(notes.length > 0 && { notes }) };
+      // Claude Code shows the model the image and structuredContent and drops text blocks, so the text block is
+      // the same JSON, as the spec asks, and a client that reads only content loses nothing either.
       return {
         content: [
-          { type: "text", text: lines.filter((line) => line !== undefined).join("\n") },
+          { type: "text", text: JSON.stringify(structuredContent) },
           { type: "image", data: Buffer.from(result.png).toString("base64"), mimeType: "image/png" },
         ],
-        structuredContent: { ...files, pixels: pngSize(result.png) },
+        structuredContent,
       };
     } catch (error) {
       if (error instanceof SpecError) return failure(error.problems.join("\n"));

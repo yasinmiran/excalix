@@ -20,7 +20,7 @@ List nodes in reading order, sources first. Where edges form a loop, order decid
 
 Keep edge labels to a few words, because an edge label sits on its arrow and the layout makes room for it: past about twenty characters it wraps onto more lines, and a sentence becomes a block that pushes the nodes apart. A \n in any label starts a new line. Keep one diagram to roughly twenty nodes, fewer if they run in a single chain: past that the image comes back large enough that the copy you see is scaled down below reading, and the answer is two diagrams, an overview and a detail. Long chains suit lr, deep hierarchies tb.
 
-Look at the returned image and call again with an adjusted spec if labels overlap or the flow reads wrong.
+Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong.
 
 ## inputSchema
 
@@ -259,6 +259,13 @@ Look at the returned image and call again with an adjusted spec if labels overla
       ],
       "additionalProperties": false,
       "description": "size of that png; a very wide one usually means a long node label stretched the layout"
+    },
+    "notes": {
+      "description": "what to do about the diagram before showing it, such as splitting one too big to read; absent when there is nothing",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [

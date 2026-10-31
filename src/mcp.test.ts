@@ -131,32 +131,36 @@ describe("sketch tool", () => {
     expect(advertised).toEqual(printed);
   });
 
-  it("returns the written paths and the png", async () => {
+  it("returns the paths and the png size as structured content, and the png", async () => {
     const { client, out, writeSketch } = await harness();
 
     const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
 
     expect(result.isError).toBeFalsy();
-    const [text, image] = blocks(result);
-    expect(text).toMatchObject({ type: "text", text: `${out}.excalidraw\n${out}.svg\n${out}.png` });
-    expect(image).toMatchObject({ type: "image", mimeType: "image/png", data: Buffer.from(PNG).toString("base64") });
-    expect(writeSketch.mock.calls[0]?.[0]).toMatchObject({ nodes: SPEC.nodes, direction: "lr", groups: [] });
-  });
-
-  it("repeats the paths and the png size as structured content", async () => {
-    const { client, out } = await harness();
-
-    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
-
     expect(result.structuredContent).toEqual({
       excalidraw: `${out}.excalidraw`,
       svg: `${out}.svg`,
       png: `${out}.png`,
       pixels: PIXELS,
     });
+    const [, image] = blocks(result);
+    expect(image).toMatchObject({ type: "image", mimeType: "image/png", data: Buffer.from(PNG).toString("base64") });
+    expect(writeSketch.mock.calls[0]?.[0]).toMatchObject({ nodes: SPEC.nodes, direction: "lr", groups: [] });
   });
 
-  it("adds one line to the text block when the png is too big to read scaled down", async () => {
+  // Claude Code drops text blocks from a result with structured content, and other clients read only the content,
+  // so each has to carry the whole answer.
+  it("serializes the structured content as its text block", async () => {
+    const { client, out } = await harness();
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+
+    const [text] = blocks(result);
+    expect(text?.type).toBe("text");
+    expect(JSON.parse(text!.text!)).toEqual(result.structuredContent);
+  });
+
+  it("adds a note when the png is too big to read scaled down", async () => {
     const { client, out } = await harness({
       writeSketch: async (_input, basename) => ({
         files: { excalidraw: `${basename}.excalidraw`, svg: `${basename}.svg`, png: `${basename}.png` },
@@ -166,15 +170,13 @@ describe("sketch tool", () => {
 
     const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
 
-    expect(textOf(result)).toBe(
-      [
-        `${out}.excalidraw`,
-        `${out}.svg`,
-        `${out}.png`,
+    expect(result.structuredContent).toMatchObject({
+      pixels: { width: 7929, height: 1775 },
+      notes: [
         "note: 7929x1775 px, too big to read once it is scaled down. Split it into an overview and a detail diagram, or shorten the longest labels.",
-      ].join("\n"),
-    );
-    expect(result.structuredContent).toMatchObject({ pixels: { width: 7929, height: 1775 } });
+      ],
+    });
+    expect(JSON.parse(textOf(result))).toEqual(result.structuredContent);
   });
 
   it("defaults out to diagrams/<title slug>", async () => {
