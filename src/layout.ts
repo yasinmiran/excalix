@@ -435,15 +435,15 @@ export const MIN_SEGMENT = 3;
 // two bends pushed sideways, bends and all, if either will go; else the run between two bends at one end of a crowded
 // run pulled back along it; else a run that ends its route pushed, sliding that end along its side as a fold does.
 function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>): void {
+  const moves = [
+    (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, false),
+    (at: number, index: number, other: Point[], from: number) => pullBack(routes, at, index, other, from, boxes),
+    (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, true),
+  ];
+  // A self loop keeps the shape its feet and its label were given room for.
+  const movable = (at: number): boolean => routes[at]!.edge.from !== routes[at]!.edge.to;
   for (let a = 0; a < routes.length; a++) {
     for (let b = a + 1; b < routes.length; b++) {
-      const moves = [
-        (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, false),
-        (at: number, index: number, other: Point[], from: number) => pullBack(routes, at, index, other, from, boxes),
-        (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, true),
-      ];
-      // A self loop keeps the shape its feet and its label were given room for.
-      const movable = (at: number): boolean => routes[at]!.edge.from !== routes[at]!.edge.to;
       const push = ([i, j]: [number, number]): boolean =>
         moves.some((move) => (movable(a) && move(a, i, routes[b]!.points, j)) || (movable(b) && move(b, j, routes[a]!.points, i)));
       // Each push leaves fewer crowded pairs, so this ends.
@@ -485,7 +485,7 @@ function pushAway(
 }
 
 // Moves the run between two bends at one end of run `index` of routes[at] along that run, so the run stops
-// LANE_SPACING short of where run `from` of `other` turns and no longer shares a stretch with it. Two arrows that swap
+// LANE_SPACING short of where run `from` of `other` ends and no longer shares a stretch with it. Two arrows that swap
 // sides in a channel are spaced this way by swapping their places in it, without moving an end.
 function pullBack(routes: Route[], at: number, index: number, other: Point[], from: number, boxes: Box[]): boolean {
   const route = routes[at]!;
@@ -494,11 +494,11 @@ function pullBack(routes: Route[], at: number, index: number, other: Point[], fr
   const run = runsOf(points)[index]!;
   const away = runsOf(other)[from]!;
   const along = (p: Point): number => (run.vertical ? p.y : p.x);
-  const [low, high] = along(points[index]!) < along(points[index + 1]!) ? [index - 1, index + 1] : [index + 1, index - 1];
-  const options: [number, number][] = [
-    ...(run.high > away.high + LANE_SPACING ? [[low, away.high + LANE_SPACING] as [number, number]] : []),
-    ...(run.low < away.low - LANE_SPACING ? [[high, away.low - LANE_SPACING] as [number, number]] : []),
-  ];
+  // The runs that meet this one at its low and at its high end.
+  const [atLow, atHigh] = along(points[index]!) < along(points[index + 1]!) ? [index - 1, index + 1] : [index + 1, index - 1];
+  const options: [number, number][] = [];
+  if (run.high > away.high + LANE_SPACING) options.push([atLow, away.high + LANE_SPACING]);
+  if (run.low < away.low - LANE_SPACING) options.push([atHigh, away.low - LANE_SPACING]);
   return options.some(
     ([neighbour, to]) =>
       isInner(points, neighbour) &&
