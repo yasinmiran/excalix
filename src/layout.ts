@@ -431,10 +431,9 @@ export const MIN_SEGMENT = 3;
 
 // ELK spaces the runs of a channel and the runs of a layer, but not a run that crosses a channel against one that
 // enters it from the next layer: two arrows that swap sides there can interleave whichever way the channel orders
-// them, at whatever gap their ports leave. Each crowded pair is pushed apart by moving one of its two runs
-// sideways, bends and all: a run between two bends if either will go, else a run that ends its route, which slides
-// that end along its side as a fold does. ELK spaced every pair exactly, and rounding each route to whole pixels on
-// its own can bring a pair a pixel closer, so only a pair closer than that is crowded.
+// them, at whatever gap their ports leave. Each crowded pair is spaced by moving one of its two arrows: a run between
+// two bends pushed sideways, bends and all, if either will go; else the run between two bends at one end of a crowded
+// run pulled back along it; else a run that ends its route pushed, sliding that end along its side as a fold does.
 function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>): void {
   for (let a = 0; a < routes.length; a++) {
     for (let b = a + 1; b < routes.length; b++) {
@@ -443,8 +442,10 @@ function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>):
         (at: number, index: number, other: Point[], from: number) => pullBack(routes, at, index, other, from, boxes),
         (at: number, index: number, other: Point[], from: number) => pushAway(routes, at, index, other, from, boxes, shaped, true),
       ];
+      // A self loop keeps the shape its feet and its label were given room for.
+      const movable = (at: number): boolean => routes[at]!.edge.from !== routes[at]!.edge.to;
       const push = ([i, j]: [number, number]): boolean =>
-        moves.some((move) => move(a, i, routes[b]!.points, j) || move(b, j, routes[a]!.points, i));
+        moves.some((move) => (movable(a) && move(a, i, routes[b]!.points, j)) || (movable(b) && move(b, j, routes[a]!.points, i)));
       // Each push leaves fewer crowded pairs, so this ends.
       let pushed = true;
       while (pushed) pushed = crowdedPairs(routes[a]!, routes[b]!).some(push);
@@ -456,7 +457,7 @@ function spaceLanes(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>):
 function crowdedPairs(a: Route, b: Route): [number, number][] {
   const runsB = runsOf(b.points);
   return runsOf(a.points).flatMap((run, i) =>
-    runsB.flatMap((other, j): [number, number][] => (gapBeside(run, other) < LANE_SPACING - 1 ? [[i, j]] : [])),
+    runsB.flatMap((other, j): [number, number][] => (crowds(run, other) ? [[i, j]] : [])),
   );
 }
 
@@ -474,7 +475,6 @@ function pushAway(
 ): boolean {
   const route = routes[at]!;
   const { points } = route;
-  if (route.edge.from === route.edge.to) return false;
   if (slide ? isInner(points, index) || points.length < 3 : !isInner(points, index)) return false;
   const run = runsOf(points)[index]!;
   const away = runsOf(other)[from]!;
@@ -490,7 +490,7 @@ function pushAway(
 function pullBack(routes: Route[], at: number, index: number, other: Point[], from: number, boxes: Box[]): boolean {
   const route = routes[at]!;
   const { points } = route;
-  if (route.edge.from === route.edge.to || labelRoom(route, index) < Infinity) return false;
+  if (labelRoom(route, index) < Infinity) return false;
   const run = runsOf(points)[index]!;
   const away = runsOf(other)[from]!;
   const along = (p: Point): number => (run.vertical ? p.y : p.x);
@@ -512,7 +512,6 @@ function pullBack(routes: Route[], at: number, index: number, other: Point[], fr
 // its neighbours on that side and the side's corners allow.
 function removeJogs(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>): void {
   for (const [at, route] of routes.entries()) {
-    if (route.edge.from === route.edge.to) continue;
     // A fold renumbers the points, so the scan starts over after one.
     for (let jog = 1; jog < route.points.length - 2; jog++) {
       const { points } = route;
@@ -617,8 +616,7 @@ function faults(points: Point[], others: Point[][], boxes: Box[]): Faults {
   let crossings = 0;
   for (const run of own) {
     for (const other of theirs) {
-      const gap = gapBeside(run, other);
-      if (gap < LANE_SPACING - 1) crowded++;
+      if (crowds(run, other)) crowded++;
       if (crosses(run, other)) crossings++;
     }
   }
@@ -648,6 +646,12 @@ function runsOf(points: Point[]): Run[] {
     const [along, across] = vertical ? (["y", "x"] as const) : (["x", "y"] as const);
     return { vertical, at: a[across], low: Math.min(a[along], b[along]), high: Math.max(a[along], b[along]) };
   });
+}
+
+// Two runs share a stretch more than a pixel under LANE_SPACING apart. ELK spaced every pair exactly, and rounding each
+// route to whole pixels on its own can bring a pair a pixel closer.
+function crowds(a: Run, b: Run): boolean {
+  return gapBeside(a, b) < LANE_SPACING - 1;
 }
 
 // How far apart two parallel runs sit where they share a stretch, or Infinity when they do not.
