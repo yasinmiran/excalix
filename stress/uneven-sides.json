@@ -1,0 +1,45 @@
+{
+  "title": "uneven sides",
+  "direction": "tb",
+  "groups": [
+    { "id": "g0", "label": "Group 0 cluster" },
+    { "id": "g1", "label": "Group 1 eu-west-1" }
+  ],
+  "nodes": [
+    { "id": "n0", "label": "Stripe", "kind": "client" },
+    { "id": "n1", "label": "Worker", "kind": "datastore" },
+    { "id": "n2", "label": "Worker", "kind": "cache", "group": "g1" },
+    { "id": "n3", "label": "Redis", "kind": "cache", "group": "g0" },
+    { "id": "n4", "label": "Redis", "kind": "cache", "group": "g0" },
+    { "id": "n5", "label": "Web", "kind": "queue" },
+    { "id": "n6", "label": "Ledger\nservice", "kind": "service" },
+    { "id": "n7", "label": "Stripe", "kind": "queue" },
+    { "id": "n8", "label": "Search", "kind": "external", "group": "g1" },
+    { "id": "n9", "label": "API", "kind": "external", "group": "g0" },
+    { "id": "n10", "label": "Web", "kind": "service", "group": "g1" },
+    { "id": "n11", "label": "Kafka", "kind": "queue", "group": "g0" },
+    { "id": "n12", "label": "Auth", "kind": "queue", "group": "g1" },
+    { "id": "n13", "label": "Ledger\nservice", "kind": "cache" }
+  ],
+  "edges": [
+    { "from": "n10", "to": "n9", "style": "async", "arrows": "both" },
+    { "from": "n10", "to": "n3", "style": "async" },
+    { "from": "n2", "to": "n5", "style": "async", "arrows": "both" },
+    { "from": "n11", "to": "n6", "label": "POST /orders", "arrows": "none" },
+    { "from": "n5", "to": "n8", "label": "ack", "style": "async", "arrows": "none" },
+    { "from": "n5", "to": "n1", "arrows": "both" },
+    { "from": "n3", "to": "n5", "label": "token" },
+    { "from": "n13", "to": "n11", "label": "publish", "style": "async" },
+    { "from": "n0", "to": "n1", "arrows": "none" },
+    { "from": "n8", "to": "n0", "style": "async" },
+    { "from": "n5", "to": "n5", "arrows": "both" },
+    { "from": "n13", "to": "n13", "style": "async" },
+    { "from": "n11", "to": "n1", "style": "async" },
+    { "from": "n9", "to": "n1", "style": "async" },
+    { "from": "n10", "to": "n13", "label": "stream", "style": "async", "arrows": "both" },
+    { "from": "n7", "to": "n6", "style": "async" },
+    { "from": "n9", "to": "n9", "label": "auth" },
+    { "from": "n10", "to": "n9" },
+    { "from": "n9", "to": "n2" }
+  ]
+}

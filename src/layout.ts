@@ -535,43 +535,62 @@ function removeJogs(routes: Route[], boxes: Box[], shaped: Map<string, Shaped>):
   }
 }
 
-// When an end cannot slide for the ends beside it, every end on that side of that node slides with it by the same
-// amount, which keeps them END_SPACING apart: ELK can space two facing sides alike a pixel out of line, and then
-// the only route between them steps. The outermost ends keep SLIDE_CORNER_ROOM from the corners, a self loop keeps
-// its feet, and each moved route has a bend to take up the shift.
+// When an end cannot slide for the ends beside it, it slides anyway and pushes the ends ahead of it along that side
+// of that node, each only as far as keeps it END_SPACING from the one before, or as far apart as they were if that
+// was less. ELK can space two facing sides a pixel or two out of line, or one a pixel wider than the other, and then
+// a route between them steps. A pushed end keeps SLIDE_CORNER_ROOM from the corners, a self loop keeps its feet, and
+// each moved route has a bend to take up the shift.
 function slideSide(routes: Route[], at: number, index: number, to: number, shaped: Map<string, Shaped>, boxes: Box[]): boolean {
   const route = routes[at]!;
   const start = index === 0;
   const node = start ? route.edge.from : route.edge.to;
-  const end = start ? route.points[0]! : route.points.at(-1)!;
-  const side = arrival(end, start ? route.points[1]! : route.points.at(-2)!);
+  const side = arrival(start ? route.points[0]! : route.points.at(-1)!, start ? route.points[1]! : route.points.at(-2)!);
   const vertical = side === "top" || side === "bottom";
-  const along = (p: Point): number => (vertical ? p.x : p.y);
-  const shift = to - along(end);
-  const members = routes.flatMap((other, i): [number, number][] => {
-    const { points, edge } = other;
-    if (points.length < 2) return [];
-    const found: [number, number][] = [];
-    if (edge.from === node && arrival(points[0]!, points[1]!) === side) found.push([i, 0]);
-    if (edge.to === node && arrival(points.at(-1)!, points.at(-2)!) === side) found.push([i, points.length - 2]);
-    return found;
-  });
+  const placeOf = (points: Point[], run: number): number => {
+    const end = run === 0 ? points[0]! : points.at(-1)!;
+    return vertical ? end.x : end.y;
+  };
+  const ends = routes
+    .flatMap((other, i) => {
+      const { points, edge } = other;
+      if (points.length < 2) return [];
+      const found: { i: number; run: number }[] = [];
+      if (edge.from === node && arrival(points[0]!, points[1]!) === side) found.push({ i, run: 0 });
+      if (edge.to === node && arrival(points.at(-1)!, points.at(-2)!) === side) found.push({ i, run: points.length - 2 });
+      return found;
+    })
+    .map((end) => ({ ...end, now: placeOf(routes[end.i]!.points, end.run) }))
+    .sort((a, b) => a.now - b.now);
+  const self = ends.findIndex((end) => end.i === at && end.run === index);
+  const after = ends.map((end) => end.now);
+  after[self] = to;
+  const step = Math.sign(to - ends[self]!.now);
+  for (let k = self + step; k >= 0 && k < ends.length; k += step) {
+    const room = Math.min(END_SPACING, Math.abs(ends[k]!.now - ends[k - step]!.now));
+    const pushed = step > 0 ? Math.max(ends[k]!.now, after[k - step]! + room) : Math.min(ends[k]!.now, after[k - step]! - room);
+    if (pushed === ends[k]!.now) break;
+    after[k] = pushed;
+  }
   const { box } = shaped.get(node)!;
   const [low, high] = vertical ? [box.x, box.x + box.width] : [box.y, box.y + box.height];
-  const keeps = (now: number, after: number): boolean => after >= Math.min(SLIDE_CORNER_ROOM, now);
-  const movable = members.every(([i, run]) => {
+  const keeps = (now: number, then: number): boolean => then >= Math.min(SLIDE_CORNER_ROOM, now);
+  const pushed = ends.flatMap((end, k) => (after[k] === end.now ? [] : [{ ...end, shift: after[k]! - end.now }]));
+  const movable = pushed.every(({ i, run, now, shift }) => {
     const { points, edge } = routes[i]!;
-    const place = along(run === 0 ? points[0]! : points.at(-1)!);
     return (
       edge.from !== edge.to &&
       points.length >= 3 &&
       Math.abs(shift) <= labelRoom(routes[i]!, run) &&
-      keeps(place - low, place + shift - low) &&
-      keeps(high - place, high - place - shift)
+      keeps(now - low, now + shift - low) &&
+      keeps(high - now, high - now - shift)
     );
   });
   if (!movable) return false;
-  const moved = new Map(members.map(([i, run]) => [i, moveRun(routes[i]!.points, run, runsOf(routes[i]!.points)[run]!.at + shift)]));
+  const moved = new Map<number, Point[]>();
+  for (const { i, run, shift } of pushed) {
+    const points = moved.get(i) ?? routes[i]!.points;
+    moved.set(i, moveRun(points, run, runsOf(points)[run]!.at + shift));
+  }
   return tryRoutes(routes, moved, boxes);
 }
 

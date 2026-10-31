@@ -763,7 +763,8 @@ describe("tidyRoutes", () => {
   });
 
   // a steps a pixel between p's right side and q's left, and both sides are packed 32px apart, so neither end of a
-  // can slide alone. p's other arrows run straight and cannot take a shift; q's both bend, so q's three ends move.
+  // can slide alone. p's other arrows run straight and cannot take a push; on q, a's end slides down and pushes e's
+  // a pixel ahead of it, while d's, 33px off after the slide, stays where it is.
   const packedSides = (qBottom: number): [Route[], Record<string, Shaped>] => [
     [
       route("a", "p", "q", [[100, 72], [150, 72], [150, 71], [300, 71]]),
@@ -775,18 +776,18 @@ describe("tidyRoutes", () => {
     { p: at(0, 20, 100, 110), q: at(300, 0, 80, qBottom), r: at(200, 30), t: at(200, 94), u: at(180, 0), v: at(180, 150) },
   ];
 
-  it("slides every end on a packed side by the pixel a step needs, keeping them 32px apart", () => {
+  it("folds a step on a packed side by pushing the ends ahead of the slide, each only as far as keeps it 32px off", () => {
     expect(tidied(...packedSides(140))).toEqual([
       [[100, 72], [300, 72]],
       [[100, 40], [200, 40]],
       [[100, 104], [200, 104]],
-      [[200, 10], [260, 10], [260, 40], [300, 40]],
+      [[200, 10], [260, 10], [260, 39], [300, 39]],
       [[300, 104], [260, 104], [260, 160], [200, 160]],
     ]);
   });
 
-  it("leaves the step when sliding a packed side would take its last end nearer a corner than 25px", () => {
-    // q's last end sits 128 - 103 = 25px above its bottom corner, and the slide would leave 24.
+  it("leaves the step when the push would take an end nearer a corner than 25px", () => {
+    // e's end sits 128 - 103 = 25px above q's bottom corner, and the push would leave 24.
     expect(tidied(...packedSides(128))[0]).toEqual([[100, 72], [150, 72], [150, 71], [300, 71]]);
   });
 });
