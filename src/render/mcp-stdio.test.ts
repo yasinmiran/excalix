@@ -62,6 +62,7 @@ describe("[browser] sketch over stdio", () => {
     expect(JSON.parse(text!.text!)).toEqual(result.structuredContent);
     expect(result.structuredContent).toMatchObject({ excalidraw: `${out}.excalidraw`, svg: `${out}.svg`, png: `${out}.png` });
     expect(result.structuredContent).not.toHaveProperty("notes");
+    expect(result.structuredContent).toMatchObject({ markdown: `![order pipeline: Web app, Order API, Fulfilment, orders.created, Postgres, Redis, Stripe](${out}.svg)` });
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
     expect([...Buffer.from(image!.data!, "base64").subarray(0, 8)]).toEqual(PNG_SIGNATURE);
 

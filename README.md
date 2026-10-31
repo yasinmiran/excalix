@@ -54,7 +54,7 @@ npx -y excalix validate spec.json              every problem at once, or ok: 7 n
 npx -y excalix schema                          JSON Schema of the spec
 ```
 
-With an agent, register the MCP server once. Its `sketch` tool takes the spec, writes the three files and returns the PNG in the same turn:
+With an agent, register the MCP server once. Its `sketch` tool takes the spec, writes the three files and returns the PNG in the same turn, along with a markdown line that shows the SVG in a README:
 
 ```
 claude mcp add excalix --scope user -- npx -y excalix mcp

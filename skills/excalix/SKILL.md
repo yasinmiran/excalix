@@ -136,6 +136,9 @@ source of truth.
 When the excalix MCP server is registered, the `sketch` tool does all of this in
 one call and hands back the picture inline, which saves the read. That copy fits
 2000 pixels a side; the `png` path in the result is the full-size file, worth
-opening when a detail is too small to judge. Its `out` is the same basename. A relative one resolves against the first root your client
+opening when a detail is too small to judge. Its `markdown` shows the SVG in a
+README, with a path relative to the project; rewrite that path relative to the
+`.md` file it goes into. With `theme` set to `both` it is a `<picture>` that
+follows the reader's colour scheme. Its `out` is the same basename. A relative one resolves against the first root your client
 declares, usually the project, or else against the directory the server was
 started in.

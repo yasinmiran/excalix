@@ -164,6 +164,7 @@ describe("sketch tool", () => {
       png: `${out}.png`,
       pixels: PIXELS,
       preview: PIXELS,
+      markdown: `![order pipeline: Web app, Order API](${out}.svg)`,
     });
     const [, image] = blocks(result);
     expect(image).toMatchObject({ type: "image", mimeType: "image/png", data: Buffer.from(PNG).toString("base64") });
@@ -258,14 +259,42 @@ describe("sketch tool", () => {
     expect(writeSketch.mock.calls[0]?.[1]).toBe(resolve("docs/pipeline"));
   });
 
-  it("keeps an absolute out without asking for roots", async () => {
-    const roots = vi.fn(() => ({ roots: [{ uri: pathToFileURL(tmpdir()).href }] }));
-    const { client, out, writeSketch } = await harness({}, roots);
+  it("keeps an absolute out as given, and writes its markdown path relative to the first root", async () => {
+    const project = await mkdtemp(join(tmpdir(), "excalix-root-"));
+    const out = join(project, "docs/arch");
+    const { client, writeSketch } = await harness({}, () => ({ roots: [{ uri: pathToFileURL(project).href }] }));
 
-    await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, out } });
 
     expect(writeSketch.mock.calls[0]?.[1]).toBe(out);
-    expect(roots).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({ markdown: "![order pipeline: Web app, Order API](docs/arch.svg)" });
+  });
+
+  it("gives a picture that follows the colour scheme when there is a dark pair", async () => {
+    const project = await mkdtemp(join(tmpdir(), "excalix-root-"));
+    const { client } = await harness(
+      {
+        writeSketch: async (_input, basename) => ({
+          files: {
+            excalidraw: `${basename}.excalidraw`,
+            svg: `${basename}.svg`,
+            png: `${basename}.png`,
+            dark: { svg: `${basename}.dark.svg`, png: `${basename}.dark.png` },
+          },
+          result: { excalidraw: "", svg: "", png: PNG, dark: { svg: "", png: PNG } },
+        }),
+      },
+      () => ({ roots: [{ uri: pathToFileURL(project).href }] }),
+    );
+
+    const result = await client.callTool({ name: "sketch", arguments: { ...SPEC, title: undefined, theme: "both" } });
+
+    expect(result.structuredContent).toMatchObject({
+      markdown:
+        '<picture><source media="(prefers-color-scheme: dark)" srcset="diagrams/diagram.dark.svg">' +
+        '<source media="(prefers-color-scheme: light)" srcset="diagrams/diagram.svg">' +
+        '<img alt="architecture diagram: Web app, Order API" src="diagrams/diagram.svg"></picture>',
+    });
   });
 
   // The SDK waits a minute for an answer by default; the test timeout is what proves a silent client costs less.

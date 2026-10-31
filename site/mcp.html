@@ -103,7 +103,7 @@
       <h2 id="description">What the agent reads</h2>
       <p>First the server's instructions, which the client receives when it connects. With tool search on, as Claude Code has it by default, they are the only excalix text an agent sees at the start of a session, so they say when to reach for the tool:</p>
       <blockquote>
-        <p>excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, so either opens in Excalidraw.</p>
+        <p>excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, and the result has markdown to put the diagram in a README.</p>
       </blockquote>
       <p>Then the tool description, the whole guide the agent gets unless the <a href="getting-started.html#skill">skill</a> is installed too. It is served verbatim from <code>tools/list</code>:</p>
       <blockquote>
@@ -139,10 +139,16 @@
   "svg": "/path/to/project/diagrams/order-pipeline.svg",
   "png": "/path/to/project/diagrams/order-pipeline.png",
   "pixels": { "width": 2330, "height": 992 },
-  "preview": { "width": 2000, "height": 851 }
+  "preview": { "width": 2000, "height": 851 },
+  "markdown": "![order pipeline: Web app, Order API, Fulfilment, orders.created, Postgres, Redis, Stripe](diagrams/order-pipeline.svg)"
 }</code></pre>
       </figure>
       <p>With <code>theme</code> set to <code>"both"</code>, a <code>dark</code> field after <code>png</code> names the dark pair: <code>{ "svg": ".../order-pipeline.dark.svg", "png": ".../order-pipeline.dark.png" }</code>. <code>pixels</code> is the size of the PNG on disk, and <code>preview</code> the size of the image block. A very wide <code>pixels.width</code> usually means a long node label stretched the layout. When there is something to act on before the diagram is shown, such as a size too big to read, a <code>notes</code> array holds one line per thing; see <a href="#size">large diagrams</a>. Without anything to say, the field is absent.</p>
+      <p><code>markdown</code> shows the diagram in a README or doc. It points at the SVG, which stays crisp at any size, carries the editable scene and renders on GitHub, and its alt text is the title followed by every node label. The path is relative to the directory a relative <code>out</code> resolves against, usually the project root, with no leading slash, so it is right as it stands for a README there; the tool description asks the agent to rewrite it relative to the <code>.md</code> file it goes into. A file outside that directory gets its absolute path. With <code>theme</code> set to <code>"both"</code> it is a picture that follows the reader's colour scheme instead, which GitHub renders:</p>
+      <figure class="frame">
+        <figcaption>structuredContent.markdown, theme both</figcaption>
+<pre tabindex="0"><code>&lt;picture&gt;&lt;source media=&quot;(prefers-color-scheme: dark)&quot; srcset=&quot;diagrams/order-pipeline.dark.svg&quot;&gt;&lt;source media=&quot;(prefers-color-scheme: light)&quot; srcset=&quot;diagrams/order-pipeline.svg&quot;&gt;&lt;img alt=&quot;order pipeline: Web app, Order API, Fulfilment, orders.created, Postgres, Redis, Stripe&quot; src=&quot;diagrams/order-pipeline.svg&quot;&gt;&lt;/picture&gt;</code></pre>
+      </figure>
       <h3 id="result-text">A text block</h3>
       <p>The structured content again, serialized as JSON on one line. Claude Code shows the model the image and the structured content and drops text blocks, while some clients read only the content, so each carries the whole answer.</p>
       <h3 id="result-image">An image block</h3>

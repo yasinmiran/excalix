@@ -24,6 +24,8 @@ Look at the returned image, and act on the notes when the result has any; call a
 
 The .svg and .png carry the editable scene, so either one dropped on excalidraw.com opens as the drawing. An image optimiser such as SVGO or a PNG crusher strips it, so the .excalidraw stays the source of truth.
 
+The result's markdown shows the SVG in a README or doc. Its path is relative to the project root, so rewrite it relative to the .md file it goes into.
+
 ## inputSchema
 
 ```json
@@ -317,6 +319,10 @@ The .svg and .png carry the editable scene, so either one dropped on excalidraw.
       "additionalProperties": false,
       "description": "size of the image block, the png scaled down to fit 2000 pixels a side, or the png itself when it fits"
     },
+    "markdown": {
+      "type": "string",
+      "description": "markdown that shows the svg, with its path relative to the directory a relative out resolves against; a <picture> that follows the reader's colour scheme when theme is both"
+    },
     "notes": {
       "description": "what to do about the diagram before showing it, such as splitting one too big to read; absent when there is nothing",
       "type": "array",
@@ -330,7 +336,8 @@ The .svg and .png carry the editable scene, so either one dropped on excalidraw.
     "svg",
     "png",
     "pixels",
-    "preview"
+    "preview",
+    "markdown"
   ],
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false

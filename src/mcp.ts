@@ -7,6 +7,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { pngSize, sizeNote, writeSketch } from "./pipeline.js";
 import type { SketchOptions, Written } from "./pipeline.js";
+import { altText, markdownSnippet } from "./markdown.js";
 import { createBrowserRenderer } from "./render/browser.js";
 import { expectedOneOf, parseSpecWith, SpecError, specSchemaWith, stringField } from "./spec.js";
 import type { Renderer } from "./types.js";
@@ -35,11 +36,13 @@ Keep edge labels to a few words, because an edge label sits on its arrow and the
 
 Look at the returned image, and act on the notes when the result has any; call again with an adjusted spec if labels overlap or the flow reads wrong. The image is scaled to fit 2000 pixels a side, and the png file holds it at full size for a closer look.
 
-The .svg and .png carry the editable scene, so either one dropped on excalidraw.com opens as the drawing. An image optimiser such as SVGO or a PNG crusher strips it, so the .excalidraw stays the source of truth.`;
+The .svg and .png carry the editable scene, so either one dropped on excalidraw.com opens as the drawing. An image optimiser such as SVGO or a PNG crusher strips it, so the .excalidraw stays the source of truth.
+
+The result's markdown shows the SVG in a README or doc. Its path is relative to the project root, so rewrite it relative to the .md file it goes into.`;
 
 // With tool search on, a client loads only tool names and these instructions at session start, so this is what
 // decides whether an agent reaches for sketch at all.
-const INSTRUCTIONS = `excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, so either opens in Excalidraw.`;
+const INSTRUCTIONS = `excalix draws architecture, system and topology diagrams in Excalidraw's hand-drawn style. Use its sketch tool whenever someone asks for one, or for an Excalidraw diagram of a system: you give the nodes, edges and groups, and it picks every shape, colour and route. It writes .excalidraw, .svg and .png files and returns their paths and the image, which you should look at before reporting back. Past about twenty nodes, draw an overview and a detail diagram instead of one. The .svg and .png carry the editable scene, and the result has markdown to put the diagram in a README.`;
 
 const theme = z
   .union(
@@ -76,6 +79,11 @@ const outputSchema = z.object({
   preview: z
     .object({ width: z.number(), height: z.number() })
     .describe("size of the image block, the png scaled down to fit 2000 pixels a side, or the png itself when it fits"),
+  markdown: z
+    .string()
+    .describe(
+      "markdown that shows the svg, with its path relative to the directory a relative out resolves against; a <picture> that follows the reader's colour scheme when theme is both",
+    ),
   notes: z
     .array(z.string())
     .optional()
@@ -130,13 +138,16 @@ export function createServer(deps: SketchDeps, onClose?: () => void): Server {
     try {
       const { out, theme, ...spec } = parseSpecWith(inputSchema, params.arguments);
       const target = out ?? defaultOut(spec.title);
-      const basename = isAbsolute(target) ? target : resolve(await baseDirectory(server), target);
+      // Asked even for an absolute out, since the markdown path is written relative to the same directory.
+      const base = await baseDirectory(server);
+      const basename = isAbsolute(target) ? target : resolve(base, target);
       const { files, result } = await deps.writeSketch(spec, basename, await renderReady(), { theme, preview: true });
       const shown = result.preview ?? { png: result.png, scale: PNG_SCALE };
       const pixels = pngSize(result.png);
       const preview = pngSize(shown.png);
       const notes = [sizeNote(pixels, { ...preview, scale: shown.scale })].filter((note) => note !== undefined);
-      const structuredContent = { ...files, pixels, preview, ...(notes.length > 0 && { notes }) };
+      const markdown = markdownSnippet(altText(spec.title, spec.nodes), files, base);
+      const structuredContent = { ...files, pixels, preview, markdown, ...(notes.length > 0 && { notes }) };
       // Claude Code shows the model the image and structuredContent and drops text blocks, so the text block is
       // the same JSON, as the spec asks, and a client that reads only content loses nothing either.
       return {
